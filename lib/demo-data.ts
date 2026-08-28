@@ -12,7 +12,8 @@ export type Agency = {
 export type DemoAccount = {
   username: string;
   name: string;
-  agencyId: Agency["id"];
+  /** Legacy field retained for fixture compatibility; production accounts use the SpaceX workspace. */
+  agencyId: Agency["id"] | "spaceport";
   applicationIds: string[];
   scenario: string;
 };

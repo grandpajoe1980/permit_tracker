@@ -1,10 +1,10 @@
 # PATH — Permit Application Tracker
 
-PATH is an accessible demo of a permit-application status portal. It shows how an applicant could select an agency, sign in, review status and milestones, notice an action deadline, inspect next steps, and print a summary.
+PATH is an accessible SpaceX Louisiana permitting-workspace MVP. Employees sign in, submit project requests, review milestones and action deadlines, and monitor the requests authorized for their account.
 
 ## Important scope note
 
-This repository is a prototype. It is not connected to LDEQ or any government system, and every person, company, record, date, milestone, deadline, and instruction is illustrative. Do not enter real credentials or sensitive information.
+This repository is a proof of concept. The SpaceX Louisiana project, users, records, dates, milestones, deadlines, and instructions are illustrative. Do not enter real credentials or sensitive information.
 
 The three public scenarios use the shared password `demo1234`:
 
@@ -57,6 +57,14 @@ npx supabase link --project-ref <your-project-ref>
 npx supabase db push
 ```
 
+After pushing the migration, seed the illustrative two-month SpaceX Louisiana workspace. This uses the server-only service-role key to create confirmed test users and eight routed requests:
+
+```bash
+npm run supabase:seed:spacex
+```
+
+The seeded test users all use password `SpaceX-MVP-2026!`; accounts are intentionally `.test` addresses and must be replaced before any real deployment.
+
 Configure these Vercel environment variables for the deployment:
 
 - `SUPABASE_URL` and `SUPABASE_ANON_KEY` (the build safely maps these to browser-safe values)
@@ -71,7 +79,7 @@ After the migration is pushed, create/approve user memberships and customer orga
 
 - `app/page.tsx` — accessible client-side demo journey
 - `app/globals.css` — visual system, responsive behavior, reduced motion, and print rules
-- `lib/demo-data.ts` — typed illustrative agencies, accounts, and permit scenarios
+- `lib/demo-data.ts` — legacy UI types retained for compatibility with the illustrative fixture tests
 - `lib/permit-utils.ts` — authentication lookup, ownership checks, and progress helpers
 - `tests/` — domain, source-contract, component, and rendered-output checks
 - `docs/execution-plan.md` — inferred MVP requirements and delivery plan

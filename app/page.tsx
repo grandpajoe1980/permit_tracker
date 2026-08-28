@@ -6,16 +6,13 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
-  Building2,
   Check,
   ChevronRight,
   Circle,
   Clock3,
-  ExternalLink,
   FilePlus2,
   Info,
   Landmark,
-  Leaf,
   LockKeyhole,
   LogOut,
   Mail,
@@ -32,8 +29,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import {
-  agencies,
-  type Agency,
   type DemoAccount,
   type PermitRecord,
   type PermitStatus,
@@ -46,6 +41,7 @@ import {
 import {
   getBrowserUser,
   getSupabaseBrowserClient,
+  createRequestForUser,
   loadRequestsForUser,
   signInWithPassword,
   signOutBrowser,
@@ -54,9 +50,6 @@ import {
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
 type View = "welcome" | "login" | "dashboard" | "detail";
-
-const ldeqApplicationUrl =
-  "https://www.deq.louisiana.gov/about-ldeq/office-of-environmental-services-welcome";
 
 const viewTitles: Record<View, string> = {
   welcome: "Track a permit application",
@@ -102,7 +95,7 @@ function PathLogo() {
 }
 
 function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
-  const labels = ["Agency", "Sign in", "Applications"];
+  const labels = ["Workspace", "Sign in", "Applications"];
   return (
     <ol className="mb-8 grid grid-cols-3 gap-2" aria-label="Sign-in progress">
       {labels.map((label, index) => {
@@ -147,7 +140,6 @@ function StatusBadge({ permit }: { permit: PermitRecord }) {
 
 export default function Home() {
   const [view, setView] = useState<View>("welcome");
-  const [selectedAgencyId, setSelectedAgencyId] = useState<Agency["id"] | null>(null);
   const [currentUser, setCurrentUser] = useState<DemoAccount | null>(null);
   const [selectedPermitId, setSelectedPermitId] = useState<string | null>(null);
   const [username, setUsername] = useState("");
@@ -155,11 +147,12 @@ export default function Home() {
   const [loginError, setLoginError] = useState("");
   const [userPermits, setUserPermits] = useState<PermitRecord[]>([]);
   const [loadingData, setLoadingData] = useState(false);
+  const [newRequest, setNewRequest] = useState({ title: "", requestType: "", description: "" });
+  const [requestMessage, setRequestMessage] = useState("");
   const headingRef = useRef<HTMLHeadingElement>(null);
   const usernameRef = useRef<HTMLInputElement>(null);
   const hasMountedRef = useRef(false);
 
-  const selectedAgency = agencies.find((agency) => agency.id === selectedAgencyId) ?? null;
   const selectedPermit = selectedPermitId ? userPermits.find((permit) => permit.id === selectedPermitId) ?? null : null;
 
   useEffect(() => {
@@ -170,9 +163,8 @@ export default function Home() {
       if (!active || !user) return;
       const { permits } = await loadRequestsForUser();
       if (!active) return;
-      setCurrentUser({ username: user.email ?? "", name: String(user.user_metadata?.full_name ?? user.email ?? "User"), agencyId: "ldeq", applicationIds: permits.map((permit) => permit.id), scenario: "Authenticated account" });
+      setCurrentUser({ username: user.email ?? "", name: String(user.user_metadata?.full_name ?? user.email ?? "User"), agencyId: "spaceport", applicationIds: permits.map((permit) => permit.id), scenario: "Authenticated account" });
       setUserPermits(permits);
-      setSelectedAgencyId("ldeq");
       setView("dashboard");
     });
     const { data: listener } = client.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
@@ -204,7 +196,6 @@ export default function Home() {
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedAgencyId) { setLoginError("Select an agency before signing in."); return; }
     setLoadingData(true);
     const { user, error } = await signInWithPassword(username, password);
     if (error || !user) {
@@ -217,7 +208,7 @@ export default function Home() {
     setLoadingData(false);
     if (loaded.error) { setLoginError(`Signed in, but applications could not be loaded: ${loaded.error.message}`); return; }
     setLoginError("");
-    const account: DemoAccount = { username: user.email ?? "", name: String(user.user_metadata?.full_name ?? user.email ?? "User"), agencyId: selectedAgencyId, applicationIds: loaded.permits.map((permit) => permit.id), scenario: "Authenticated account" };
+    const account: DemoAccount = { username: user.email ?? "", name: String(user.user_metadata?.full_name ?? user.email ?? "User"), agencyId: "spaceport", applicationIds: loaded.permits.map((permit) => permit.id), scenario: "Authenticated account" };
     setCurrentUser(account);
     setUserPermits(loaded.permits);
     setSelectedPermitId(null);
@@ -234,12 +225,22 @@ export default function Home() {
     await signOutBrowser();
     setCurrentUser(null);
     setSelectedPermitId(null);
-    setSelectedAgencyId(null);
     setUsername("");
     setPassword("");
     setLoginError("");
     setUserPermits([]);
     setView("welcome");
+  }
+
+  async function handleRequestSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setRequestMessage("Submitting request…");
+    const result = await createRequestForUser(newRequest);
+    if (result.error) { setRequestMessage(result.error.message); return; }
+    const loaded = await loadRequestsForUser();
+    setUserPermits(loaded.permits);
+    setNewRequest({ title: "", requestType: "", description: "" });
+    setRequestMessage("Request submitted and routed to the appropriate team.");
   }
 
   return (
@@ -332,51 +333,12 @@ export default function Home() {
               <Card className="overflow-hidden border-0 py-0 shadow-xl shadow-slate-900/10">
                 <div className="road-stripe" aria-hidden="true" />
                 <CardHeader className="px-6 pt-7 sm:px-8">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-800">Step 1 of 3</p>
-                  <CardTitle className="text-2xl text-[#00284d]">Select your agency</CardTitle>
-                  <p className="text-sm leading-6 text-slate-600">Choose the agency for your account.</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-800">SpaceX Louisiana workspace</p>
+                  <CardTitle className="text-2xl text-[#00284d]">Sign in to your project workspace</CardTitle>
+                  <p className="text-sm leading-6 text-slate-600">Your account determines which requests, teams, and project updates you can access.</p>
                 </CardHeader>
-                <CardContent className="space-y-3 px-6 pb-8 sm:px-8">
-                  <div className="space-y-3" role="group" aria-label="Available agencies">
-                    {agencies.map((agency) => {
-                      const selected = agency.id === selectedAgencyId;
-                      return (
-                        <button
-                          key={agency.id}
-                          id={`agency-tile-${agency.id}`}
-                          type="button"
-                          disabled={!agency.enabled}
-                          aria-pressed={agency.enabled ? selected : undefined}
-                          onClick={() => agency.enabled && setSelectedAgencyId(agency.id)}
-                          className={`agency-option ${selected ? "agency-option-selected" : ""}`}
-                        >
-                          <span className={`agency-icon ${agency.enabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"}`}>
-                            {agency.id === "ldeq" ? <Leaf aria-hidden="true" /> : <Building2 aria-hidden="true" />}
-                          </span>
-                          <span className="min-w-0 flex-1 text-left">
-                            <span className="block font-extrabold text-[#00284d]">{agency.abbreviation}</span>
-                            <span className="block text-sm font-semibold text-slate-800">{agency.name}</span>
-                            <span className="mt-1 block text-xs leading-5 text-slate-500">{agency.description}</span>
-                          </span>
-                          {agency.enabled ? (
-                            <span className={`selection-mark ${selected ? "selection-mark-selected" : ""}`} aria-hidden="true">
-                              {selected && <Check className="size-4" />}
-                            </span>
-                          ) : (
-                            <Badge variant="secondary">Coming later</Badge>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <Button
-                    id="agency-next"
-                    size="lg"
-                    type="button"
-                    disabled={!selectedAgencyId}
-                    className="mt-3 h-12 w-full bg-[#00284d] text-base hover:bg-[#003c70]"
-                    onClick={() => navigate("login")}
-                  >
+                <CardContent className="px-6 pb-8 sm:px-8">
+                  <Button id="workspace-next" size="lg" type="button" className="h-12 w-full bg-[#00284d] text-base hover:bg-[#003c70]" onClick={() => navigate("login")}>
                     Continue to sign in
                     <ArrowRight aria-hidden="true" />
                   </Button>
@@ -404,9 +366,7 @@ export default function Home() {
                     >
                       Sign in to PATH
                     </h1>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {selectedAgency?.abbreviation} · {selectedAgency?.name}
-                    </p>
+                    <p className="mt-1 text-sm text-slate-600">SpaceX Louisiana · Pecan Island Spaceport program</p>
                   </div>
                 </div>
               </CardHeader>
@@ -472,7 +432,7 @@ export default function Home() {
 
                 <Button type="button" variant="ghost" className="mt-4 w-full" onClick={() => navigate("welcome")}>
                   <ArrowLeft aria-hidden="true" />
-                  Change agency
+                  Return to workspace
                 </Button>
               </CardContent>
             </Card>
@@ -483,7 +443,7 @@ export default function Home() {
           <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
             <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-teal-800">LDEQ workspace</p>
+                <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-teal-800">SpaceX Louisiana workspace</p>
                 <h1
                   ref={headingRef}
                   tabIndex={-1}
@@ -508,23 +468,15 @@ export default function Home() {
                 </Alert>
               ))}
 
-            <a
-              id="new-permit-link"
-              href={ldeqApplicationUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mb-6 flex items-center gap-4 rounded-xl border-2 border-dashed border-teal-300 bg-teal-50 p-5 text-left transition hover:border-teal-600 hover:bg-teal-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal-200"
-            >
-              <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-white text-teal-800 shadow-sm">
-                <FilePlus2 aria-hidden="true" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block font-extrabold text-[#00284d]">Apply for a new permit</span>
-                <span className="mt-1 block text-sm text-slate-600">Visit LDEQ&apos;s official Office of Environmental Services page.</span>
-              </span>
-              <ExternalLink className="size-5 shrink-0 text-teal-800" aria-hidden="true" />
-              <span className="sr-only">Opens in a new tab</span>
-            </a>
+            <form onSubmit={handleRequestSubmit} className="mb-8 rounded-xl border-2 border-dashed border-teal-300 bg-teal-50 p-5">
+              <div className="mb-4 flex items-center gap-3"><FilePlus2 className="size-5 text-teal-800" aria-hidden="true" /><h2 className="font-extrabold text-[#00284d]">Submit a new project request</h2></div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input aria-label="Request title" placeholder="Request title" required value={newRequest.title} onChange={(e) => setNewRequest({ ...newRequest, title: e.target.value })} />
+                <Input aria-label="Request category" placeholder="Category (e.g. road, coastal, factory)" required value={newRequest.requestType} onChange={(e) => setNewRequest({ ...newRequest, requestType: e.target.value })} />
+              </div>
+              <textarea aria-label="Request description" placeholder="Describe the scope, location, and decision needed" required value={newRequest.description} onChange={(e) => setNewRequest({ ...newRequest, description: e.target.value })} className="mt-3 min-h-24 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" />
+              <div className="mt-3 flex flex-wrap items-center gap-3"><Button type="submit" className="bg-[#00284d] hover:bg-[#003c70]">Submit request</Button>{requestMessage && <p role="status" className="text-sm font-semibold text-teal-900">{requestMessage}</p>}</div>
+            </form>
 
             <section aria-labelledby="application-list-title">
               <h2 id="application-list-title" className="sr-only">My applications</h2>
@@ -600,7 +552,7 @@ export default function Home() {
                   ["Date submitted", selectedPermit.submitted],
                   ["Illustrative day", `Day ${selectedPermit.currentDay} of ${selectedPermit.totalDays}`],
                   ["Permit type", "Individual permit (IP)"],
-                  ["Agency", "LDEQ"],
+                  ["Workspace", "SpaceX Louisiana"],
                 ].map(([label, value]) => (
                   <div key={label} className="border-b px-5 py-4 last:border-b-0 sm:border-r sm:px-6 lg:border-b-0 lg:last:border-r-0">
                     <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
@@ -677,7 +629,7 @@ export default function Home() {
 
                 <section className="flex flex-col gap-5 rounded-xl bg-[#00284d] p-5 text-white sm:flex-row sm:items-center sm:justify-between sm:p-6" aria-labelledby="contact-title">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-teal-200">Example agency contact</p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-teal-200">Assigned program team</p>
                     <h2 id="contact-title" className="mt-1 font-extrabold">{selectedPermit.contact.name}</h2>
                     <div className="mt-2 flex flex-col gap-1 text-sm text-slate-200 sm:flex-row sm:flex-wrap sm:gap-x-4">
                       <span className="inline-flex items-center gap-1.5">
@@ -686,7 +638,7 @@ export default function Home() {
                       </span>
                       <span>{selectedPermit.contact.phone}</span>
                     </div>
-                    <p className="mt-2 text-xs text-slate-300">Fictional contact details. Verify real contacts on the official agency website.</p>
+                    <p className="mt-2 text-xs text-slate-300">Illustrative contact details for this proof of concept.</p>
                   </div>
                   <Button type="button" variant="outline" className="print-hide border-white/30 bg-white text-[#00284d] hover:bg-slate-100" onClick={() => window.print()}>
                     <Printer aria-hidden="true" />
@@ -706,7 +658,7 @@ export default function Home() {
       <footer className="site-footer print-keep">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-xs leading-5 sm:px-6">
           <p className="font-bold text-slate-800">PATH is an application tracking portal.</p>
-          <p>Application status and records are provided by participating agencies. Verify official notices through your agency contact.</p>
+          <p>Application status and records are provided by the SpaceX Louisiana program workspace.</p>
         </div>
       </footer>
     </div>
