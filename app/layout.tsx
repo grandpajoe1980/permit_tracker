@@ -2,17 +2,23 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PATH | Project and Permit Tracking",
+  title: "PATH — Permit Application Tracker",
   description:
-    "Secure project and permit tracking for customers and participating government organizations.",
+    "An accessible demonstration of permit status, milestone, deadline, and next-step tracking for applicants.",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{ children: React.ReactNode }>) {
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

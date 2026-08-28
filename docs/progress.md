@@ -1,37 +1,65 @@
-# PATH Delivery Progress
+# Current Status
 
-Last updated: 2026-08-28
+Wave 4 release is active. The demo MVP is implemented, independent review found no blocker/high demo defects, browser E2E passed, lint passes, and all pre-build domain/source contract tests pass.
 
-## Current checkpoint
+# Completed Tasks
 
-Checkpoint 1A is complete: repository hygiene and the production application scaffold are ready. Work is paused before Supabase/auth implementation for cloud handoff.
+- Inspected the complete source repository and recent GitHub history.
+- Established the existing one-file demo as the authoritative scope because no PRD exists.
+- Recorded the inferred demo MVP requirements, exclusions, dependency graph, risks, and verification strategy.
+- Initialized the maintainable Vinext application and dependency baseline.
+- Created typed agency, account, permit, milestone, alert, contact, and next-step fixtures.
+- Implemented semantic agency selection and three-scenario demo sign-in.
+- Implemented account-scoped dashboard, status/action states, and external LDEQ application handoff.
+- Implemented protected permit detail, milestone timeline, bounded progress, next steps, contact links, and print summary.
+- Added persistent prototype disclosure, skip navigation, focus management, announced errors/view changes, reduced-motion support, responsive rules, and print protections.
+- Added focused domain, ownership, authentication, source-contract, and metadata tests.
+- Passed lint and 12 pre-build focused tests.
+- Completed independent demo compliance, security/accessibility/UX, and test-sufficiency reviews.
+- Resolved the final review's live-looking contact and form-validation concerns by using fictional non-actionable contact details and native required-field validation.
+- Expanded agency, scenario deadline/hearing, and external-link contracts; 13 focused tests now pass.
+- Completed a live primary-flow browser pass: LDEQ selection, enabled/disabled progression, action-required demo sign-in, dashboard alert, account-owned detail, timeline/deadline/contact disclosure, back navigation, and clean sign-out reset.
+- Completed the first production build/package checkpoint successfully; private publication is being verified while the final review fixes await the release checkpoint.
 
-## Completed
+# Active Tasks
 
-- Read `docs/PRD.MD` and identified the production architecture, security boundary, core user path, and unresolved governance decisions.
-- Inspected the repository baseline: a tracked static `index.html` visual demo and `README.md`, plus local untracked environment/editor files.
-- Created the MVP execution plan around a secure end-to-end request lifecycle.
-- Added `.gitignore` coverage for credential-bearing environment files, dependencies, build output, and test artifacts.
-- Added `.env.example` with the PRD-required public/server variable boundary and blank values only.
-- Generated the official Next.js 16 App Router scaffold with React 19, TypeScript, Tailwind CSS, and ESLint.
-- Replaced the generic starter page with an accessible, responsive PATH landing shell based on the existing prototype’s visual language.
-- Added explicit lint and typecheck scripts.
-- Verified `npm run lint`, `npm run typecheck`, and `npm run build` successfully.
-- Removed the isolated temporary scaffold after integration; the original `index.html` remains unchanged as a visual reference.
+- RELEASE-01: Final build/package checkpoint, full post-build test run, deployment verification, and GitHub synchronization.
 
-## In progress
+# Pending Tasks
 
-- Paused at the completed scaffold checkpoint for cloud handoff.
+- Complete the final production build/package checkpoint and full post-build test suite.
+- Verify deployment and synchronize the validated source to GitHub.
 
-## Next
+# Blockers
 
-1. Add Supabase client boundaries, protected-route middleware, and the initial organization/membership/audit migration.
-2. Add RLS authorization tests before building operational features.
-3. Implement the email/password authentication shell.
+None for the demo MVP.
 
-## Risks and blockers
+Production use remains externally blocked on an approved PRD, identity provider, authoritative permit-data integration, agency/legal content validation, privacy/accessibility policies, and operational ownership. These do not block the explicitly described demo.
 
-- The PRD’s governance decisions remain open; synthetic pilot assumptions will be used only for development until approved.
-- The local `.env` is now ignored and remains uncommitted. Its variable names do not yet match all PRD-required names.
-- No database migrations or automated tests exist yet.
-- Node currently reports that TLS certificate verification is disabled in the host environment; this must not be used in CI or production tooling.
+# Test Status
+
+- Domain/source contract tests: 13 passed.
+- Lint: passed.
+- Production build/package: first checkpoint passed; final checkpoint pending review-fix publication.
+- Rendered-output and component tests: pending built artifact.
+- Browser E2E: passed primary action-required journey and sign-out reset.
+- Independent review: passed with no blocker/high demo findings.
+
+# Integration Status
+
+- GitHub source repository inspected and connected.
+- Site checkout initialized.
+- Source synchronization will occur after the final validated checkpoint.
+
+# Next Actions
+
+1. Finish terminal verification of the first publication.
+2. Prepare the final review-fix production checkpoint.
+3. Run the full test suite against the final built artifact.
+4. Publish, verify, and synchronize the validated source to GitHub.
+
+# Deferred Demo Improvements
+
+- Encode the multi-step journey in routes/history so browser Back and refresh preserve intuitive state.
+- Add automated browser and accessibility scanning to CI; the current release uses a bounded live browser pass plus source/data/rendered-output checks.
+- Replace the selectable agency buttons with a radio-group pattern if more agencies become available.
