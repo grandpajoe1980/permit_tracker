@@ -1,0 +1,22 @@
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+
+# Dependencies and Next.js output
+node_modules/
+.next/
+out/
+
+# Test and coverage output
+coverage/
+playwright-report/
+test-results/
+
+# Local tooling
+.vercel/
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+next-env.d.ts
+npm-debug.log*
