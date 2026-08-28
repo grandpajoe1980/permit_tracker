@@ -59,8 +59,8 @@ npx supabase db push
 
 Configure these Vercel environment variables for the deployment:
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or the legacy `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
+- `SUPABASE_URL` and `SUPABASE_ANON_KEY` (the build safely maps these to browser-safe values)
+- Or use `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` directly
 - `SUPABASE_SERVICE_ROLE_KEY` only for trusted server-side jobs; never expose it to the browser
 
 After the migration is pushed, create/approve user memberships and customer organization links before expecting customer requests to appear. RLS remains the authorization boundary.

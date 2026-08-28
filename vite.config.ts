@@ -1,6 +1,6 @@
 import vinext from "vinext";
 import { nitro } from "nitro/vite";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { sites } from "./build/sites-vite-plugin";
 
@@ -34,7 +34,21 @@ const localBindingConfig = {
     : [],
 };
 
-export default defineConfig(async () => {
+export default defineConfig(async ({ mode }) => {
+  const fileEnv = loadEnv(mode, process.cwd(), "");
+  const runtimeEnv = { ...fileEnv, ...process.env };
+  const publicSupabaseUrl =
+    runtimeEnv.NEXT_PUBLIC_SUPABASE_URL ?? runtimeEnv.SUPABASE_URL ?? "";
+  const publicSupabaseKey =
+    runtimeEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    runtimeEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    runtimeEnv.SUPABASE_ANON_KEY ??
+    "";
+  const publicEnvDefines = {
+    "process.env.NEXT_PUBLIC_SUPABASE_URL": JSON.stringify(publicSupabaseUrl),
+    "process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(publicSupabaseKey),
+    "process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY": JSON.stringify(publicSupabaseKey),
+  };
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= "false";
@@ -43,8 +57,9 @@ export default defineConfig(async () => {
 
   // Vercel needs Nitro's Node-compatible output. Cloudflare Sites keeps the
   // native Worker adapter used by the local/Cloudflare deployment path.
-  if (process.env.VERCEL === "1") {
+  if (runtimeEnv.VERCEL === "1") {
     return {
+      define: publicEnvDefines,
       plugins: [vinext(), nitro()],
     };
   }
@@ -52,6 +67,7 @@ export default defineConfig(async () => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
+    define: publicEnvDefines,
     server: {
       host: "0.0.0.0",
       allowedHosts: ["terminal.local"],
