@@ -7,6 +7,11 @@ if [[ "${SITES_ENV_READY:-}" != "1" ]]; then
   exec "${script_dir}/sites-env.sh" -- "$0" "$@"
 fi
 
+if [[ "${VERCEL:-}" == "1" ]]; then
+  echo "Running Vercel Nitro build..."
+  exec vite build
+fi
+
 command -v timeout || {
   echo "build-verified.sh requires GNU timeout." >&2
   exit 69

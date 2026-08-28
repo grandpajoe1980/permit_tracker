@@ -1,4 +1,5 @@
 import vinext from "vinext";
+import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { sites } from "./build/sites-vite-plugin";
@@ -40,7 +41,14 @@ export default defineConfig(async () => {
   process.env.WRANGLER_LOG_PATH ??= ".wrangler/logs";
   process.env.MINIFLARE_REGISTRY_PATH ??= ".wrangler/registry";
 
-  // Wrangler snapshots its log path while the Cloudflare plugin is imported.
+  // Vercel needs Nitro's Node-compatible output. Cloudflare Sites keeps the
+  // native Worker adapter used by the local/Cloudflare deployment path.
+  if (process.env.VERCEL === "1") {
+    return {
+      plugins: [vinext(), nitro()],
+    };
+  }
+
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
