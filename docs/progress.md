@@ -1,5 +1,9 @@
 # Current Status
 
+Supabase connectivity is verified with the supplied `.env` credentials. REST introspection and Storage reads succeed; a uniquely named private bucket was created, observed on read-after-write, and deleted successfully. The versioned MVP schema/RLS migration is now present locally, but the hosted project still has no application tables until the migration is pushed.
+
+The versioned MVP migration and frontend Supabase data path are now present locally. Until the migration is pushed to the hosted project, the web app will show no requests because the `requests` table does not exist remotely yet.
+
 Wave 4 release is active. The demo MVP is implemented, independent review found no blocker/high demo defects, browser E2E passed, lint passes, and all pre-build domain/source contract tests pass.
 
 # Completed Tasks
@@ -20,10 +24,18 @@ Wave 4 release is active. The demo MVP is implemented, independent review found 
 - Expanded agency, scenario deadline/hearing, and external-link contracts; 13 focused tests now pass.
 - Completed a live primary-flow browser pass: LDEQ selection, enabled/disabled progression, action-required demo sign-in, dashboard alert, account-owned detail, timeline/deadline/contact disclosure, back navigation, and clean sign-out reset.
 - Completed the first production build/package checkpoint successfully; private publication is being verified while the final review fixes await the release checkpoint.
+- Verified the supplied Supabase service-role credentials with `npm run supabase:probe` (REST read 200; Storage read/write/delete passed).
+- Added reproducible Supabase client dependencies and the redacted connection probe script.
+- Added `supabase/config.toml`, the initial PATH schema/RLS migration, and a safe seed file.
+- Updated the website login/session flow to read authorized `requests` rows from Supabase and removed demo credentials from the user-facing flow.
+- Verified the Vite/Vinext production build succeeds outside the sandbox.
+- Re-ran the Node test files outside the sandbox: 16 passed; two artifact tests could not run because the Windows environment did not produce `dist` through the Bash build wrapper (with a port-in-use warning).
+- The existing `npm test` wrapper is not runnable in this Windows shell because its checked-in Bash build script is denied by the host; the Supabase probe itself passes independently.
 
 # Active Tasks
 
 - RELEASE-01: Final build/package checkpoint, full post-build test run, deployment verification, and GitHub synchronization.
+- SUPABASE-01: Push the versioned schema migration to the hosted project, then verify authenticated database row reads/writes.
 
 # Pending Tasks
 
@@ -32,7 +44,7 @@ Wave 4 release is active. The demo MVP is implemented, independent review found 
 
 # Blockers
 
-None for the demo MVP.
+No client connection blocker. Hosted database row read/write and live web data are blocked only by the migration not yet being applied to the connected project; this requires Supabase CLI/database authorization not present in `.env`.
 
 Production use remains externally blocked on an approved PRD, identity provider, authoritative permit-data integration, agency/legal content validation, privacy/accessibility policies, and operational ownership. These do not block the explicitly described demo.
 

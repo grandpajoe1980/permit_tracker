@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   AlertTriangle,
@@ -32,9 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import {
-  DEMO_PASSWORD,
   agencies,
-  demoAccounts,
   type Agency,
   type DemoAccount,
   type PermitRecord,
@@ -42,12 +40,18 @@ import {
   type StepState,
 } from "@/lib/demo-data";
 import {
-  authenticateDemoAccount,
   firstName,
-  getPermitForAccount,
-  getPermitsForAccount,
   permitProgress,
 } from "@/lib/permit-utils";
+import {
+  getBrowserUser,
+  getSupabaseBrowserClient,
+  loadRequestsForUser,
+  signInWithPassword,
+  signOutBrowser,
+  supabaseConfigured,
+} from "@/lib/supabase-browser";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
 type View = "welcome" | "login" | "dashboard" | "detail";
 
@@ -56,7 +60,7 @@ const ldeqApplicationUrl =
 
 const viewTitles: Record<View, string> = {
   welcome: "Track a permit application",
-  login: "Sign in to the PATH demo",
+  login: "Sign in to PATH",
   dashboard: "My applications",
   detail: "Application detail",
 };
@@ -149,18 +153,36 @@ export default function Home() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [userPermits, setUserPermits] = useState<PermitRecord[]>([]);
+  const [loadingData, setLoadingData] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const usernameRef = useRef<HTMLInputElement>(null);
   const hasMountedRef = useRef(false);
 
   const selectedAgency = agencies.find((agency) => agency.id === selectedAgencyId) ?? null;
-  const selectedPermit = selectedPermitId
-    ? getPermitForAccount(currentUser, selectedPermitId)
-    : null;
-  const userPermits = useMemo(
-    () => getPermitsForAccount(currentUser),
-    [currentUser],
-  );
+  const selectedPermit = selectedPermitId ? userPermits.find((permit) => permit.id === selectedPermitId) ?? null : null;
+
+  useEffect(() => {
+    let active = true;
+    const client = getSupabaseBrowserClient();
+    if (!client) return;
+    void getBrowserUser().then(async (user) => {
+      if (!active || !user) return;
+      const { permits } = await loadRequestsForUser();
+      if (!active) return;
+      setCurrentUser({ username: user.email ?? "", name: String(user.user_metadata?.full_name ?? user.email ?? "User"), agencyId: "ldeq", applicationIds: permits.map((permit) => permit.id), scenario: "Authenticated account" });
+      setUserPermits(permits);
+      setSelectedAgencyId("ldeq");
+      setView("dashboard");
+    });
+    const { data: listener } = client.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
+      if (event === "SIGNED_OUT" || !session?.user) {
+        setCurrentUser(null);
+        setUserPermits([]);
+      }
+    });
+    return () => { active = false; listener.subscription.unsubscribe(); };
+  }, []);
 
   useEffect(() => {
     if (!hasMountedRef.current) {
@@ -180,41 +202,43 @@ export default function Home() {
     setView(nextView);
   }
 
-  function fillDemoAccount(account: DemoAccount) {
-    setUsername(account.username);
-    setPassword(DEMO_PASSWORD);
-    setLoginError("");
-    usernameRef.current?.focus();
-  }
-
-  function handleLogin(event: FormEvent<HTMLFormElement>) {
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const account = authenticateDemoAccount(username, password, selectedAgencyId);
-    if (!account) {
-      setLoginError("That demo username and password combination was not recognized.");
+    if (!selectedAgencyId) { setLoginError("Select an agency before signing in."); return; }
+    setLoadingData(true);
+    const { user, error } = await signInWithPassword(username, password);
+    if (error || !user) {
+      setLoadingData(false);
+      setLoginError(error?.message || "Sign-in failed. Check your email and password.");
       usernameRef.current?.focus();
       return;
     }
-
+    const loaded = await loadRequestsForUser();
+    setLoadingData(false);
+    if (loaded.error) { setLoginError(`Signed in, but applications could not be loaded: ${loaded.error.message}`); return; }
     setLoginError("");
+    const account: DemoAccount = { username: user.email ?? "", name: String(user.user_metadata?.full_name ?? user.email ?? "User"), agencyId: selectedAgencyId, applicationIds: loaded.permits.map((permit) => permit.id), scenario: "Authenticated account" };
     setCurrentUser(account);
+    setUserPermits(loaded.permits);
     setSelectedPermitId(null);
     setView("dashboard");
   }
 
   function openPermit(permitId: string) {
-    if (!getPermitForAccount(currentUser, permitId)) return;
+    if (!userPermits.some((permit) => permit.id === permitId)) return;
     setSelectedPermitId(permitId);
     setView("detail");
   }
 
-  function signOut() {
+  async function signOut() {
+    await signOutBrowser();
     setCurrentUser(null);
     setSelectedPermitId(null);
     setSelectedAgencyId(null);
     setUsername("");
     setPassword("");
     setLoginError("");
+    setUserPermits([]);
     setView("welcome");
   }
 
@@ -226,9 +250,7 @@ export default function Home() {
 
       <div className="demo-banner print-keep" role="note">
         <ShieldAlert className="size-4 shrink-0" aria-hidden="true" />
-        <p>
-          <strong>Prototype only.</strong> Illustrative sample data; not connected to LDEQ or any government system. Do not enter real credentials or sensitive information.
-        </p>
+          <p><strong>PATH secure portal.</strong> Application data is loaded from your authorized Supabase account. Never share your password.</p>
       </div>
 
       <header className="site-header print-hide">
@@ -249,7 +271,7 @@ export default function Home() {
           {currentUser ? (
             <div className="flex min-w-0 items-center gap-2 sm:gap-4">
               <p className="hidden truncate text-sm text-slate-300 sm:block">
-                Demo user: <strong className="text-white">{currentUser.name}</strong>
+                Signed in as <strong className="text-white">{currentUser.name}</strong>
               </p>
               <Button
                 id="logout"
@@ -264,7 +286,7 @@ export default function Home() {
               </Button>
             </div>
           ) : (
-            <Badge className="border border-white/20 bg-white/10 text-white">Demo MVP</Badge>
+            <Badge className="border border-white/20 bg-white/10 text-white">Secure portal</Badge>
           )}
         </div>
       </header>
@@ -291,7 +313,7 @@ export default function Home() {
 
                 <div className="mt-10 grid gap-4 sm:grid-cols-3">
                   {[
-                    [Clock3, "Clear status", "See the current phase and illustrative target timeline."],
+                    [Clock3, "Clear status", "See the current phase and target timeline."],
                     [AlertTriangle, "Action alerts", "Bring deadlines and requested information to the front."],
                     [Route, "Visible path", "Understand what is complete and what comes next."],
                   ].map(([Icon, title, body]) => {
@@ -310,9 +332,9 @@ export default function Home() {
               <Card className="overflow-hidden border-0 py-0 shadow-xl shadow-slate-900/10">
                 <div className="road-stripe" aria-hidden="true" />
                 <CardHeader className="px-6 pt-7 sm:px-8">
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-800">Step 1 of 3</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-800">Step 1 of 3</p>
                   <CardTitle className="text-2xl text-[#00284d]">Select your agency</CardTitle>
-                  <p className="text-sm leading-6 text-slate-600">Choose the agency used by the demo account.</p>
+                  <p className="text-sm leading-6 text-slate-600">Choose the agency for your account.</p>
                 </CardHeader>
                 <CardContent className="space-y-3 px-6 pb-8 sm:px-8">
                   <div className="space-y-3" role="group" aria-label="Available agencies">
@@ -355,7 +377,7 @@ export default function Home() {
                     className="mt-3 h-12 w-full bg-[#00284d] text-base hover:bg-[#003c70]"
                     onClick={() => navigate("login")}
                   >
-                    Continue to demo sign in
+                    Continue to sign in
                     <ArrowRight aria-hidden="true" />
                   </Button>
                 </CardContent>
@@ -380,7 +402,7 @@ export default function Home() {
                       tabIndex={-1}
                       className="text-2xl font-black text-[#00284d] outline-none"
                     >
-                      Sign in to the PATH demo
+                      Sign in to PATH
                     </h1>
                     <p className="mt-1 text-sm text-slate-600">
                       {selectedAgency?.abbreviation} · {selectedAgency?.name}
@@ -389,38 +411,24 @@ export default function Home() {
                 </div>
               </CardHeader>
               <CardContent className="px-6 py-7 sm:px-8">
-                <Alert className="mb-7 border-amber-300 bg-amber-50 text-amber-950">
+                <Alert className="mb-7 border-teal-300 bg-teal-50 text-teal-950">
                   <Info aria-hidden="true" />
-                  <AlertTitle>Choose a sample scenario</AlertTitle>
-                  <AlertDescription className="text-amber-900">
-                    These public credentials unlock fictional data only. Shared password: <code className="rounded bg-amber-100 px-1.5 py-0.5 font-bold">{DEMO_PASSWORD}</code>
+                  <AlertTitle>Sign in with your PATH account</AlertTitle>
+                  <AlertDescription className="text-teal-900">
+                    {supabaseConfigured() ? "Connected to Supabase. Your access is enforced by Supabase Auth and row-level security; applications are limited to your authorized account." : "Supabase is not configured in this deployment. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in the environment settings."}
                   </AlertDescription>
                 </Alert>
-
-                <div className="mb-7 grid gap-2 sm:grid-cols-3" role="group" aria-label="Demo accounts">
-                  {demoAccounts.map((account) => (
-                    <Button
-                      key={account.username}
-                      type="button"
-                      variant="outline"
-                      className="h-auto min-w-0 flex-col items-start gap-0.5 px-3 py-3 text-left"
-                      onClick={() => fillDemoAccount(account)}
-                    >
-                      <span className="font-bold">{account.scenario}</span>
-                      <span className="max-w-full truncate text-xs font-normal text-slate-500">{account.username}</span>
-                    </Button>
-                  ))}
-                </div>
 
                 <form onSubmit={handleLogin}>
                   <div className="grid gap-5">
                     <div className="grid gap-2">
-                      <Label htmlFor="username">Demo username</Label>
+                      <Label htmlFor="username">Email address</Label>
                       <Input
                         ref={usernameRef}
                         id="username"
                         name="username"
-                        autoComplete="username"
+                        type="email"
+                        autoComplete="email"
                         value={username}
                         required
                         aria-invalid={Boolean(loginError)}
@@ -433,7 +441,7 @@ export default function Home() {
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="password">Demo password</Label>
+                      <Label htmlFor="password">Password</Label>
                       <Input
                         id="password"
                         name="password"
@@ -456,7 +464,7 @@ export default function Home() {
                       </p>
                     )}
                     <Button id="login-submit" type="submit" size="lg" className="h-12 bg-[#00284d] text-base hover:bg-[#003c70]">
-                      View my demo application
+                      {loadingData ? "Loading applications…" : "Sign in and view applications"}
                       <ArrowRight aria-hidden="true" />
                     </Button>
                   </div>
@@ -475,7 +483,7 @@ export default function Home() {
           <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
             <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-teal-800">LDEQ demo workspace</p>
+                <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-teal-800">LDEQ workspace</p>
                 <h1
                   ref={headingRef}
                   tabIndex={-1}
@@ -483,10 +491,10 @@ export default function Home() {
                 >
                   Welcome back, {firstName(currentUser.name)}
                 </h1>
-                <p className="mt-2 text-slate-600">Showing the application linked to this fictional account.</p>
+                <p className="mt-2 text-slate-600">Showing applications authorized for your account.</p>
               </div>
               <Badge variant="outline" className="border-slate-300 bg-white px-3 py-1 text-slate-700">
-                {userPermits.length} demo application{userPermits.length === 1 ? "" : "s"}
+                {userPermits.length} application{userPermits.length === 1 ? "" : "s"}
               </Badge>
             </div>
 
@@ -495,7 +503,7 @@ export default function Home() {
               .map((permit) => (
                 <Alert key={permit.id} className="mb-6 border-amber-400 bg-amber-50 text-amber-950 shadow-sm">
                   <AlertTriangle aria-hidden="true" />
-                  <AlertTitle>Action-required example · {permit.id}</AlertTitle>
+                  <AlertTitle>Action required · {permit.id}</AlertTitle>
                   <AlertDescription className="text-amber-900">{permit.alert?.body}</AlertDescription>
                 </Alert>
               ))}
@@ -519,7 +527,7 @@ export default function Home() {
             </a>
 
             <section aria-labelledby="application-list-title">
-              <h2 id="application-list-title" className="sr-only">My demo applications</h2>
+              <h2 id="application-list-title" className="sr-only">My applications</h2>
               <div className="space-y-4">
                 {userPermits.map((permit) => {
                   const progress = permitProgress(permit);
@@ -547,7 +555,7 @@ export default function Home() {
                         </span>
                         <Progress
                           value={progress}
-                          aria-label={`${progress}% of the illustrative target timeline elapsed`}
+                          aria-label={`${progress}% of the target timeline elapsed`}
                           className={`h-2 bg-slate-200 ${permit.status === "action-needed" ? "[&_[data-slot=progress-indicator]]:bg-amber-600" : "[&_[data-slot=progress-indicator]]:bg-teal-700"}`}
                         />
                       </span>
@@ -572,7 +580,7 @@ export default function Home() {
               <div className="border-b px-5 py-6 sm:px-8 sm:py-8">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-teal-800">Illustrative application summary</p>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-teal-800">Application summary</p>
                     <h1
                       ref={headingRef}
                       tabIndex={-1}
@@ -624,11 +632,11 @@ export default function Home() {
                       <p className="section-kicker">Application progress</p>
                       <h2 id="timeline-title" className="text-xl font-black text-[#00284d]">Milestone timeline</h2>
                     </div>
-                    <p className="text-sm font-bold text-teal-800">{permitProgress(selectedPermit)}% of illustrative target</p>
+                    <p className="text-sm font-bold text-teal-800">{permitProgress(selectedPermit)}% of target</p>
                   </div>
                   <Progress
                     value={permitProgress(selectedPermit)}
-                    aria-label={`${permitProgress(selectedPermit)}% of the illustrative target timeline elapsed`}
+                    aria-label={`${permitProgress(selectedPermit)}% of the target timeline elapsed`}
                     className={`mb-8 h-3 bg-slate-200 ${selectedPermit.status === "action-needed" ? "[&_[data-slot=progress-indicator]]:bg-amber-600" : "[&_[data-slot=progress-indicator]]:bg-teal-700"}`}
                   />
 
@@ -697,8 +705,8 @@ export default function Home() {
 
       <footer className="site-footer print-keep">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-xs leading-5 sm:px-6">
-          <p className="font-bold text-slate-800">PATH is a demonstration interface, not an official agency communication channel.</p>
-          <p>All people, companies, records, milestones, dates, deadlines, and instructions shown here are illustrative and require agency validation before any production use.</p>
+          <p className="font-bold text-slate-800">PATH is an application tracking portal.</p>
+          <p>Application status and records are provided by participating agencies. Verify official notices through your agency contact.</p>
         </div>
       </footer>
     </div>

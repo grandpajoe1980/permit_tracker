@@ -39,6 +39,32 @@ npm run lint
 npm test
 ```
 
+## Supabase connection
+
+The website uses Supabase Auth and reads authorized rows from the `requests` table. The schema, RLS policies, auth-profile trigger, and private document bucket are versioned under `supabase/`.
+
+For local verification, copy `.env.example` to `.env` and set the Supabase URL plus a server-only service-role key. Then run:
+
+```bash
+npm run supabase:probe
+```
+
+To apply the schema to a hosted project, authenticate the Supabase CLI and push the migration from a trusted machine:
+
+```bash
+npx supabase login
+npx supabase link --project-ref <your-project-ref>
+npx supabase db push
+```
+
+Configure these Vercel environment variables for the deployment:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or the legacy `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
+- `SUPABASE_SERVICE_ROLE_KEY` only for trusted server-side jobs; never expose it to the browser
+
+After the migration is pushed, create/approve user memberships and customer organization links before expecting customer requests to appear. RLS remains the authorization boundary.
+
 `npm test` creates the production build and runs the focused data, helper, component, CSS, and rendered-output checks.
 
 ## Project map
