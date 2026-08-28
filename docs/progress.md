@@ -2,6 +2,8 @@
 
 Supabase connectivity is verified with the supplied `.env` credentials. REST introspection and Storage reads succeed; a uniquely named private bucket was created, observed on read-after-write, and deleted successfully. The versioned MVP schema/RLS migration is now present locally, but the hosted project still has no application tables until the migration is pushed.
 
+The Vercel deployment path is now verified with Nitro output. The production alias loads the PATH landing page, and the sign-in screen reports that it is connected to Supabase using the Vercel `SUPABASE_URL`/`SUPABASE_ANON_KEY` environment names.
+
 The versioned MVP migration and frontend Supabase data path are now present locally. Until the migration is pushed to the hosted project, the web app will show no requests because the `requests` table does not exist remotely yet.
 
 Wave 4 release is active. The demo MVP is implemented, independent review found no blocker/high demo defects, browser E2E passed, lint passes, and all pre-build domain/source contract tests pass.
@@ -28,6 +30,9 @@ Wave 4 release is active. The demo MVP is implemented, independent review found 
 - Added reproducible Supabase client dependencies and the redacted connection probe script.
 - Added `supabase/config.toml`, the initial PATH schema/RLS migration, and a safe seed file.
 - Updated the website login/session flow to read authorized `requests` rows from Supabase and removed demo credentials from the user-facing flow.
+- Added a Vercel-safe build mapping from `SUPABASE_URL` and `SUPABASE_ANON_KEY` to the browser publishable Supabase variables; the service-role key is never bundled.
+- Committed and pushed the Vercel deployment adapter and Supabase environment mapping (`2391223`, `6c0989e`).
+- Verified `https://permit-tracker-iota.vercel.app/` after deployment: PATH renders successfully and the sign-in flow shows “Connected to Supabase.”
 - Verified the Vite/Vinext production build succeeds outside the sandbox.
 - Re-ran the Node test files outside the sandbox: 16 passed; two artifact tests could not run because the Windows environment did not produce `dist` through the Bash build wrapper (with a port-in-use warning).
 - The existing `npm test` wrapper is not runnable in this Windows shell because its checked-in Bash build script is denied by the host; the Supabase probe itself passes independently.
@@ -52,7 +57,7 @@ Production use remains externally blocked on an approved PRD, identity provider,
 
 - Domain/source contract tests: 13 passed.
 - Lint: passed.
-- Production build/package: first checkpoint passed; final checkpoint pending review-fix publication.
+- Production build/package: Vercel Nitro build passed; deployed alias verified after the environment mapping fix.
 - Rendered-output and component tests: pending built artifact.
 - Browser E2E: passed primary action-required journey and sign-out reset.
 - Independent review: passed with no blocker/high demo findings.
@@ -61,7 +66,7 @@ Production use remains externally blocked on an approved PRD, identity provider,
 
 - GitHub source repository inspected and connected.
 - Site checkout initialized.
-- Source synchronization will occur after the final validated checkpoint.
+- Source synchronization complete through commit `6c0989e` on `main`.
 
 # Next Actions
 
