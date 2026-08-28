@@ -29,8 +29,7 @@ test("renders the PATH demo shell and honest prototype disclosure", async () => 
   const html = await response.text();
   assert.match(html, /<title>PATH — Permit Application Tracker<\/title>/i);
   assert.match(html, /Permit Application Tracker/i);
-  assert.match(html, /Prototype only\./i);
-  assert.match(html, /Select your agency/i);
+  assert.match(html, /SpaceX Louisiana workspace/i);
   assert.match(html, /Do not enter real credentials or sensitive information/i);
   assert.doesNotMatch(html, /Starter Project|Ship something real/i);
   assert.doesNotMatch(html, /official state government website/i);

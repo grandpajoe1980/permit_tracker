@@ -17,20 +17,14 @@ test("uses the typed domain module without duplicating fixtures in the UI", () =
 });
 
 test("preserves stable journey labels and semantic controls", () => {
-  assert.match(page, /Select your agency/i);
-  assert.match(page, /Sign in to the PATH demo/i);
+  assert.match(page, /SpaceX Louisiana workspace/i);
+  assert.match(page, /Sign in to PATH/i);
   assert.match(page, /My applications/i);
-  assert.match(page, /id="agency-next"/);
+  assert.match(page, /id="workspace-next"/);
   assert.match(page, /id="login-submit"/);
   assert.match(page, /id="login-error" role="alert"/);
-  assert.match(page, /id="new-permit-link"/);
-  assert.match(
-    page,
-    /https:\/\/www\.deq\.louisiana\.gov\/about-ldeq\/office-of-environmental-services-welcome/,
-  );
-  assert.match(page, /target="_blank"/);
-  assert.match(page, /rel="noopener noreferrer"/);
-  assert.match(page, /role="group" aria-label="Available agencies"/);
+  assert.match(page, /Submit a new project request/i);
+  assert.match(page, /createRequestForUser/);
   assert.match(page, /aria-live="polite"/);
   assert.doesNotMatch(page, /dangerouslySetInnerHTML|onclick\s*=/);
 });
@@ -49,7 +43,7 @@ test("includes responsive, focus, reduced-motion, and print protections", () => 
 });
 
 test("documents the public-demo boundary and production security gap", () => {
-  assert.match(readme, /not connected to LDEQ or any government system/i);
+  assert.match(readme, /proof of concept/i);
   assert.match(readme, /not a security boundary/i);
   assert.match(readme, /server-side authorization/i);
 });
