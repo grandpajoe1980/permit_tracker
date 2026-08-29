@@ -9,6 +9,12 @@ export type RequestCategory =
   | "workforce"
   | "community";
 
+export type JurisdictionLevel =
+  | "Federal"
+  | "State"
+  | "Local / Parish"
+  | "Utility / Regional";
+
 export type RAGStatus = "green" | "yellow" | "red";
 
 export type CategoryMeta = {
@@ -90,6 +96,20 @@ export type PermitStep = {
   note?: string;
 };
 
+export type GanttPhase = {
+  name: string;
+  startMonth: number; // 1 = Jan, 12 = Dec 2024
+  endMonth: number;
+  state: StepState;
+};
+
+export type GanttTimeline = {
+  startMonth: number;
+  endMonth: number;
+  progressMonth: number; // e.g. 5.5 = Mid-May
+  phases: GanttPhase[];
+};
+
 export type ServiceRequest = {
   id: string;
   title: string;
@@ -100,6 +120,7 @@ export type ServiceRequest = {
   organization: string;
   leadAgency: string;
   leadAgencyCode: string;
+  agencyLevel: JurisdictionLevel;
   submitted: string;
   targetDate: string;
   currentDay: number;
@@ -130,6 +151,7 @@ export type ServiceRequest = {
   };
   escalationPath: EscalationTier[];
   steps: PermitStep[];
+  gantt?: GanttTimeline;
   nextSteps: Array<{
     title: string;
     body: string;
@@ -281,44 +303,45 @@ export const demoAccounts: DemoAccount[] = [
     username: "applicant.happypath",
     name: "Jordan Thibodaux",
     agencyId: "ldeq",
-    applicationIds: ["WQ-2024-00142"],
+    applicationIds: ["TASK-T003"],
     scenario: "Standard review",
   },
   {
     username: "applicant.suspended",
     name: "Marcus Fontenot",
     agencyId: "ldeq",
-    applicationIds: ["WQ-2024-00089"],
+    applicationIds: ["TASK-T001"],
     scenario: "Action required",
   },
   {
     username: "applicant.hearing",
     name: "Celeste Broussard",
     agencyId: "ldeq",
-    applicationIds: ["WQ-2024-00207"],
+    applicationIds: ["TASK-T003"],
     scenario: "Public hearing",
   },
 ];
 
 export const pecanIslandRequests: ServiceRequest[] = [
   {
-    id: "REQ-PECAN-001",
+    id: "TASK-T001",
     title: "LA-82 Heavy-Haul Access Road & Bridge Reinforcement",
-    type: "Road & Bridge Infrastructure Approval",
+    type: "Road & Bridge Infrastructure Authorization",
     category: "road",
     categoryLabel: "Roads & Access",
     applicant: "SpaceX Louisiana Program",
     organization: "Space Exploration Technologies Corp.",
-    leadAgency: "Louisiana Department of Transportation and Development",
+    leadAgency: "Louisiana Department of Transportation & Development (DOTD)",
     leadAgencyCode: "DOTD",
+    agencyLevel: "State",
     submitted: "January 15, 2024",
     targetDate: "September 1, 2024",
     currentDay: 135,
     totalDays: 230,
     status: "action-needed",
-    statusLabel: "Blocked on Coastal Drainage Review",
+    statusLabel: "Blocked on Coastal Drainage Concurrence",
     ragStatus: "red",
-    ragLabel: "Blocked / Critical Path",
+    ragLabel: "Blocked",
     isCriticalPath: true,
     blocker: {
       title: "Inter-Agency Blocker: CPRA Drainage Authorization Required",
@@ -346,7 +369,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
         contactName: "Dave Broussard",
         contactEmail: "dave.broussard@dotd.la.gov",
         contactPhone: "(337) 262-6100",
-        agency: "DOTD",
+        agency: "DOTD (State)",
         status: "engaged",
       },
       {
@@ -355,7 +378,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
         contactName: "Jean-Paul Guidry",
         contactEmail: "jp.guidry@gov.la.gov",
         contactPhone: "(225) 342-7000",
-        agency: "Governor's Office",
+        agency: "Governor's Office (State)",
         status: "escalated",
       },
       {
@@ -364,10 +387,22 @@ export const pecanIslandRequests: ServiceRequest[] = [
         contactName: "Secretary of Transportation & CPRA Chair",
         contactEmail: "taskforce@gov.la.gov",
         contactPhone: "(225) 342-0900",
-        agency: "Executive Cabinet",
+        agency: "Executive Cabinet (State)",
         status: "idle",
       },
     ],
+    gantt: {
+      startMonth: 1,
+      endMonth: 9,
+      progressMonth: 5.5,
+      phases: [
+        { name: "Route Survey", startMonth: 1, endMonth: 2, state: "done" },
+        { name: "Structural Design", startMonth: 2, endMonth: 4, state: "done" },
+        { name: "CPRA Drainage Clearance", startMonth: 4, endMonth: 6, state: "blocked" },
+        { name: "DOTD Construction Order", startMonth: 6, endMonth: 8, state: "future" },
+        { name: "Load Certification", startMonth: 8, endMonth: 9, state: "future" },
+      ],
+    },
     steps: [
       { phase: "Phase 1 · Project Intake", title: "Route Survey & Axle-Load Study", meta: "Completed · January 28, 2024", state: "done" },
       { phase: "Phase 2 · Engineering Review", title: "Bridge Abutment Structural Analysis", meta: "Completed · March 15, 2024", state: "done" },
@@ -387,7 +422,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
     officialFilingNotice: "Formal right-of-way permit application DOTD-ROW-2024-8891 is lodged with Louisiana DOTD District 03.",
   },
   {
-    id: "REQ-PECAN-002",
+    id: "TASK-T002",
     title: "230kV Dual-Feed High-Capacity Grid Interconnection",
     type: "Electric Utility Transmission Interconnection",
     category: "utility",
@@ -396,6 +431,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
     organization: "Space Exploration Technologies Corp.",
     leadAgency: "Louisiana Public Service Commission & Entergy Louisiana",
     leadAgencyCode: "LPSC / Entergy",
+    agencyLevel: "Utility / Regional",
     submitted: "February 1, 2024",
     targetDate: "October 15, 2024",
     currentDay: 118,
@@ -403,7 +439,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
     status: "in-review",
     statusLabel: "Substation Engineering Under Review",
     ragStatus: "green",
-    ragLabel: "On Track · Critical Path",
+    ragLabel: "On Track",
     isCriticalPath: true,
     owner: {
       name: "Carolyn Hebert",
@@ -424,7 +460,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
         contactName: "Carolyn Hebert",
         contactEmail: "c.hebert@entergy-power.invalid",
         contactPhone: "(504) 576-4000",
-        agency: "Entergy",
+        agency: "Entergy (Utility)",
         status: "engaged",
       },
       {
@@ -433,19 +469,22 @@ export const pecanIslandRequests: ServiceRequest[] = [
         contactName: "Mark Landry",
         contactEmail: "m.landry@lpsc.gov",
         contactPhone: "(225) 342-4411",
-        agency: "LPSC",
-        status: "idle",
-      },
-      {
-        level: 3,
-        title: "Governor's Energy Resilience Task Force",
-        contactName: "Undersecretary for Energy Infrastructure",
-        contactEmail: "energy-liaison@gov.la.gov",
-        contactPhone: "(225) 342-7000",
-        agency: "Executive Cabinet",
+        agency: "LPSC (State Commission)",
         status: "idle",
       },
     ],
+    gantt: {
+      startMonth: 2,
+      endMonth: 10,
+      progressMonth: 5.5,
+      phases: [
+        { name: "Grid Feasibility Study", startMonth: 2, endMonth: 3, state: "done" },
+        { name: "Corridor Right-of-Way", startMonth: 3, endMonth: 4, state: "done" },
+        { name: "Substation Engineering", startMonth: 4, endMonth: 7, state: "active" },
+        { name: "LPSC Order Sign-off", startMonth: 7, endMonth: 8, state: "future" },
+        { name: "Commercial Energization", startMonth: 8, endMonth: 10, state: "future" },
+      ],
+    },
     steps: [
       { phase: "Phase 1 · Interconnection Study", title: "Feasibility and Grid Stability Modeling", meta: "Completed · February 28, 2024", state: "done" },
       { phase: "Phase 2 · Route Survey", title: "18-Mile Transmission Corridor Right-of-Way", meta: "Completed · April 20, 2024", state: "done" },
@@ -460,7 +499,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
     officialFilingNotice: "Official utility docket filed under LPSC Docket No. U-36940.",
   },
   {
-    id: "REQ-PECAN-003",
+    id: "TASK-T003",
     title: "Industrial Wastewater & Launch Deluge Retention Basin",
     type: "Individual LPDES Water Quality Permit",
     category: "permit",
@@ -469,6 +508,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
     organization: "Space Exploration Technologies Corp.",
     leadAgency: "Louisiana Department of Environmental Quality",
     leadAgencyCode: "LDEQ",
+    agencyLevel: "State",
     submitted: "January 10, 2024",
     targetDate: "August 30, 2024",
     currentDay: 140,
@@ -476,7 +516,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
     status: "hearing",
     statusLabel: "Public Hearing Scheduled (July 15)",
     ragStatus: "yellow",
-    ragLabel: "Action / Hearing · Critical Path",
+    ragLabel: "Hearing",
     isCriticalPath: true,
     owner: {
       name: "Jordan Lee",
@@ -497,7 +537,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
         contactName: "Jordan Lee",
         contactEmail: "jordan.lee@la.gov",
         contactPhone: "(225) 219-3181",
-        agency: "LDEQ",
+        agency: "LDEQ (State)",
         status: "engaged",
       },
       {
@@ -506,19 +546,22 @@ export const pecanIslandRequests: ServiceRequest[] = [
         contactName: "Celeste Moreau",
         contactEmail: "celeste.moreau@la.gov",
         contactPhone: "(225) 219-3950",
-        agency: "LDEQ",
-        status: "idle",
-      },
-      {
-        level: 3,
-        title: "Governor's Environmental & Economic Council",
-        contactName: "Deputy Chief of Staff for Environment",
-        contactEmail: "env-council@gov.la.gov",
-        contactPhone: "(225) 342-7000",
-        agency: "Executive Cabinet",
+        agency: "LDEQ (State)",
         status: "idle",
       },
     ],
+    gantt: {
+      startMonth: 1,
+      endMonth: 8,
+      progressMonth: 5.5,
+      phases: [
+        { name: "Effluent Modeling", startMonth: 1, endMonth: 2, state: "done" },
+        { name: "Technical Review", startMonth: 2, endMonth: 4, state: "done" },
+        { name: "Draft Permit & Notice", startMonth: 4, endMonth: 5, state: "done" },
+        { name: "Public Hearing (July 15)", startMonth: 5, endMonth: 7, state: "hearing" },
+        { name: "LPDES Permit Determination", startMonth: 7, endMonth: 8, state: "future" },
+      ],
+    },
     steps: [
       { phase: "Phase 1 · Application Intake", title: "Completeness Review & Effluent Sampling Plan", meta: "Completed · January 30, 2024", state: "done" },
       { phase: "Phase 2 · Technical Review", title: "Deluge Water Treatment Modeling", meta: "Completed · April 15, 2024", state: "done" },
@@ -538,15 +581,16 @@ export const pecanIslandRequests: ServiceRequest[] = [
     officialFilingNotice: "Statutory application LPDES-LA0128913 is published in the LDEQ Electronic Document Management System (EDMS).",
   },
   {
-    id: "REQ-PECAN-004",
+    id: "TASK-T004",
     title: "Starship Assembly High-Bay Building Authorization",
     type: "Parish Commercial & Industrial Building Permit",
     category: "permit",
     categoryLabel: "Permits",
     applicant: "SpaceX Louisiana Program",
     organization: "Space Exploration Technologies Corp.",
-    leadAgency: "Vermilion Parish Development Board",
+    leadAgency: "Vermilion Parish Development Board & Building Department",
     leadAgencyCode: "Vermilion Parish",
+    agencyLevel: "Local / Parish",
     submitted: "January 5, 2024",
     targetDate: "June 30, 2024",
     currentDay: 145,
@@ -575,10 +619,21 @@ export const pecanIslandRequests: ServiceRequest[] = [
         contactName: "Brett Landry",
         contactEmail: "b.landry@vermiliongov.invalid",
         contactPhone: "(337) 898-4300",
-        agency: "Vermilion Parish",
+        agency: "Vermilion Parish (Local)",
         status: "idle",
       },
     ],
+    gantt: {
+      startMonth: 1,
+      endMonth: 6,
+      progressMonth: 6,
+      phases: [
+        { name: "Architectural & Wind Load", startMonth: 1, endMonth: 2, state: "done" },
+        { name: "Coastal Height Variance", startMonth: 2, endMonth: 3, state: "done" },
+        { name: "Foundation Slab Release", startMonth: 3, endMonth: 5, state: "done" },
+        { name: "Permit Issued & Sign-off", startMonth: 5, endMonth: 6, state: "done" },
+      ],
+    },
     steps: [
       { phase: "Phase 1 · Intake", title: "Architectural & Structural Wind-Load Review (165mph)", meta: "Completed · January 25, 2024", state: "done" },
       { phase: "Phase 2 · Coastal Zoning", title: "Height & Setback Variance Sign-off", meta: "Completed · March 10, 2024", state: "done" },
@@ -591,15 +646,16 @@ export const pecanIslandRequests: ServiceRequest[] = [
     officialFilingNotice: "Parish Building Permit VP-IND-2024-041 on record at Abbeville courthouse.",
   },
   {
-    id: "REQ-PECAN-005",
-    title: "Gulf Airspace & Maritime Launch Safety Corridor",
+    id: "TASK-T005",
+    title: "Gulf Airspace NOTAM & Maritime Launch Safety Corridor",
     type: "Multi-Agency Safety & Security Authorization",
     category: "public_safety",
     categoryLabel: "Public Safety",
     applicant: "SpaceX Louisiana Program",
     organization: "Space Exploration Technologies Corp.",
-    leadAgency: "Louisiana State Police, FAA & USCG District 8",
-    leadAgencyCode: "LSP / FAA / USCG",
+    leadAgency: "FAA Southwest Region, USCG District 8 & Louisiana State Police",
+    leadAgencyCode: "FAA / USCG / LSP",
+    agencyLevel: "Federal",
     submitted: "March 1, 2024",
     targetDate: "November 1, 2024",
     currentDay: 90,
@@ -607,12 +663,12 @@ export const pecanIslandRequests: ServiceRequest[] = [
     status: "in-review",
     statusLabel: "Airspace & Maritime Draft Plan In Review",
     ragStatus: "green",
-    ragLabel: "On Track · Critical Path",
+    ragLabel: "On Track",
     isCriticalPath: true,
     owner: {
       name: "Maj. Ryan Falcon",
-      title: "Commander, Emergency Operations & Aviation Liaison",
-      agency: "Louisiana State Police",
+      title: "Commander, Aviation Liaison & Emergency Operations",
+      agency: "Louisiana State Police / FAA Liaison",
       email: "ryan.falcon@dps.la.gov",
       phone: "(225) 925-6000",
     },
@@ -628,28 +684,40 @@ export const pecanIslandRequests: ServiceRequest[] = [
         contactName: "Maj. Ryan Falcon",
         contactEmail: "ryan.falcon@dps.la.gov",
         contactPhone: "(225) 925-6000",
-        agency: "State Police",
+        agency: "State Police (State)",
         status: "engaged",
       },
       {
         level: 2,
-        title: "GOHSEP Inter-Agency Operations Director",
+        title: "GOHSEP Operations Director",
         contactName: "Col. Jacques Trahan",
         contactEmail: "j.trahan@gohsep.la.gov",
         contactPhone: "(225) 925-7500",
-        agency: "GOHSEP",
+        agency: "GOHSEP (State)",
         status: "idle",
       },
       {
         level: 3,
-        title: "Governor's Homeland Security Council",
-        contactName: "Secretary of Public Safety",
-        contactEmail: "dps-sec@gov.la.gov",
-        contactPhone: "(225) 342-7000",
-        agency: "Executive Cabinet",
+        title: "FAA Commercial Space Operations Desk",
+        contactName: "Federal Space Transportation Lead",
+        contactEmail: "ast-liaison@faa.gov",
+        contactPhone: "(202) 267-8000",
+        agency: "FAA (Federal)",
         status: "idle",
       },
     ],
+    gantt: {
+      startMonth: 3,
+      endMonth: 11,
+      progressMonth: 5.5,
+      phases: [
+        { name: "Azimuth Hazard Mapping", startMonth: 3, endMonth: 4, state: "done" },
+        { name: "USCG Notice Protocol", startMonth: 4, endMonth: 5, state: "done" },
+        { name: "FAA ATC Agreement", startMonth: 5, endMonth: 8, state: "active" },
+        { name: "Multi-Agency Drill", startMonth: 8, endMonth: 9, state: "future" },
+        { name: "Final Launch License Release", startMonth: 9, endMonth: 11, state: "future" },
+      ],
+    },
     steps: [
       { phase: "Phase 1 · Trajectory Mapping", title: "Launch Azimuth & Hazard Area Analysis", meta: "Completed · March 28, 2024", state: "done" },
       { phase: "Phase 2 · Maritime Coordination", title: "USCG Local Notice to Mariners Protocol", meta: "Completed · May 15, 2024", state: "done" },
@@ -664,15 +732,16 @@ export const pecanIslandRequests: ServiceRequest[] = [
     officialFilingNotice: "FAA commercial launch license filings coordinated under Title 14 CFR Part 450.",
   },
   {
-    id: "REQ-PECAN-006",
+    id: "TASK-T006",
     title: "Coastal Dune Reconstruction & Chenier Wetland Mitigation Bank",
     type: "Coastal Use & Wetland Mitigation Permit",
     category: "permit",
     categoryLabel: "Permits",
     applicant: "SpaceX Louisiana Program",
     organization: "Space Exploration Technologies Corp.",
-    leadAgency: "Coastal Protection and Restoration Authority & USACE",
+    leadAgency: "Coastal Protection & Restoration Authority & US Army Corps of Engineers",
     leadAgencyCode: "CPRA / USACE",
+    agencyLevel: "Federal",
     submitted: "February 10, 2024",
     targetDate: "October 30, 2024",
     currentDay: 110,
@@ -708,19 +777,31 @@ export const pecanIslandRequests: ServiceRequest[] = [
         contactName: "Dr. Monique Richard",
         contactEmail: "monique.richard@la.gov",
         contactPhone: "(225) 342-7308",
-        agency: "CPRA",
+        agency: "CPRA (State)",
         status: "engaged",
       },
       {
         level: 2,
-        title: "USACE New Orleans District Regulatory Project Manager",
+        title: "USACE New Orleans Regulatory PM",
         contactName: "Darren Babin",
         contactEmail: "darren.babin@usace.army.mil",
         contactPhone: "(504) 862-2270",
-        agency: "USACE",
+        agency: "USACE (Federal)",
         status: "idle",
       },
     ],
+    gantt: {
+      startMonth: 2,
+      endMonth: 10,
+      progressMonth: 5.5,
+      phases: [
+        { name: "Wetland Delineation", startMonth: 2, endMonth: 3, state: "done" },
+        { name: "Living Shoreline Plan", startMonth: 3, endMonth: 4, state: "done" },
+        { name: "USACE 404 Credit Audit", startMonth: 4, endMonth: 6, state: "blocked" },
+        { name: "Joint Public Notice", startMonth: 6, endMonth: 8, state: "future" },
+        { name: "Joint CUP Issuance", startMonth: 8, endMonth: 10, state: "future" },
+      ],
+    },
     steps: [
       { phase: "Phase 1 · Wetland Delineation", title: "On-Site Soil & Vegetation Survey", meta: "Completed · March 5, 2024", state: "done" },
       { phase: "Phase 2 · Mitigation Plan", title: "Living Shoreline & Oyster Reef Barrier Plan", meta: "Completed · April 22, 2024", state: "done" },
@@ -734,7 +815,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
     officialFilingNotice: "Statutory Coastal Use Permit filed under Joint Application P20240182.",
   },
   {
-    id: "REQ-PECAN-007",
+    id: "TASK-T007",
     title: "South Louisiana Aerospace Specialized Workforce Consortium",
     type: "State Workforce Pipeline & Customized Training Grant",
     category: "workforce",
@@ -743,6 +824,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
     organization: "Space Exploration Technologies Corp.",
     leadAgency: "Louisiana Economic Development (LED) & SLCC",
     leadAgencyCode: "LED / SLCC",
+    agencyLevel: "State",
     submitted: "January 20, 2024",
     targetDate: "August 1, 2024",
     currentDay: 130,
@@ -771,10 +853,21 @@ export const pecanIslandRequests: ServiceRequest[] = [
         contactName: "Andre Thibodeaux",
         contactEmail: "andre.thibodeaux@la.gov",
         contactPhone: "(225) 342-3000",
-        agency: "LED",
+        agency: "LED (State)",
         status: "engaged",
       },
     ],
+    gantt: {
+      startMonth: 1,
+      endMonth: 8,
+      progressMonth: 5.5,
+      phases: [
+        { name: "Skills Matrix Definition", startMonth: 1, endMonth: 2, state: "done" },
+        { name: "LED FastStart $4.2M Grant", startMonth: 2, endMonth: 3, state: "done" },
+        { name: "Abbeville Campus Lab Delivery", startMonth: 3, endMonth: 7, state: "active" },
+        { name: "Cohort 1 Launch (60 Techs)", startMonth: 7, endMonth: 8, state: "future" },
+      ],
+    },
     steps: [
       { phase: "Phase 1 · Skills Matrix", title: "Aerospace TIG/Orbital Welding & NDT Competency Definition", meta: "Completed · February 15, 2024", state: "done" },
       { phase: "Phase 2 · Funding Allocation", title: "LED FastStart $4.2M Grant Authorization", meta: "Completed · March 30, 2024", state: "done" },
@@ -787,7 +880,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
     officialFilingNotice: "Workforce cooperative endeavor agreement on file with LED Contract #LED-2024-W091.",
   },
   {
-    id: "REQ-PECAN-008",
+    id: "TASK-T008",
     title: "Cryogenic Fuel & High-Pressure Hazardous Storage Plan",
     type: "Industrial Fire Safety & Cryogenic Storage Approval",
     category: "public_safety",
@@ -796,6 +889,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
     organization: "Space Exploration Technologies Corp.",
     leadAgency: "Louisiana Office of State Fire Marshal",
     leadAgencyCode: "OSFM",
+    agencyLevel: "State",
     submitted: "February 15, 2024",
     targetDate: "September 15, 2024",
     currentDay: 105,
@@ -824,10 +918,22 @@ export const pecanIslandRequests: ServiceRequest[] = [
         contactName: "Capt. Travis Miller",
         contactEmail: "travis.miller@dps.la.gov",
         contactPhone: "(225) 925-4911",
-        agency: "OSFM",
+        agency: "OSFM (State)",
         status: "engaged",
       },
     ],
+    gantt: {
+      startMonth: 2,
+      endMonth: 9,
+      progressMonth: 5.5,
+      phases: [
+        { name: "LOX/LNG Separation Study", startMonth: 2, endMonth: 3, state: "done" },
+        { name: "Deluge Piping Sign-off", startMonth: 3, endMonth: 5, state: "done" },
+        { name: "Vapor Dispersion Verification", startMonth: 5, endMonth: 7, state: "active" },
+        { name: "Field Hydrostatic Witness", startMonth: 7, endMonth: 8, state: "future" },
+        { name: "OSFM Certificate of Occupancy", startMonth: 8, endMonth: 9, state: "future" },
+      ],
+    },
     steps: [
       { phase: "Phase 1 · Cryogenic Layout", title: "LOX / Liquid Methane Separation Distances Review", meta: "Completed · March 20, 2024", state: "done" },
       { phase: "Phase 2 · Water Deluge Review", title: "High-Pressure Water Deluge Piping Review", meta: "Completed · May 10, 2024", state: "done" },
@@ -841,7 +947,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
     officialFilingNotice: "Hazardous facility plan review application OSFM-2024-CRYO-091.",
   },
   {
-    id: "REQ-PECAN-009",
+    id: "TASK-T009",
     title: "Pecan Island Community Water & Coastal Baseline Monitoring",
     type: "Local Government Community Agreement & Groundwater Baseline",
     category: "community",
@@ -850,6 +956,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
     organization: "Space Exploration Technologies Corp.",
     leadAgency: "Vermilion Parish Police Jury & Louisiana Department of Health",
     leadAgencyCode: "Parish / LDH",
+    agencyLevel: "Local / Parish",
     submitted: "January 8, 2024",
     targetDate: "Ongoing Tracking",
     currentDay: 142,
@@ -857,7 +964,7 @@ export const pecanIslandRequests: ServiceRequest[] = [
     status: "approved",
     statusLabel: "Active Ongoing Monitoring & Monthly Briefing",
     ragStatus: "green",
-    ragLabel: "Active Monitoring",
+    ragLabel: "Active",
     isCriticalPath: false,
     owner: {
       name: "Elena Sonnier",
@@ -878,10 +985,20 @@ export const pecanIslandRequests: ServiceRequest[] = [
         contactName: "Elena Sonnier",
         contactEmail: "e.sonnier@vermiliongov.invalid",
         contactPhone: "(337) 898-4302",
-        agency: "Vermilion Parish",
+        agency: "Vermilion Parish (Local)",
         status: "engaged",
       },
     ],
+    gantt: {
+      startMonth: 1,
+      endMonth: 12,
+      progressMonth: 5.5,
+      phases: [
+        { name: "Baseline Well Installation", startMonth: 1, endMonth: 2, state: "done" },
+        { name: "Monthly Town Hall Cadence", startMonth: 2, endMonth: 5, state: "done" },
+        { name: "Public Water Sensor Feeds", startMonth: 5, endMonth: 12, state: "active" },
+      ],
+    },
     steps: [
       { phase: "Phase 1 · Well Baseline", title: "12 Shallow Aquifer Baseline Testing Wells Installed", meta: "Completed · February 10, 2024", state: "done" },
       { phase: "Phase 2 · Monthly Town Hall", title: "Pecan Island Community Center Public Q&A Series", meta: "Active · 4 sessions completed", state: "done" },
@@ -894,218 +1011,23 @@ export const pecanIslandRequests: ServiceRequest[] = [
   },
 ];
 
-export const legacyPermits: Record<string, ServiceRequest> = {
-  "WQ-2024-00142": {
-    id: "WQ-2024-00142",
-    title: "Individual Water Quality Permit · Riverdale Infrastructure",
-    type: "Individual Water Quality Permit",
-    category: "permit",
-    categoryLabel: "Permits",
-    applicant: "Riverdale Infrastructure LLC",
-    organization: "Riverdale Infrastructure LLC",
-    leadAgency: "Louisiana Department of Environmental Quality",
-    leadAgencyCode: "LDEQ",
-    submitted: "February 14, 2024",
-    targetDate: "July 15, 2024",
-    currentDay: 87,
-    totalDays: 150,
-    status: "in-review",
-    statusLabel: "Under review",
-    ragStatus: "green",
-    ragLabel: "On Track",
-    isCriticalPath: false,
-    owner: {
-      name: "Jordan Lee",
-      title: "Review Officer",
-      agency: "LDEQ",
-      email: "wq-permits@example.invalid",
-      phone: "(225) 555-0100",
-    },
-    contact: {
-      name: "Water Quality Permits Division",
-      email: "wq-permits@example.invalid",
-      phone: "(225) 555-0100",
-    },
-    escalationPath: [
-      {
-        level: 1,
-        title: "LDEQ Permit Reviewer",
-        contactName: "Jordan Lee",
-        contactEmail: "wq-permits@example.invalid",
-        contactPhone: "(225) 555-0100",
-        agency: "LDEQ",
-        status: "engaged",
-      },
-    ],
-    steps: [
-      { phase: "Phase 1 · Application review", title: "Application received", meta: "Completed · February 14, 2024", state: "done" },
-      { phase: "Phase 1 · Application review", title: "Completeness check", meta: "Completed · Day 12 — Application deemed complete", state: "done" },
-      { phase: "Phase 1 · Application review", title: "Technical review", meta: "Completed · Day 30", state: "done" },
-      {
-        phase: "Phase 2 · Agency coordination",
-        title: "Agency coordination",
-        meta: "In progress — Responses due by Day 90",
-        state: "active",
-        note: "Your application is currently being reviewed by coordinating agencies. No action is required from you in this demo scenario.",
-      },
-      { phase: "Phase 3 · Permit decision", title: "Technical review of coordination responses", meta: "Estimated to begin Day 90", state: "future" },
-      { phase: "Phase 3 · Permit decision", title: "Draft permit prepared", meta: "Estimated Day 105", state: "future" },
-      { phase: "Phase 3 · Permit decision", title: "Public comment period", meta: "Estimated Day 120 — 30-day window", state: "future" },
-      { phase: "Phase 3 · Permit decision", title: "Final permit decision", meta: "Target: Day 150", state: "future" },
-    ],
-    nextSteps: [
-      { title: "Watch the contact channel on file", body: "The applicant would be notified if additional information is needed or when a draft permit is ready for review." },
-      { title: "Public comment period ahead", body: "This example shows a 30-day public comment period opening around Day 120." },
-    ],
-    officialFilingNotice: "Statutory application lodged in LDEQ EDMS system.",
-  },
-  "WQ-2024-00089": {
-    id: "WQ-2024-00089",
-    title: "Individual Water Quality Permit · Bayou Crossing",
-    type: "Individual Water Quality Permit",
-    category: "permit",
-    categoryLabel: "Permits",
-    applicant: "Bayou Crossing Development Co.",
-    organization: "Bayou Crossing Development Co.",
-    leadAgency: "Louisiana Department of Environmental Quality",
-    leadAgencyCode: "LDEQ",
-    submitted: "January 9, 2024",
-    targetDate: "June 28, 2024",
-    currentDay: 112,
-    totalDays: 150,
-    status: "action-needed",
-    statusLabel: "Action required",
-    ragStatus: "yellow",
-    ragLabel: "Action Required",
-    isCriticalPath: false,
-    blocker: {
-      title: "Suspended for Insufficient Information",
-      description: "Application clock paused pending applicant response with updated outfall discharge modeling.",
-      severity: "warning",
-      blockedSince: "Day 95",
-      unblockingAction: "Upload requested technical documentation through the agency portal.",
-    },
-    owner: {
-      name: "Marcus Fontenot",
-      title: "Case Officer",
-      agency: "LDEQ",
-      email: "wq-permits@example.invalid",
-      phone: "(225) 555-0100",
-    },
-    contact: {
-      name: "Water Quality Permits Division",
-      email: "wq-permits@example.invalid",
-      phone: "(225) 555-0100",
-    },
-    escalationPath: [
-      {
-        level: 1,
-        title: "LDEQ Case Officer",
-        contactName: "Marcus Fontenot",
-        contactEmail: "wq-permits@example.invalid",
-        contactPhone: "(225) 555-0100",
-        agency: "LDEQ",
-        status: "engaged",
-      },
-    ],
-    steps: [
-      { phase: "Phase 1 · Application review", title: "Application received", meta: "Completed · January 9, 2024", state: "done" },
-      { phase: "Phase 1 · Application review", title: "Completeness check", meta: "Completed · Day 18 — Application deemed complete", state: "done" },
-      { phase: "Phase 1 · Application review", title: "Technical review", meta: "Completed · Day 30", state: "done" },
-      { phase: "Phase 2 · Agency coordination", title: "Agency coordination", meta: "Completed · Day 75", state: "done" },
-      { phase: "Phase 3 · Permit decision", title: "Additional information requested", meta: "Completed · Day 82 — Request for information issued", state: "done" },
-      {
-        phase: "Application suspended",
-        title: "Application suspended",
-        meta: "Day 95 — Pending applicant response",
-        state: "blocked",
-        note: "This demo application clock is paused until the requested material is received.",
-      },
-      { phase: "Permit decision · Pending reactivation", title: "Review of applicant response", meta: "Would begin after reactivation", state: "future" },
-      { phase: "Permit decision · Pending reactivation", title: "Final permit decision", meta: "Example target: Day 150 from reactivation", state: "future" },
-    ],
-    nextSteps: [
-      { title: "Submit the requested documentation", body: "In a live portal, the notice would identify the official submission channel and required reference number." },
-      { title: "Confirm receipt with the case manager", body: "The applicant could contact the listed division to confirm receipt and ask about reactivation." },
-      { title: "Review the response deadline", body: "The past date shown here is retained only to demonstrate an urgent deadline state." },
-    ],
-    alert: {
-      tone: "warning",
-      title: "Example response deadline: June 28, 2024",
-      body: "This illustrative application was suspended on Day 95 for insufficient information. It shows how a portal could call attention to required documentation and a response deadline.",
-    },
-    officialFilingNotice: "Statutory application lodged in LDEQ EDMS system.",
-  },
-  "WQ-2024-00207": {
-    id: "WQ-2024-00207",
-    title: "Individual Water Quality Permit · Magnolia Pipeline",
-    type: "Individual Water Quality Permit",
-    category: "permit",
-    categoryLabel: "Permits",
-    applicant: "Magnolia Pipeline Services",
-    organization: "Magnolia Pipeline Services",
-    leadAgency: "Louisiana Department of Environmental Quality",
-    leadAgencyCode: "LDEQ",
-    submitted: "March 3, 2024",
-    targetDate: "October 1, 2024",
-    currentDay: 138,
-    totalDays: 210,
-    status: "hearing",
-    statusLabel: "Public hearing scheduled",
-    ragStatus: "yellow",
-    ragLabel: "Hearing Scheduled",
-    isCriticalPath: false,
-    owner: {
-      name: "Celeste Broussard",
-      title: "Hearing Officer",
-      agency: "LDEQ",
-      email: "wq-permits@example.invalid",
-      phone: "(225) 555-0100",
-    },
-    contact: {
-      name: "Water Quality Permits Division",
-      email: "wq-permits@example.invalid",
-      phone: "(225) 555-0100",
-    },
-    escalationPath: [
-      {
-        level: 1,
-        title: "LDEQ Hearing Officer",
-        contactName: "Celeste Broussard",
-        contactEmail: "wq-permits@example.invalid",
-        contactPhone: "(225) 555-0100",
-        agency: "LDEQ",
-        status: "engaged",
-      },
-    ],
-    steps: [
-      { phase: "Phase 1 · Application review", title: "Application received", meta: "Completed · March 3, 2024", state: "done" },
-      { phase: "Phase 1 · Application review", title: "Completeness check and technical review", meta: "Completed · Day 30", state: "done" },
-      { phase: "Phase 2 · Agency coordination", title: "Agency coordination", meta: "Completed · Day 75", state: "done" },
-      { phase: "Phase 3 · Permit decision", title: "Technical review", meta: "Completed · Day 105", state: "done" },
-      { phase: "Phase 3 · Permit decision", title: "Draft permit issued", meta: "Completed · Day 110", state: "done" },
-      { phase: "Phase 3 · Permit decision", title: "Public comment period", meta: "Completed · Days 110–140 — Substantive comments received", state: "done", note: "This example comment period is closed." },
-      { phase: "Public hearing process", title: "Public hearing — July 15, 2024", meta: "Historical demo event · State Office Building, Room 4B, 9:00 AM", state: "hearing", note: "Illustrative event retained to show how hearing instructions would appear." },
-      { phase: "Public hearing process", title: "Agency review of hearing record", meta: "Example start: July 22, 2024", state: "future" },
-      { phase: "Phase 3 · Final decision", title: "Final permit decision", meta: "Example revised target: Day 210", state: "future" },
-    ],
-    nextSteps: [
-      { title: "Review hearing instructions", body: "A live notice would provide verified attendance and testimony instructions." },
-      { title: "Submit written testimony", body: "This example demonstrates how a submission deadline and official channel could be displayed." },
-      { title: "See the updated decision timeline", body: "This scenario extends the illustrative final-decision target to Day 210." },
-    ],
-    alert: {
-      tone: "info",
-      title: "Example hearing: July 15, 2024 at 9:00 AM",
-      body: "This historical scenario demonstrates how a public hearing and an extended decision timeline could be presented. It is not a current hearing notice.",
-    },
-    officialFilingNotice: "Statutory application lodged in LDEQ EDMS system.",
-  },
-};
+const taskMap = Object.fromEntries(pecanIslandRequests.map((req) => [req.id, req]));
 
 export const permits: Record<string, ServiceRequest> = {
-  ...legacyPermits,
-  ...Object.fromEntries(pecanIslandRequests.map((req) => [req.id, req])),
+  ...taskMap,
+  // Backward compatibility aliases
+  "REQ-PECAN-001": taskMap["TASK-T001"],
+  "REQ-PECAN-002": taskMap["TASK-T002"],
+  "REQ-PECAN-003": taskMap["TASK-T003"],
+  "REQ-PECAN-004": taskMap["TASK-T004"],
+  "REQ-PECAN-005": taskMap["TASK-T005"],
+  "REQ-PECAN-006": taskMap["TASK-T006"],
+  "REQ-PECAN-007": taskMap["TASK-T007"],
+  "REQ-PECAN-008": taskMap["TASK-T008"],
+  "REQ-PECAN-009": taskMap["TASK-T009"],
+  "WQ-2024-00142": taskMap["TASK-T003"],
+  "WQ-2024-00089": taskMap["TASK-T001"],
+  "WQ-2024-00207": taskMap["TASK-T003"],
 };
 
 export const requests: Record<string, ServiceRequest> = permits;

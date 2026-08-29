@@ -1,42 +1,37 @@
-# PATH — Government Service Request & Permit Command Center
+# Critical Path — SpaceX Louisiana Project Operations
 
-PATH is an accessible, multi-agency operational command center and permit tracking platform for the **SpaceX Louisiana Pecan Island Launch Complex** project. It unifies state infrastructure requests, statutory permit tracking, critical path milestones, agency workload distribution, and executive escalation across Louisiana departments.
-
-> [!NOTE]
-> **Operational Tracking Boundary Notice**: PATH is a state-level operational coordination and escalation command center. Official statutory applications, formal permit filings, and legal records continue through each agency's designated system of record (e.g. LDEQ EDMS, Louisiana DOTD, LPSC, CPRA, OSFM, and local Parish building offices).
+**Critical Path** is an accessible, multi-agency operational coordination and permit tracking platform for the **SpaceX Louisiana Pecan Island Launch Complex** project. It brings together state infrastructure requests, statutory permit tracking, critical path milestones, agency workload distribution, and executive escalation across Federal, State, and Local Louisiana departments.
 
 ---
 
-## Core Capabilities
+## Key Capabilities
 
-### 1. Unified Service Request Model
-Every project need is modeled as a first-class `ServiceRequest` across six key disciplines:
-- **Environmental & Facility Permits (`permit`)**: LDEQ air/water quality permits, CPRA coastal use permits, parish industrial building permits.
-- **Heavy-Haul & Access Roads (`road`)**: DOTD state highway reinforcement (LA-82), oversized bridge permits, and transport route clearances.
-- **Utilities & Grid Interconnection (`utility`)**: Entergy / LPSC 230kV dual-feed high-capacity transmission, substation right-of-ways, and industrial deluge water connections.
-- **Airspace, Maritime & Public Safety (`public_safety`)**: FAA launch corridor NOTAMs, US Coast Guard maritime closures, State Police escorts, and Fire Marshal (OSFM) cryogenic storage safety.
-- **Workforce Development (`workforce`)**: Louisiana Economic Development (LED FastStart) and SLCC aerospace technician training pipelines.
-- **Parish & Community Liaison (`community`)**: Vermilion Parish Police Jury coordination, baseline drinking water monitoring, and local town halls.
+### 1. Operations Overview & Gantt Timeline
+- **Interactive Gantt Chart**: Visual 2024 phase progression spanning route surveys, technical review, inter-agency clearances, public hearings, and final determinations across all government stakeholders.
+- **RAG Status Summaries**: Clickable rollups for 🟢 **On Track**, 🟡 **Action Needed / Public Hearing**, 🔴 **Blocked**, and ⚡ **Critical Path**. Clicking any status dynamically filters the project requests.
+- **Active Blockers Spotlight**: Directly surfaces active roadblocks (e.g. `TASK-T001` bridge reinforcement blocked on CPRA drainage concurrence), days elapsed, and immediate unblocking actions.
+- **Human-Readable Task IDs**: Standardized identifiers (`TASK-T001` through `TASK-T009`) with clear reviewing agency and jurisdiction levels.
 
-### 2. Executive RAG Dashboard & Critical Path Visibility
-- **RAG Status Summaries**: Real-time rollups of requests categorized as 🟢 **On Track**, 🟡 **Action Needed / Public Hearing**, and 🔴 **Blocked / Risk**.
-- **Critical Path Highlighting**: Direct visual tracking of items whose delays threaten the project go-live date.
-- **Active Blocker Banners**: Immediate visibility into root cause blockers, days elapsed, and concrete unblocking actions.
-- **Three-Tier Escalation Path**: Clear routing hierarchy from Level 1 (Agency Lead) → Level 2 (Inter-Agency State Liaison) → Level 3 (Governor's Major Project Task Force).
+### 2. Multi-Level Agency Review & Jurisdiction Tracking
+Every project request notes the Reviewing Agency and its Jurisdiction Level:
+- **Federal**: FAA Southwest Region (Airspace NOTAMs), US Coast Guard District 8 (Maritime safety corridors), US Army Corps of Engineers (USACE Section 404), FCC (Spectrum clearance).
+- **State**: Louisiana DOTD (Highway LA-82 & heavy-haul bridges), LDEQ (Water quality & deluge basins), CPRA (Coastal protection & wetland mitigation), Office of State Fire Marshal (OSFM cryogenic storage), Louisiana State Police (LSP escort & safety), Louisiana Economic Development (LED FastStart).
+- **Local / Parish**: Vermilion Parish Police Jury, Vermilion Parish Building Department, Louisiana Department of Health (LDH).
+- **Utility / Regional**: Entergy Louisiana & Louisiana Public Service Commission (LPSC 230kV transmission).
 
-### 3. Plain-English SpaceX Intake & Liaison Triage
-- Interactive plain-English intake textarea for engineers and managers to submit needs in natural language.
-- Heuristic triage parser automatically infers request category, suggests lead agency, determines priority, flags critical path candidates, and routes the request into the live dashboard and Liaison Triage Queue.
+### 3. Unified Request Model & SpaceX Plain-English Intake
+- Conversational natural language intake textarea with live heuristic triage analysis that auto-detects category, suggests lead agency, determines priority, flags critical path candidates, and provides statutory filing instructions.
+- Live submission directly routes new items into the project matrix and Liaison Triage Queue.
 
-### 4. Cross-Agency Workload & Upcoming Deadlines
-- Real-time distribution of open tasks across DOTD, LDEQ, CPRA, LPSC/Entergy, LED, OSFM, LSP, and Vermilion Parish.
-- 30/60-day decision deadline ticker.
+### 4. Interactive Request Matrix & Dedicated Detail Pages
+- **Expandable Inline Summaries**: Quick expansion of milestone steps, active blockers, assigned state owners, and next steps right within the list.
+- **Dedicated Detail Drilldown**: Complete 5-phase timeline, 3-tier escalation hierarchy (`engaged`, `escalated`, `idle`), contact channels, and statutory docket notices.
 
 ---
 
-## Demo Personas & Quick Sign-In
+## Demo Personas & Sign-In
 
-PATH includes a **Demo Login** dropdown at the top of the sign-in view with 8 pre-configured personas:
+Critical Path provides direct sign-in on the main page along with an account menu in the top right and a **Quick Demo Sign-In** selector with 8 pre-configured personas:
 
 ### SpaceX Louisiana Program Team
 | Persona | Role | Scenario | Email |
@@ -61,8 +56,8 @@ PATH includes a **Demo Login** dropdown at the top of the sign-in view with 8 pr
 - **Framework**: Next.js (App Router) powered by Vinext (Vite 8) + React 19 + TypeScript
 - **Styling & UI**: Tailwind CSS, Radix UI primitives, Lucide Icons
 - **Data & Utilities**:
-  - `lib/demo-data.ts`: Typed request entities, RAG classifications, escalation tiers, Pecan Island demo dataset.
-  - `lib/permit-utils.ts`: Progress calculations, RAG aggregators, workload distribution, plain-English intake triage.
+  - `lib/demo-data.ts`: Typed request entities, RAG classifications, escalation tiers, Gantt data, and Pecan Island demo dataset.
+  - `lib/permit-utils.ts`: Progress calculations, RAG aggregators, workload distribution, and plain-English intake triage.
   - `lib/supabase-browser.ts`: Optional Supabase integration for authenticated live workloads.
 - **Testing**: Node.js built-in test runner (`node --test tests/*.test.mjs`) covering 100% of data invariants, source contracts, UI components, and SSR output.
 
@@ -79,9 +74,3 @@ npx vinext build
 ```bash
 node --test tests/*.test.mjs
 ```
-
----
-
-## Scope & Security Notice
-
-This application is a demo-stage proof of concept showcasing government service request tracking and inter-agency coordination. Client-side authentication and demo fixtures do not constitute a security boundary. Production deployment requires formal single sign-on (SSO), server-enforced role-based access control (RBAC), direct REST/API sync with authoritative agency databases, and statutory compliance certification.

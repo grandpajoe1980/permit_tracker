@@ -9,12 +9,14 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  BarChart3,
   Building2,
   Calendar,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Circle,
   Clock3,
   ExternalLink,
@@ -22,6 +24,7 @@ import {
   FileText,
   Filter,
   Flame,
+  Globe2,
   GraduationCap,
   HardHat,
   HelpCircle,
@@ -32,6 +35,8 @@ import {
   LockKeyhole,
   LogOut,
   Mail,
+  MapPin,
+  Maximize2,
   Phone,
   Printer,
   Radio,
@@ -47,6 +52,7 @@ import {
   UserCheck,
   Users,
   Wrench,
+  X,
   Zap,
 } from "lucide-react";
 
@@ -72,6 +78,7 @@ import {
   requestCategories,
   type DemoAccount,
   type DemoPersona,
+  type JurisdictionLevel,
   type PermitRecord,
   type PermitStatus,
   type RAGStatus,
@@ -99,7 +106,7 @@ import {
 } from "@/lib/supabase-browser";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
-type View = "welcome" | "login" | "dashboard" | "detail";
+type View = "portal" | "detail";
 
 function categoryIcon(category: RequestCategory) {
   switch (category) {
@@ -137,24 +144,25 @@ function categoryBadgeClasses(category: RequestCategory) {
   }
 }
 
+function jurisdictionBadgeClasses(level: JurisdictionLevel) {
+  switch (level) {
+    case "Federal":
+      return "border-indigo-400 bg-indigo-100 text-indigo-950 font-bold";
+    case "State":
+      return "border-teal-400 bg-teal-100 text-teal-950 font-bold";
+    case "Local / Parish":
+      return "border-emerald-400 bg-emerald-100 text-emerald-950 font-bold";
+    case "Utility / Regional":
+      return "border-cyan-400 bg-cyan-100 text-cyan-950 font-bold";
+    default:
+      return "border-slate-300 bg-slate-100 text-slate-900 font-bold";
+  }
+}
+
 function ragBadgeClasses(rag: RAGStatus) {
   if (rag === "red") return "border-red-500 bg-red-50 text-red-900 font-bold";
   if (rag === "yellow") return "border-amber-400 bg-amber-50 text-amber-900 font-bold";
   return "border-emerald-500 bg-emerald-50 text-emerald-900 font-bold";
-}
-
-function statusClasses(status: PermitStatus) {
-  if (status === "action-needed") return "border-amber-400 bg-amber-50 text-amber-950";
-  if (status === "hearing") return "border-violet-400 bg-violet-50 text-violet-950";
-  if (status === "approved") return "border-emerald-400 bg-emerald-50 text-emerald-950";
-  return "border-sky-400 bg-sky-50 text-sky-950";
-}
-
-function statusIcon(status: PermitStatus) {
-  if (status === "action-needed") return <AlertTriangle aria-hidden="true" />;
-  if (status === "hearing") return <Landmark aria-hidden="true" />;
-  if (status === "approved") return <CheckCircle2 aria-hidden="true" />;
-  return <Clock3 aria-hidden="true" />;
 }
 
 function stepIcon(state: StepState) {
@@ -176,57 +184,32 @@ function stepClasses(state: StepState) {
 function PathLogo() {
   return (
     <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d] shadow-sm">
-      <Route className="size-6" aria-hidden="true" />
+      <Zap className="size-6 fill-current" aria-hidden="true" />
     </span>
   );
 }
 
-function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
-  const labels = ["Workspace", "Sign in", "Command Center"];
-  return (
-    <ol className="mb-8 grid grid-cols-3 gap-2" aria-label="Sign-in progress">
-      {labels.map((label, index) => {
-        const step = (index + 1) as 1 | 2 | 3;
-        const complete = step < current;
-        const active = step === current;
-        return (
-          <li
-            key={label}
-            className={`flex min-w-0 items-center gap-2 border-t-4 pt-3 text-xs font-semibold sm:text-sm ${
-              complete || active ? "border-teal-700 text-[#00284d]" : "border-slate-200 text-slate-500"
-            }`}
-            aria-current={active ? "step" : undefined}
-          >
-            <span
-              className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs ${
-                complete
-                  ? "bg-teal-700 text-white"
-                  : active
-                    ? "bg-[#00284d] text-white"
-                    : "bg-slate-100 text-slate-500"
-              }`}
-            >
-              {complete ? <Check className="size-3.5" aria-hidden="true" /> : step}
-            </span>
-            <span className="truncate">{label}</span>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export default function Home() {
-  const [view, setView] = useState<View>("welcome");
+  const [view, setView] = useState<View>("portal");
   const [currentUser, setCurrentUser] = useState<DemoAccount | null>(null);
   const [selectedPermitId, setSelectedPermitId] = useState<string | null>(null);
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({ "TASK-T001": true });
+
+  // Filter States
+  const [statusFilter, setStatusFilter] = useState<"all" | "green" | "yellow" | "red" | "critical">("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Login Form State
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
-  const [userPermits, setUserPermits] = useState<ServiceRequest[]>(pecanIslandRequests);
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState("");
   const [loadingData, setLoadingData] = useState(false);
+
+  // Requests Data
+  const [userPermits, setUserPermits] = useState<ServiceRequest[]>(pecanIslandRequests);
 
   // Plain-English Intake State
   const [intakeText, setIntakeText] = useState("");
@@ -261,7 +244,6 @@ export default function Home() {
         scenario: "SpaceX Louisiana Program Lead",
       });
       setUserPermits(activePermits);
-      setView("dashboard");
     });
     const { data: listener } = client.auth.onAuthStateChange(
       (event: AuthChangeEvent, session: Session | null) => {
@@ -287,14 +269,6 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
   }, [view, selectedPermitId]);
 
-  function navigate(nextView: View) {
-    if ((nextView === "dashboard" || nextView === "detail") && !currentUser) {
-      setView("welcome");
-      return;
-    }
-    setView(nextView);
-  }
-
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoadingData(true);
@@ -308,7 +282,7 @@ export default function Home() {
     const loaded = await loadRequestsForUser();
     setLoadingData(false);
     if (loaded.error) {
-      setLoginError(`Signed in, but applications could not be loaded: ${loaded.error.message}`);
+      setLoginError(`Signed in, but requests could not be loaded: ${loaded.error.message}`);
       return;
     }
     setLoginError("");
@@ -323,7 +297,6 @@ export default function Home() {
     setCurrentUser(account);
     setUserPermits(finalPermits);
     setSelectedPermitId(null);
-    setView("dashboard");
   }
 
   async function handleDemoPersonaSelect(persona: DemoPersona) {
@@ -350,7 +323,6 @@ export default function Home() {
           setCurrentUser(account);
           setUserPermits(finalPermits);
           setSelectedPermitId(null);
-          setView("dashboard");
           return;
         }
       }
@@ -368,13 +340,18 @@ export default function Home() {
     setCurrentUser(account);
     setUserPermits(personaPermits);
     setSelectedPermitId(null);
-    setView("dashboard");
   }
 
   function openPermit(permitId: string) {
-    if (!userPermits.some((permit) => permit.id === permitId)) return;
     setSelectedPermitId(permitId);
     setView("detail");
+  }
+
+  function toggleCardExpanded(permitId: string) {
+    setExpandedCards((prev) => ({
+      ...prev,
+      [permitId]: !prev[permitId],
+    }));
   }
 
   async function signOut() {
@@ -385,7 +362,7 @@ export default function Home() {
     setPassword("");
     setLoginError("");
     setUserPermits(pecanIslandRequests);
-    setView("welcome");
+    setView("portal");
   }
 
   async function handleIntakeSubmit(event: FormEvent<HTMLFormElement>) {
@@ -395,9 +372,9 @@ export default function Home() {
     const triage = parsePlainEnglishIntake(intakeText);
     setRequestMessage("Routing request to Louisiana Inter-Agency Liaison triage queue…");
 
-    const newReqId = `REQ-PECAN-00${userPermits.length + 1}`;
+    const newTaskId = `TASK-T00${userPermits.length + 1}`;
     const newServiceReq: ServiceRequest = {
-      id: newReqId,
+      id: newTaskId,
       title: triage.extractedTitle,
       type: `${triage.categoryLabel} Service Request`,
       category: triage.detectedCategory,
@@ -406,6 +383,7 @@ export default function Home() {
       organization: "Space Exploration Technologies Corp.",
       leadAgency: triage.suggestedLeadAgency,
       leadAgencyCode: triage.suggestedLeadAgencyCode,
+      agencyLevel: triage.suggestedAgencyLevel,
       submitted: new Date().toLocaleDateString(undefined, { dateStyle: "long" }),
       targetDate: new Date(Date.now() + triage.estimatedDays * 86400000).toLocaleDateString(undefined, { dateStyle: "long" }),
       currentDay: 1,
@@ -438,12 +416,21 @@ export default function Home() {
           status: "engaged",
         },
       ],
+      gantt: {
+        startMonth: 6,
+        endMonth: 12,
+        progressMonth: 6,
+        phases: [
+          { name: "Intake & Triage", startMonth: 6, endMonth: 7, state: "done" },
+          { name: "Agency Technical Review", startMonth: 7, endMonth: 9, state: "active" },
+          { name: "Inter-Agency Execution", startMonth: 9, endMonth: 12, state: "future" },
+        ],
+      },
       steps: [
         { phase: "Phase 1 · Intake & Triage", title: "Plain-English Need Parsed & Routed", meta: `Submitted · ${new Date().toLocaleDateString(undefined, { dateStyle: "long" })}`, state: "done" },
-        { phase: "Phase 2 · Lead Agency Assignment", title: `Assigned to ${triage.suggestedLeadAgencyCode}`, meta: "In progress · Liaison reviewing jurisdiction", state: "active" },
-        { phase: "Phase 3 · Statutory Application Guidance", title: "Official Filing Guidance Packet", meta: triage.statutoryNotice, state: "future" },
-        { phase: "Phase 4 · Inter-Agency Coordination", title: "Joint State Review & Milestones", meta: `Target: Day ${Math.round(triage.estimatedDays * 0.6)}`, state: "future" },
-        { phase: "Phase 5 · Execution & Sign-off", title: "Agency Determination & Delivery", meta: `Target: Day ${triage.estimatedDays}`, state: "future" },
+        { phase: "Phase 2 · Lead Agency Assignment", title: `Assigned to ${triage.suggestedLeadAgencyCode} (${triage.suggestedAgencyLevel})`, meta: "In progress · Liaison reviewing jurisdiction", state: "active" },
+        { phase: "Phase 3 · Statutory Guidance", title: "Official Filing Guidance Packet", meta: triage.statutoryNotice, state: "future" },
+        { phase: "Phase 4 · Inter-Agency Execution", title: "Joint Review & Delivery", meta: `Target: Day ${triage.estimatedDays}`, state: "future" },
       ],
       nextSteps: [
         {
@@ -466,7 +453,7 @@ export default function Home() {
 
     setUserPermits([newServiceReq, ...userPermits]);
     setIntakeText("");
-    setRequestMessage(`✓ Request ${newReqId} submitted and routed to ${triage.suggestedLeadAgencyCode} triage queue.`);
+    setRequestMessage(`✓ Request ${newTaskId} submitted and routed to ${triage.suggestedLeadAgencyCode} (${triage.suggestedAgencyLevel}) queue.`);
     setTimeout(() => setRequestMessage(""), 7000);
   }
 
@@ -474,19 +461,28 @@ export default function Home() {
   const filteredPermits = userPermits.filter((permit) => {
     const matchesCategory =
       selectedCategory === "all" || permit.category === selectedCategory;
+
+    let matchesStatus = true;
+    if (statusFilter === "green") matchesStatus = permit.ragStatus === "green";
+    else if (statusFilter === "yellow") matchesStatus = permit.ragStatus === "yellow";
+    else if (statusFilter === "red") matchesStatus = permit.ragStatus === "red";
+    else if (statusFilter === "critical") matchesStatus = permit.isCriticalPath;
+
     const matchesSearch =
       !searchQuery.trim() ||
       permit.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       permit.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       permit.leadAgency.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      permit.agencyLevel.toLowerCase().includes(searchQuery.toLowerCase()) ||
       permit.statusLabel.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+
+    return matchesCategory && matchesStatus && matchesSearch;
   });
 
   const ragSummary = calculateRAGSummary(userPermits);
   const agencyWorkload = getAgencyWorkload(userPermits);
   const upcomingDeadlines = getUpcomingDeadlines(userPermits);
-  const criticalPathItems = userPermits.filter((p) => p.isCriticalPath);
+  const activeBlockers = userPermits.filter((p) => p.ragStatus === "red" && p.blocker);
 
   return (
     <div className="min-h-screen bg-[#f1f5f9] text-slate-950">
@@ -494,337 +490,109 @@ export default function Home() {
         Skip to main content
       </a>
 
-      {/* Pervasive Official Filing Disclaimer Bar */}
-      <div className="demo-banner print-keep" role="note">
-        <ShieldAlert className="size-4 shrink-0" aria-hidden="true" />
-        <p>
-          <strong>PATH Command Center Demo:</strong> Do not enter real credentials or sensitive information. Official statutory applications, formal filings, and permits continue through designated agency portals. PATH provides state-level operational coordination, critical path tracking, and escalation.
-        </p>
-      </div>
-
-      {/* Site Header */}
+      {/* Clean Global Header */}
       <header className="site-header print-hide border-b border-slate-800 bg-[#001f3d] text-white">
         <div className="mx-auto flex min-h-18 max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <button
             type="button"
             className="group flex items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300"
-            onClick={() => navigate(currentUser ? "dashboard" : "welcome")}
-            aria-label={currentUser ? "PATH Command Center, go to dashboard" : "PATH Command Center Home"}
+            onClick={() => {
+              setView("portal");
+              setSelectedPermitId(null);
+            }}
+            aria-label="Critical Path Home"
           >
             <PathLogo />
             <span>
-              <span className="block text-lg font-black tracking-wide text-white">
-                PATH <span className="text-amber-400 font-semibold text-sm">Command Center</span>
+              <span className="block text-xl font-black tracking-wide text-white">
+                Critical Path
               </span>
               <span className="block text-xs text-slate-300">
-                Permit Application Tracker & Government Service Coordination
+                SpaceX Louisiana · Pecan Island Project Operations & Permitting
               </span>
             </span>
           </button>
 
           {currentUser ? (
-            <div className="flex min-w-0 items-center gap-2 sm:gap-4">
-              <div className="hidden text-right sm:block">
-                <p className="truncate text-xs font-bold text-amber-400">SpaceX Louisiana</p>
-                <p className="truncate text-sm text-slate-200">
-                  Signed in as <strong className="text-white">{currentUser.name}</strong>
-                </p>
-              </div>
-              <Button
-                id="logout"
-                type="button"
-                variant="outline"
-                size="sm"
-                className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                onClick={signOut}
-              >
-                <LogOut className="size-4" aria-hidden="true" />
-                Sign out
-              </Button>
+            <div className="flex items-center gap-3">
+              {/* Account Dropdown in Top Right */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="inline-flex items-center gap-2.5 border-white/20 bg-white/10 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-white/20 hover:text-white focus-visible:ring-2 focus-visible:ring-amber-300"
+                  >
+                    <span className="flex size-7 items-center justify-center rounded-full bg-amber-400 font-black text-xs text-[#00284d]">
+                      {currentUser.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")}
+                    </span>
+                    <div className="text-left hidden sm:block">
+                      <p className="text-xs font-bold leading-none text-white">{currentUser.name}</p>
+                      <p className="text-[10px] text-amber-300 mt-0.5 leading-none">{currentUser.scenario.split("·")[0]}</p>
+                    </div>
+                    <ChevronDown className="size-4 text-white/70" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80 rounded-xl border-slate-200 bg-white p-2 shadow-2xl">
+                  <DropdownMenuLabel className="px-3 py-2">
+                    <p className="text-xs font-bold text-slate-500 uppercase">Signed In User</p>
+                    <p className="text-sm font-black text-[#00284d]">{currentUser.name}</p>
+                    <p className="text-xs text-slate-600">{currentUser.username}</p>
+                    <Badge variant="outline" className="mt-1.5 border-teal-700 bg-teal-50 text-teal-900 text-[10px] font-bold">
+                      {currentUser.scenario}
+                    </Badge>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+
+                  <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    Switch Demo Persona
+                  </div>
+                  {demoPersonas.slice(0, 5).map((persona) => (
+                    <DropdownMenuItem
+                      key={persona.id}
+                      className="cursor-pointer text-xs font-medium text-slate-800 hover:bg-teal-50"
+                      onClick={() => handleDemoPersonaSelect(persona)}
+                    >
+                      <div className="flex w-full items-center justify-between">
+                        <span>{persona.name}</span>
+                        <span className="text-[10px] text-slate-500">{persona.badge}</span>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    id="logout"
+                    className="cursor-pointer text-xs font-bold text-red-600 hover:bg-red-50"
+                    onClick={signOut}
+                  >
+                    <LogOut className="mr-2 size-3.5" /> Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           ) : (
-            <Badge className="border border-white/20 bg-white/10 text-white">
-              State & Local Command Center
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge className="border border-white/20 bg-white/10 text-white text-xs">
+                Public Access Portal
+              </Badge>
+            </div>
           )}
         </div>
       </header>
 
       <main id="main-content">
         {/* ========================================================================= */}
-        {/* VIEW 1: WELCOME / LANDING                                                 */}
+        {/* VIEW: MAIN PORTAL (Interactive Dashboard + Inline Login if logged out)    */}
         {/* ========================================================================= */}
-        {view === "welcome" && (
-          <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-16">
-            <div className="grid items-start gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16">
-              <section className="pt-2">
-                <Badge variant="outline" className="mb-5 border-teal-700 bg-teal-50 text-teal-900 font-bold px-3 py-1">
-                  <Activity className="mr-1.5 size-4 text-teal-700" aria-hidden="true" />
-                  Multi-Agency Operational Command Center
-                </Badge>
-                <h1
-                  ref={headingRef}
-                  tabIndex={-1}
-                  className="max-w-2xl text-4xl font-black tracking-tight text-[#00284d] outline-none sm:text-5xl lg:text-6xl"
-                >
-                  Accelerate major infrastructure through unified state coordination.
-                </h1>
-                <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-700">
-                  PATH bridges SpaceX Louisiana and state agencies—unifying permits, heavy-haul roads, utility grids, public safety corridors, workforce pipelines, and parish engagement into one transparent command center.
-                </p>
-
-                <div className="mt-10 grid gap-4 sm:grid-cols-3">
-                  {[
-                    [Zap, "Critical Path", "Surface inter-agency blockers and schedule bottlenecks before they slip."],
-                    [AlertOctagon, "Liaison Escalation", "Three-tier escalation paths from department lead to Governor's Task Force."],
-                    [Layers, "Multi-Discipline", "Track permits, roads, power, public safety, workforce, and community needs."],
-                  ].map(([Icon, title, body]) => {
-                    const FeatureIcon = Icon as typeof Zap;
-                    return (
-                      <div key={title as string} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <div className="mb-3 flex size-9 items-center justify-center rounded-lg bg-teal-50 text-teal-800">
-                          <FeatureIcon className="size-5" aria-hidden="true" />
-                        </div>
-                        <h2 className="font-bold text-[#00284d]">{title as string}</h2>
-                        <p className="mt-1 text-xs leading-5 text-slate-600">{body as string}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-
-              <Card className="overflow-hidden border-0 py-0 shadow-xl shadow-slate-900/10">
-                <div className="road-stripe" aria-hidden="true" />
-                <CardHeader className="px-6 pt-7 sm:px-8">
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-800">
-                    SpaceX Louisiana Workspace
-                  </p>
-                  <CardTitle className="text-2xl text-[#00284d]">
-                    Pecan Island Spaceport Command Center
-                  </CardTitle>
-                  <p className="text-sm leading-6 text-slate-600">
-                    Access real-time project request tracking, critical path milestones, agency workload metrics, and direct liaison escalation.
-                  </p>
-                </CardHeader>
-                <CardContent className="px-6 pb-8 sm:px-8 space-y-4">
-                  <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3.5 text-xs text-amber-950">
-                    <p className="font-semibold flex items-center gap-1.5 mb-1">
-                      <Info className="size-4 text-amber-700" /> Operational Tracking Boundary
-                    </p>
-                    <p>Official statutory filings occur directly with DOTD, LDEQ, CPRA, LPSC, and FAA. PATH tracks execution and cross-agency escalations.</p>
-                  </div>
-
-                  <Button
-                    id="workspace-next"
-                    size="lg"
-                    type="button"
-                    className="h-12 w-full bg-[#00284d] text-base font-bold hover:bg-[#003c70]"
-                    onClick={() => navigate("login")}
-                  >
-                    Enter Command Center
-                    <ArrowRight className="ml-2 size-5" aria-hidden="true" />
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================================= */}
-        {/* VIEW 2: LOGIN / PERSONA SELECTION                                         */}
-        {/* ========================================================================= */}
-        {view === "login" && (
-          <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
-            <StepIndicator current={2} />
-            <Card className="overflow-hidden border-0 py-0 shadow-xl shadow-slate-900/10">
-              <div className="road-stripe" aria-hidden="true" />
-              <CardHeader className="border-b bg-slate-50 px-6 py-6 sm:px-8">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-start gap-4">
-                    <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-teal-100 text-teal-800">
-                      <LockKeyhole aria-hidden="true" />
-                    </span>
-                    <div>
-                      <h1
-                        ref={headingRef}
-                        tabIndex={-1}
-                        className="text-2xl font-black text-[#00284d] outline-none"
-                      >
-                        Sign in to PATH
-                      </h1>
-                      <p className="mt-1 text-sm text-slate-600">SpaceX Louisiana · Pecan Island Command Center</p>
-                    </div>
-                  </div>
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        id="demo-login-trigger"
-                        type="button"
-                        variant="outline"
-                        className="inline-flex items-center gap-2 border-teal-600/40 bg-teal-50 px-3.5 py-2 text-sm font-bold text-teal-900 shadow-xs hover:bg-teal-100 hover:text-teal-950 focus-visible:ring-2 focus-visible:ring-teal-700"
-                        aria-label="Demo login options and personas"
-                      >
-                        <Sparkles className="size-4 text-teal-700" aria-hidden="true" />
-                        <span>Demo Login</span>
-                        <ChevronDown className="size-4 text-teal-700/80" aria-hidden="true" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="w-84 max-h-[85vh] overflow-y-auto rounded-xl border-slate-200 bg-white p-2 shadow-2xl sm:w-96"
-                    >
-                      <DropdownMenuLabel className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-teal-900">
-                        Quick Demo Sign-In · Choose Persona
-                      </DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-
-                      <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                        SpaceX Louisiana Program Team
-                      </div>
-                      {demoPersonas
-                        .filter((p) => p.group === "SpaceX Louisiana Program")
-                        .map((persona) => (
-                          <DropdownMenuItem
-                            key={persona.id}
-                            id={`demo-persona-${persona.id}`}
-                            className="flex cursor-pointer flex-col items-start gap-1 rounded-lg px-3 py-2.5 transition hover:bg-teal-50/60 focus:bg-teal-50 focus:text-teal-950"
-                            onClick={() => handleDemoPersonaSelect(persona)}
-                          >
-                            <div className="flex w-full items-center justify-between gap-2">
-                              <span className="text-sm font-bold text-[#00284d]">{persona.name}</span>
-                              <Badge
-                                variant="outline"
-                                className="border-teal-700/30 bg-teal-50 text-[11px] font-semibold text-teal-800"
-                              >
-                                {persona.badge}
-                              </Badge>
-                            </div>
-                            <div className="text-xs font-semibold text-slate-700">{persona.role}</div>
-                            <p className="line-clamp-2 text-[11px] text-slate-500">{persona.roleDescription}</p>
-                          </DropdownMenuItem>
-                        ))}
-
-                      <DropdownMenuSeparator />
-                      <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                        Applicant Review Scenarios
-                      </div>
-                      {demoPersonas
-                        .filter((p) => p.group === "Applicant Scenarios")
-                        .map((persona) => (
-                          <DropdownMenuItem
-                            key={persona.id}
-                            id={`demo-persona-${persona.id}`}
-                            className="flex cursor-pointer flex-col items-start gap-1 rounded-lg px-3 py-2.5 transition hover:bg-slate-100 focus:bg-teal-50 focus:text-teal-950"
-                            onClick={() => handleDemoPersonaSelect(persona)}
-                          >
-                            <div className="flex w-full items-center justify-between gap-2">
-                              <span className="text-sm font-bold text-[#00284d]">{persona.name}</span>
-                              <Badge
-                                variant="outline"
-                                className="border-slate-300 bg-slate-100 text-[11px] font-semibold text-slate-700"
-                              >
-                                {persona.badge}
-                              </Badge>
-                            </div>
-                            <div className="text-xs font-semibold text-slate-700">{persona.role}</div>
-                            <p className="line-clamp-2 text-[11px] text-slate-500">{persona.roleDescription}</p>
-                          </DropdownMenuItem>
-                        ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardHeader>
-              <CardContent className="px-6 py-7 sm:px-8">
-                <Alert className="mb-7 border-teal-300 bg-teal-50 text-teal-950">
-                  <Info className="size-4" aria-hidden="true" />
-                  <AlertTitle>Authenticated Command Center Access</AlertTitle>
-                  <AlertDescription className="text-teal-900 text-xs sm:text-sm">
-                    {supabaseConfigured()
-                      ? "Connected to Supabase. Sign in with authorized account or select a Demo Persona from the top right."
-                      : "Demo mode active. Use any demo credentials or select a Persona from the quick dropdown above to explore."}
-                  </AlertDescription>
-                </Alert>
-
-                <form onSubmit={handleLogin}>
-                  <div className="grid gap-5">
-                    <div className="grid gap-2">
-                      <Label htmlFor="username">Email address</Label>
-                      <Input
-                        ref={usernameRef}
-                        id="username"
-                        name="username"
-                        type="text"
-                        autoComplete="username"
-                        value={username}
-                        required
-                        aria-invalid={Boolean(loginError)}
-                        aria-describedby={loginError ? "login-error" : undefined}
-                        onChange={(event) => {
-                          setUsername(event.target.value);
-                          setLoginError("");
-                        }}
-                        className="h-11"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="password">Password</Label>
-                      <Input
-                        id="password"
-                        name="password"
-                        type="password"
-                        autoComplete="current-password"
-                        value={password}
-                        required
-                        aria-invalid={Boolean(loginError)}
-                        aria-describedby={loginError ? "login-error" : undefined}
-                        onChange={(event) => {
-                          setPassword(event.target.value);
-                          setLoginError("");
-                        }}
-                        className="h-11"
-                      />
-                    </div>
-                    {loginError && (
-                      <p id="login-error" role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
-                        {loginError}
-                      </p>
-                    )}
-                    <Button
-                      id="login-submit"
-                      type="submit"
-                      size="lg"
-                      className="h-12 bg-[#00284d] text-base font-bold hover:bg-[#003c70]"
-                    >
-                      {loadingData ? "Loading Command Center…" : "Sign in to Command Center"}
-                      <ArrowRight className="ml-2 size-5" aria-hidden="true" />
-                    </Button>
-                  </div>
-                </form>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="mt-4 w-full text-slate-600 hover:text-slate-900"
-                  onClick={() => navigate("welcome")}
-                >
-                  <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
-                  Return to overview
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* ========================================================================= */}
-        {/* VIEW 3: EXECUTIVE COMMAND CENTER DASHBOARD                                 */}
-        {/* ========================================================================= */}
-        {view === "dashboard" && currentUser && (
+        {view === "portal" && (
           <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 space-y-8">
-            {/* Header / Persona Title */}
+            {/* Header / Project Intro */}
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between border-b border-slate-200 pb-6">
               <div>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1.5">
                   <Badge variant="outline" className="border-teal-700 bg-teal-50 text-teal-900 font-bold uppercase tracking-wider text-[10px]">
                     SpaceX Louisiana Spaceport
                   </Badge>
@@ -835,130 +603,439 @@ export default function Home() {
                   tabIndex={-1}
                   className="text-3xl font-black tracking-tight text-[#00284d] outline-none sm:text-4xl"
                 >
-                  Pecan Island Project Command Center
+                  Pecan Island Project Operations & Permitting
                 </h1>
                 <p className="mt-1 text-sm text-slate-600">
-                  Welcome back, <strong className="text-slate-900">{firstName(currentUser.name)}</strong> ({currentUser.scenario}). Real-time government service & permit tracking.
+                  Real-time multi-agency status, critical path Gantt schedule, active blockers, and escalation paths.
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
-                <Badge variant="outline" className="border-slate-300 bg-white px-3 py-1.5 text-sm font-bold text-slate-800 shadow-xs">
-                  {userPermits.length} Active Requests
-                </Badge>
-              </div>
+              {/* Clickable Total Count */}
+              <button
+                type="button"
+                onClick={() => setStatusFilter("all")}
+                className={`flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-bold shadow-xs transition ${
+                  statusFilter === "all"
+                    ? "border-teal-700 bg-teal-50 text-teal-950 ring-2 ring-teal-700"
+                    : "border-slate-300 bg-white text-slate-800 hover:bg-slate-50"
+                }`}
+              >
+                <Layers className="size-4 text-teal-700" />
+                <span>{userPermits.length} Total Requests</span>
+              </button>
             </div>
 
             {/* =================================================================== */}
-            {/* 1. EXECUTIVE RAG HEALTH STATUS BAR                                  */}
+            {/* INLINE SIGN-IN BOX (Directly on first page when not logged in)      */}
             {/* =================================================================== */}
-            <section aria-label="Executive Health Metrics">
+            {!currentUser && (
+              <Card className="border-2 border-teal-700/30 bg-white shadow-md overflow-hidden">
+                <div className="h-1.5 bg-[#00284d]" />
+                <CardHeader className="bg-slate-50 border-b border-slate-100 p-5 sm:px-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-lg font-black text-[#00284d] flex items-center gap-2">
+                        <LockKeyhole className="size-4 text-teal-700" /> Sign In to Critical Path
+                      </CardTitle>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        Access authorized SpaceX Louisiana filings, submit requests, and manage project workflows.
+                      </p>
+                    </div>
+
+                    {/* Quick Demo Persona Dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          id="demo-login-trigger"
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="border-teal-600/40 bg-teal-50 text-teal-900 font-bold hover:bg-teal-100"
+                        >
+                          <Sparkles className="mr-1.5 size-3.5 text-teal-700" />
+                          Quick Demo Sign-In
+                          <ChevronDown className="ml-1 size-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-84 max-h-[80vh] overflow-y-auto rounded-xl border-slate-200 bg-white p-2 shadow-2xl">
+                        <DropdownMenuLabel className="px-3 py-1.5 text-xs font-bold uppercase text-slate-500">
+                          Select Persona to Auto-Login
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <div className="px-3 py-1 text-[11px] font-bold text-teal-900 uppercase">SpaceX Louisiana Team</div>
+                        {demoPersonas
+                          .filter((p) => p.group === "SpaceX Louisiana Program")
+                          .map((persona) => (
+                            <DropdownMenuItem
+                              key={persona.id}
+                              id={`demo-persona-${persona.id}`}
+                              className="cursor-pointer flex flex-col items-start gap-0.5 p-2 rounded hover:bg-teal-50"
+                              onClick={() => handleDemoPersonaSelect(persona)}
+                            >
+                              <div className="flex w-full justify-between items-center text-xs font-bold text-[#00284d]">
+                                <span>{persona.name}</span>
+                                <Badge variant="outline" className="text-[10px]">{persona.badge}</Badge>
+                              </div>
+                              <span className="text-[11px] text-slate-500">{persona.role}</span>
+                            </DropdownMenuItem>
+                          ))}
+                        <DropdownMenuSeparator />
+                        <div className="px-3 py-1 text-[11px] font-bold text-slate-500 uppercase">Applicant Scenarios</div>
+                        {demoPersonas
+                          .filter((p) => p.group === "Applicant Scenarios")
+                          .map((persona) => (
+                            <DropdownMenuItem
+                              key={persona.id}
+                              id={`demo-persona-${persona.id}`}
+                              className="cursor-pointer flex flex-col items-start gap-0.5 p-2 rounded hover:bg-slate-100"
+                              onClick={() => handleDemoPersonaSelect(persona)}
+                            >
+                              <div className="flex w-full justify-between items-center text-xs font-bold text-[#00284d]">
+                                <span>{persona.name}</span>
+                                <Badge variant="outline" className="text-[10px]">{persona.badge}</Badge>
+                              </div>
+                              <span className="text-[11px] text-slate-500">{persona.role}</span>
+                            </DropdownMenuItem>
+                          ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="p-5 sm:px-6">
+                  <form onSubmit={handleLogin} className="grid gap-4 sm:grid-cols-[1fr_1fr_auto]">
+                    <div>
+                      <Label htmlFor="username" className="text-xs font-bold text-slate-700">Email Address / Username</Label>
+                      <Input
+                        ref={usernameRef}
+                        id="username"
+                        name="username"
+                        type="text"
+                        placeholder="e.g. alex.martin@spacex.test"
+                        value={username}
+                        required
+                        onChange={(e) => {
+                          setUsername(e.target.value);
+                          setLoginError("");
+                        }}
+                        className="mt-1 h-10 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="password" className="text-xs font-bold text-slate-700">Password</Label>
+                      <Input
+                        id="password"
+                        name="password"
+                        type="password"
+                        placeholder="demo1234 or persona password"
+                        value={password}
+                        required
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          setLoginError("");
+                        }}
+                        className="mt-1 h-10 text-xs"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <Button
+                        id="login-submit"
+                        type="submit"
+                        disabled={loadingData}
+                        className="h-10 w-full bg-[#00284d] font-bold text-white hover:bg-[#003c70]"
+                      >
+                        {loadingData ? "Signing in…" : "Sign In"}
+                        <ArrowRight className="ml-1.5 size-4" />
+                      </Button>
+                    </div>
+                  </form>
+
+                  {loginError && (
+                    <p id="login-error" role="alert" className="mt-3 rounded-md bg-red-50 p-2.5 text-xs font-bold text-red-800 border border-red-200">
+                      {loginError}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* =================================================================== */}
+            {/* 1. CLICKABLE PROJECT HEALTH STATUS METRICS                          */}
+            {/* =================================================================== */}
+            <section aria-label="Project Health Metrics">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-                <div className="rounded-xl border border-emerald-300 bg-emerald-50/80 p-4 shadow-xs">
+                {/* 🟢 On Track */}
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter(statusFilter === "green" ? "all" : "green")}
+                  className={`rounded-xl border p-4 text-left shadow-xs transition hover:scale-[1.01] ${
+                    statusFilter === "green"
+                      ? "border-emerald-600 bg-emerald-100 ring-2 ring-emerald-600"
+                      : "border-emerald-300 bg-emerald-50/80 hover:bg-emerald-100/70"
+                  }`}
+                >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">🟢 On Track / Done</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-900">🟢 On Track</span>
                     <CheckCircle2 className="size-4 text-emerald-700" />
                   </div>
                   <div className="mt-2 text-2xl font-black text-emerald-950 sm:text-3xl">
                     {ragSummary.green}
                   </div>
-                  <p className="mt-0.5 text-[11px] text-emerald-700">Moving within statutory SLA</p>
-                </div>
+                  <p className="mt-0.5 text-[11px] text-emerald-800">Click to filter on-track items</p>
+                </button>
 
-                <div className="rounded-xl border border-amber-300 bg-amber-50/80 p-4 shadow-xs">
+                {/* 🟡 Action / Hearings */}
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter(statusFilter === "yellow" ? "all" : "yellow")}
+                  className={`rounded-xl border p-4 text-left shadow-xs transition hover:scale-[1.01] ${
+                    statusFilter === "yellow"
+                      ? "border-amber-600 bg-amber-100 ring-2 ring-amber-600"
+                      : "border-amber-300 bg-amber-50/80 hover:bg-amber-100/70"
+                  }`}
+                >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-amber-800">🟡 Action / Hearings</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-900">🟡 Action / Hearings</span>
                     <AlertTriangle className="size-4 text-amber-700" />
                   </div>
                   <div className="mt-2 text-2xl font-black text-amber-950 sm:text-3xl">
                     {ragSummary.yellow}
                   </div>
-                  <p className="mt-0.5 text-[11px] text-amber-700">Needs applicant or public step</p>
-                </div>
+                  <p className="mt-0.5 text-[11px] text-amber-800">Click to filter action needed</p>
+                </button>
 
-                <div className="rounded-xl border border-red-300 bg-red-50/90 p-4 shadow-xs">
+                {/* 🔴 Blocked */}
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter(statusFilter === "red" ? "all" : "red")}
+                  className={`rounded-xl border p-4 text-left shadow-xs transition hover:scale-[1.01] ${
+                    statusFilter === "red"
+                      ? "border-red-600 bg-red-100 ring-2 ring-red-600"
+                      : "border-red-300 bg-red-50/90 hover:bg-red-100/70"
+                  }`}
+                >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-red-800">🔴 Blocked / Risk</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-red-900">🔴 Blocked</span>
                     <AlertOctagon className="size-4 text-red-700 animate-pulse" />
                   </div>
                   <div className="mt-2 text-2xl font-black text-red-950 sm:text-3xl">
                     {ragSummary.red}
                   </div>
-                  <p className="mt-0.5 text-[11px] text-red-700">Escalated to Inter-Agency Liaison</p>
-                </div>
+                  <p className="mt-0.5 text-[11px] text-red-800">Click to filter active blockers</p>
+                </button>
 
-                <div className="rounded-xl border border-indigo-300 bg-indigo-50/80 p-4 shadow-xs">
+                {/* ⚡ Critical Path */}
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter(statusFilter === "critical" ? "all" : "critical")}
+                  className={`rounded-xl border p-4 text-left shadow-xs transition hover:scale-[1.01] ${
+                    statusFilter === "critical"
+                      ? "border-indigo-600 bg-indigo-100 ring-2 ring-indigo-600"
+                      : "border-indigo-300 bg-indigo-50/80 hover:bg-indigo-100/70"
+                  }`}
+                >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-indigo-800">⚡ Critical Path</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-indigo-900">⚡ Critical Path</span>
                     <Zap className="size-4 text-indigo-700" />
                   </div>
                   <div className="mt-2 text-2xl font-black text-indigo-950 sm:text-3xl">
                     {ragSummary.criticalPathCount}
                   </div>
-                  <p className="mt-0.5 text-[11px] text-indigo-700">Directly drives launch go-live</p>
-                </div>
+                  <p className="mt-0.5 text-[11px] text-indigo-800">Click to filter launch drivers</p>
+                </button>
               </div>
             </section>
 
+            {/* Active Filter Banner */}
+            {statusFilter !== "all" && (
+              <div className="flex items-center justify-between rounded-lg bg-slate-200 px-4 py-2 text-xs font-bold text-slate-800">
+                <span>
+                  Filtering by:{" "}
+                  <strong className="text-[#00284d] uppercase">
+                    {statusFilter === "critical" ? "⚡ Critical Path Items" : `${statusFilter.toUpperCase()} Status`}
+                  </strong>{" "}
+                  ({filteredPermits.length} items found)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("all")}
+                  className="inline-flex items-center text-teal-800 hover:text-teal-950 underline font-semibold"
+                >
+                  <X className="mr-1 size-3.5" /> Clear filter
+                </button>
+              </div>
+            )}
+
             {/* =================================================================== */}
-            {/* 2. CRITICAL PATH & ACTIVE BLOCKER SPOTLIGHT                         */}
+            {/* 2. ONLY BLOCKERS SHOWN SPOTLIGHT                                    */}
             {/* =================================================================== */}
-            {userPermits.some((p) => p.ragStatus === "red" && p.blocker) && (
-              <section aria-label="Critical Path Blocker Alert">
-                {userPermits
-                  .filter((p) => p.ragStatus === "red" && p.blocker)
-                  .map((item) => (
+            {activeBlockers.length > 0 && (
+              <section aria-label="Active Project Blockers">
+                <div className="rounded-xl border-2 border-red-500 bg-red-50/90 p-5 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="flex size-7 items-center justify-center rounded-md bg-red-600 text-white font-bold">
+                        <AlertOctagon className="size-4" />
+                      </span>
+                      <h2 className="text-base font-black text-red-950 uppercase tracking-wide">
+                        Active Project Blockers ({activeBlockers.length})
+                      </h2>
+                    </div>
+                    <Badge className="border border-red-600 bg-red-600 text-white font-bold text-xs">
+                      Escalated to Level 2 State Liaison
+                    </Badge>
+                  </div>
+
+                  {activeBlockers.map((item) => (
                     <div
                       key={item.id}
-                      className="rounded-xl border-2 border-red-500 bg-red-50 p-5 shadow-sm space-y-3"
+                      className="rounded-lg bg-white p-4 border border-red-200 shadow-xs space-y-2.5"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="flex size-8 items-center justify-center rounded-lg bg-red-600 text-white font-bold text-xs">
-                            <AlertOctagon className="size-4" />
+                          <span className="font-mono text-xs font-black bg-red-100 text-red-900 px-2 py-0.5 rounded border border-red-300">
+                            {item.id}
                           </span>
-                          <div>
-                            <h2 className="font-extrabold text-red-950 text-base">
-                              CRITICAL PATH BLOCKER · {item.id}: {item.title}
-                            </h2>
-                            <p className="text-xs text-red-800">
-                              Lead Agency: <strong>{item.leadAgency}</strong> · Blocked Duration: {item.blocker?.blockedSince}
-                            </p>
-                          </div>
+                          <strong className="text-sm font-black text-[#00284d]">{item.title}</strong>
+                          <Badge variant="outline" className={jurisdictionBadgeClasses(item.agencyLevel)}>
+                            {item.agencyLevel}
+                          </Badge>
                         </div>
-
-                        <Badge className="border border-red-600 bg-red-600 text-white font-bold">
-                          Escalated: Level 2 State Liaison
-                        </Badge>
+                        <span className="text-xs font-semibold text-red-800">
+                          Blocked: {item.blocker?.blockedSince}
+                        </span>
                       </div>
 
-                      <div className="rounded-lg bg-white/90 p-3.5 border border-red-200 text-xs sm:text-sm text-slate-800 space-y-2">
-                        <p><strong>Blocker:</strong> {item.blocker?.description}</p>
-                        <div className="flex items-center gap-2 text-red-900 font-semibold">
-                          <ArrowRight className="size-4 shrink-0 text-red-600" />
-                          <span><strong>Immediate Unblocking Action:</strong> {item.blocker?.unblockingAction}</span>
-                        </div>
+                      <p className="text-xs text-slate-700 leading-relaxed">{item.blocker?.description}</p>
+
+                      <div className="rounded bg-red-50/70 p-2.5 border border-red-200 text-xs text-red-900 font-semibold flex items-center gap-2">
+                        <ArrowRight className="size-4 text-red-600 shrink-0" />
+                        <span><strong>Unblocking Action:</strong> {item.blocker?.unblockingAction}</span>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-red-900">
-                        <span>Assigned State Owner: <strong>{item.owner.name}</strong> ({item.owner.phone})</span>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 pt-1 border-t border-slate-100">
+                        <span>Lead Agency: <strong className="text-slate-900">{item.leadAgency}</strong></span>
                         <Button
                           size="sm"
                           variant="outline"
-                          className="border-red-400 bg-white text-red-950 hover:bg-red-100 font-bold"
                           onClick={() => openPermit(item.id)}
+                          className="h-8 border-red-300 bg-red-50 text-red-950 font-bold hover:bg-red-100"
                         >
                           View Blocker & Escalation Path
-                          <ChevronRight className="ml-1 size-4" />
+                          <ChevronRight className="ml-1 size-3.5" />
                         </Button>
                       </div>
                     </div>
                   ))}
+                </div>
               </section>
             )}
 
             {/* =================================================================== */}
-            {/* 3. SIDE-BY-SIDE COMMAND WIDGETS (Agency Workload & Deadlines)       */}
+            {/* 3. INTERACTIVE GANTT TIMELINE CHART (Government Side Phases)        */}
+            {/* =================================================================== */}
+            <Card className="border border-slate-200 bg-white shadow-xs overflow-hidden">
+              <CardHeader className="border-b border-slate-100 p-5">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <CardTitle className="text-base font-black text-[#00284d] flex items-center gap-2">
+                      <BarChart3 className="size-4 text-teal-700" /> Government Operations & Permitting Gantt Timeline (2024)
+                    </CardTitle>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Visual multi-agency phase progression, active review windows, and critical path timeline
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-600">
+                    <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-full bg-emerald-600" /> Completed</span>
+                    <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-full bg-teal-600" /> Active</span>
+                    <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-full bg-red-600" /> Blocked</span>
+                    <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-full bg-slate-300" /> Future</span>
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-5 overflow-x-auto">
+                <div className="min-w-[700px] space-y-3">
+                  {/* Month Columns Header */}
+                  <div className="grid grid-cols-[220px_repeat(12,1fr)] gap-1 border-b border-slate-200 pb-2 text-[11px] font-bold text-slate-500 uppercase">
+                    <span>Task / Permit</span>
+                    {MONTHS.map((month, idx) => (
+                      <span key={month} className={`text-center ${idx === 5 ? "text-teal-800 font-extrabold bg-teal-50 rounded" : ""}`}>
+                        {month}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Gantt Rows */}
+                  {userPermits.map((item) => {
+                    const gantt = item.gantt || { startMonth: 1, endMonth: 9, progressMonth: 5.5, phases: [] };
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => openPermit(item.id)}
+                        className="group grid grid-cols-[220px_repeat(12,1fr)] gap-1 items-center rounded-lg p-1.5 hover:bg-slate-50 cursor-pointer transition border border-transparent hover:border-slate-200"
+                      >
+                        {/* Task Title & ID */}
+                        <div className="pr-2 truncate">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-[10px] font-bold text-slate-600">{item.id}</span>
+                            {item.isCriticalPath && <span className="text-[10px] text-amber-700 font-black">⚡</span>}
+                            <Badge variant="outline" className={`text-[9px] px-1 py-0 ${jurisdictionBadgeClasses(item.agencyLevel)}`}>
+                              {item.agencyLevel}
+                            </Badge>
+                          </div>
+                          <p className="text-xs font-bold text-[#00284d] truncate group-hover:text-teal-800">
+                            {item.title}
+                          </p>
+                        </div>
+
+                        {/* 12-Month Bar Grid */}
+                        <div className="col-span-12 grid grid-cols-12 gap-1 h-7 items-center relative bg-slate-100/70 rounded-md p-1">
+                          {/* Current Date Line (Mid-June) */}
+                          <div
+                            className="absolute top-0 bottom-0 w-0.5 bg-teal-700/60 z-10"
+                            style={{ left: "45.8%" }}
+                            title="Current Project Milestone (June 2024)"
+                          />
+
+                          {/* Phase Spans */}
+                          {gantt.phases.map((phase) => {
+                            const colStart = phase.startMonth;
+                            const span = Math.max(1, phase.endMonth - phase.startMonth);
+                            return (
+                              <div
+                                key={phase.name}
+                                style={{
+                                  gridColumnStart: colStart,
+                                  gridColumnEnd: `span ${span}`,
+                                }}
+                                className={`h-5 rounded text-[10px] font-bold flex items-center justify-center truncate px-1 text-white shadow-xs ${
+                                  phase.state === "done"
+                                    ? "bg-emerald-600"
+                                    : phase.state === "active"
+                                      ? "bg-teal-700 ring-2 ring-teal-200"
+                                      : phase.state === "blocked"
+                                        ? "bg-red-600 animate-pulse ring-2 ring-red-200"
+                                        : phase.state === "hearing"
+                                          ? "bg-amber-500"
+                                          : "bg-slate-300 text-slate-700"
+                                }`}
+                                title={`${phase.name} (Month ${phase.startMonth}–${phase.endMonth})`}
+                              >
+                                {phase.name}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* =================================================================== */}
+            {/* 4. CROSS-AGENCY WORKLOAD & UPCOMING DEADLINES                       */}
             {/* =================================================================== */}
             <div className="grid gap-6 lg:grid-cols-2">
               {/* Agency Workload Breakdown */}
@@ -966,21 +1043,24 @@ export default function Home() {
                 <CardHeader className="border-b border-slate-100 pb-3.5 pt-5 px-5">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base font-extrabold text-[#00284d] flex items-center gap-2">
-                      <Building2 className="size-4 text-teal-700" /> Agency Workload Distribution
+                      <Building2 className="size-4 text-teal-700" /> Agency Workload & Reviewing Level
                     </CardTitle>
                     <Badge variant="outline" className="text-[10px] text-slate-600">
                       {agencyWorkload.length} Agencies
                     </Badge>
                   </div>
-                  <p className="text-xs text-slate-500">Cross-agency operational case loads & bottlenecks</p>
+                  <p className="text-xs text-slate-500">Cross-agency operational case loads & jurisdictional tiers</p>
                 </CardHeader>
                 <CardContent className="p-5 space-y-3">
-                  {agencyWorkload.slice(0, 5).map((agency) => (
+                  {agencyWorkload.map((agency) => (
                     <div key={agency.agencyCode} className="space-y-1">
                       <div className="flex items-center justify-between text-xs font-semibold">
                         <span className="text-[#00284d] flex items-center gap-1.5">
                           <strong>{agency.agencyCode}</strong>
-                          <span className="text-slate-500 font-normal truncate max-w-[180px] sm:max-w-xs">{agency.agencyName}</span>
+                          <Badge variant="outline" className={`text-[9px] px-1 py-0 ${jurisdictionBadgeClasses(agency.agencyLevel)}`}>
+                            {agency.agencyLevel}
+                          </Badge>
+                          <span className="text-slate-500 font-normal truncate max-w-[150px] sm:max-w-xs">{agency.agencyName}</span>
                         </span>
                         <span className="flex items-center gap-2 font-mono">
                           {agency.blockedCount > 0 && (
@@ -1032,6 +1112,9 @@ export default function Home() {
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className="font-mono text-[11px] font-bold text-slate-700">{deadline.requestId}</span>
                           <span className="text-[11px] font-bold text-teal-900 bg-teal-50 px-1.5 rounded">{deadline.agencyCode}</span>
+                          <Badge variant="outline" className={`text-[9px] px-1 py-0 ${jurisdictionBadgeClasses(deadline.agencyLevel)}`}>
+                            {deadline.agencyLevel}
+                          </Badge>
                           {deadline.isCriticalPath && (
                             <span className="text-[10px] font-extrabold text-amber-800 bg-amber-50 px-1.5 rounded">⚡ Critical</span>
                           )}
@@ -1053,7 +1136,7 @@ export default function Home() {
             </div>
 
             {/* =================================================================== */}
-            {/* 4. SPACEX PLAIN-ENGLISH INTAKE & LIAISON TRIAGE                     */}
+            {/* 5. SPACEX PLAIN-ENGLISH INTAKE & LIAISON TRIAGE                     */}
             {/* =================================================================== */}
             <Card className="overflow-hidden border-2 border-teal-700/30 bg-white shadow-md">
               <div className="h-2 bg-gradient-to-r from-teal-700 via-amber-400 to-[#00284d]" />
@@ -1065,15 +1148,15 @@ export default function Home() {
                     </div>
                     <div>
                       <CardTitle className="text-lg font-black text-[#00284d]">
-                        Submit a Plain-English Government Service or Permit Need
+                        Submit a Plain-English Government Service or Infrastructure Need
                       </CardTitle>
                       <p className="text-xs text-slate-600">
-                        State Liaison Triage auto-categorizes your requirement and routes it to the designated agency lead.
+                        Inter-agency liaison triage automatically identifies jurisdiction, suggests lead agency, and routes the request.
                       </p>
                     </div>
                   </div>
                   <Badge variant="outline" className="border-teal-700 bg-teal-50 text-teal-900 font-bold text-xs">
-                    Liaison Triage Engine Active
+                    Liaison Triage Active
                   </Badge>
                 </div>
               </CardHeader>
@@ -1087,7 +1170,7 @@ export default function Home() {
                   {[
                     "Heavy-haul bridge reinforcement on LA-82 for rocket booster transport",
                     "Need 230kV high-capacity electrical transmission line for cryogenic facility",
-                    "Airspace NOTAM safety corridor coordination with FAA and Coast Guard",
+                    "Airspace NOTAM safety corridor and FCC radio spectrum clearance",
                     "Aerospace welding and NDT technician workforce training program with SLCC",
                     "Pecan Island residential drinking water well testing protocol",
                   ].map((example) => (
@@ -1097,7 +1180,7 @@ export default function Home() {
                       onClick={() => setIntakeText(example)}
                       className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700 transition hover:border-teal-400 hover:bg-teal-50 hover:text-teal-900"
                     >
-                      {example.slice(0, 38)}…
+                      {example.slice(0, 42)}…
                     </button>
                   ))}
                 </div>
@@ -1123,11 +1206,16 @@ export default function Home() {
                     <div className="rounded-xl border border-teal-200 bg-teal-50/70 p-4 space-y-3 animate-in fade-in-50 duration-200">
                       <div className="flex items-center justify-between text-xs font-bold text-teal-950">
                         <span className="flex items-center gap-1.5">
-                          <Sparkles className="size-4 text-teal-700" /> Automatic Liaison Triage Analysis
+                          <Sparkles className="size-4 text-teal-700" /> Automatic Triage Analysis
                         </span>
-                        <Badge className={categoryBadgeClasses(intakePreview.detectedCategory)}>
-                          {intakePreview.categoryLabel}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge className={categoryBadgeClasses(intakePreview.detectedCategory)}>
+                            {intakePreview.categoryLabel}
+                          </Badge>
+                          <Badge className={jurisdictionBadgeClasses(intakePreview.suggestedAgencyLevel)}>
+                            {intakePreview.suggestedAgencyLevel}
+                          </Badge>
+                        </div>
                       </div>
 
                       <div className="grid gap-2 sm:grid-cols-2 text-xs text-slate-800">
@@ -1172,16 +1260,16 @@ export default function Home() {
             </Card>
 
             {/* =================================================================== */}
-            {/* 5. MULTI-CATEGORY FILTERABLE REQUEST MATRIX                         */}
+            {/* 6. ALL PERMITS & SERVICE REQUEST MATRIX (Expandable + Drilldown)    */}
             {/* =================================================================== */}
             <section aria-labelledby="matrix-heading" className="space-y-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 id="matrix-heading" className="text-xl font-black text-[#00284d]">
-                    Service Request & Permit Matrix
+                    Project Service Requests & Permits ({filteredPermits.length})
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Comprehensive cross-agency coordination tracker for Pecan Island
+                    Showing all tracked items with expandable inline summaries and dedicated detail pages
                   </p>
                 </div>
 
@@ -1234,72 +1322,145 @@ export default function Home() {
                 })}
               </div>
 
-              {/* Request Cards Grid */}
+              {/* Request Cards Grid (Expandable & Clickable) */}
               <div className="space-y-3 pt-2">
                 {filteredPermits.map((permit) => {
                   const progress = permitProgress(permit);
+                  const isExpanded = Boolean(expandedCards[permit.id]);
                   return (
-                    <button
-                      id={`request-card-${permit.id}`}
+                    <div
                       key={permit.id}
-                      type="button"
-                      className="group flex w-full flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-xs transition hover:border-teal-600 hover:shadow-md sm:flex-row sm:items-center sm:justify-between"
-                      onClick={() => openPermit(permit.id)}
+                      id={`request-card-${permit.id}`}
+                      className="rounded-xl border border-slate-200 bg-white shadow-xs transition hover:border-teal-500 overflow-hidden"
                     >
-                      {/* Left: Metadata & Title */}
-                      <div className="min-w-0 flex-1 space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-xs font-black text-[#00284d] bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                            {permit.id}
-                          </span>
-                          <Badge variant="outline" className={`text-[11px] ${categoryBadgeClasses(permit.category)}`}>
-                            {categoryIcon(permit.category)}
-                            <span className="ml-1">{permit.categoryLabel}</span>
-                          </Badge>
-                          <Badge variant="outline" className={`text-[11px] ${ragBadgeClasses(permit.ragStatus)}`}>
-                            {permit.ragLabel}
-                          </Badge>
-                          {permit.isCriticalPath && (
-                            <span className="inline-flex items-center text-[10px] font-extrabold text-amber-900 bg-amber-100 border border-amber-300 rounded px-1.5 py-0.5">
-                              ⚡ Critical Path
+                      {/* Top Summary Bar */}
+                      <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="min-w-0 flex-1 space-y-1.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono text-xs font-black text-[#00284d] bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                              {permit.id}
                             </span>
-                          )}
-                        </div>
-
-                        <h3 className="text-base font-extrabold text-[#00284d] group-hover:text-teal-800 transition">
-                          {permit.title}
-                        </h3>
-
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                          <span>Lead Agency: <strong className="text-slate-800">{permit.leadAgency}</strong></span>
-                          <span>Owner: <strong className="text-slate-800">{permit.owner.name}</strong></span>
-                          <span>Target: <strong className="text-slate-800">{permit.targetDate}</strong></span>
-                        </div>
-                      </div>
-
-                      {/* Right: Progress & Action */}
-                      <div className="flex w-full items-center justify-between sm:w-56 shrink-0 gap-3 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
-                        <div className="w-full space-y-1.5">
-                          <div className="flex justify-between text-[11px] font-bold text-slate-600">
-                            <span>Day {permit.currentDay} of {permit.totalDays}</span>
-                            <span>{progress}%</span>
+                            <Badge variant="outline" className={`text-[11px] ${categoryBadgeClasses(permit.category)}`}>
+                              {categoryIcon(permit.category)}
+                              <span className="ml-1">{permit.categoryLabel}</span>
+                            </Badge>
+                            <Badge variant="outline" className={`text-[11px] ${jurisdictionBadgeClasses(permit.agencyLevel)}`}>
+                              {permit.agencyLevel}
+                            </Badge>
+                            <Badge variant="outline" className={`text-[11px] ${ragBadgeClasses(permit.ragStatus)}`}>
+                              {permit.ragLabel}
+                            </Badge>
+                            {permit.isCriticalPath && (
+                              <span className="inline-flex items-center text-[10px] font-extrabold text-amber-900 bg-amber-100 border border-amber-300 rounded px-1.5 py-0.5">
+                                ⚡ Critical Path
+                              </span>
+                            )}
                           </div>
-                          <Progress
-                            value={progress}
-                            aria-label={`${progress}% complete`}
-                            className={`h-2 ${
-                              permit.ragStatus === "red"
-                                ? "[&_[data-slot=progress-indicator]]:bg-red-600"
-                                : permit.ragStatus === "yellow"
-                                  ? "[&_[data-slot=progress-indicator]]:bg-amber-500"
-                                  : "[&_[data-slot=progress-indicator]]:bg-teal-700"
-                            }`}
-                          />
+
+                          <h3 className="text-base font-extrabold text-[#00284d]">
+                            {permit.title}
+                          </h3>
+
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                            <span>Reviewing Agency: <strong className="text-slate-800">{permit.leadAgency}</strong></span>
+                            <span>Owner: <strong className="text-slate-800">{permit.owner.name}</strong></span>
+                            <span>Target: <strong className="text-slate-800">{permit.targetDate}</strong></span>
+                          </div>
                         </div>
 
-                        <ChevronRight className="size-5 shrink-0 text-slate-400 transition group-hover:translate-x-1 group-hover:text-teal-800" />
+                        {/* Right: Progress & Toggle / Drilldown */}
+                        <div className="flex items-center gap-3 sm:w-64 shrink-0 justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+                          <div className="w-28 sm:w-32 space-y-1">
+                            <div className="flex justify-between text-[10px] font-bold text-slate-600">
+                              <span>Day {permit.currentDay}/{permit.totalDays}</span>
+                              <span>{progress}%</span>
+                            </div>
+                            <Progress
+                              value={progress}
+                              className={`h-1.5 ${
+                                permit.ragStatus === "red"
+                                  ? "[&_[data-slot=progress-indicator]]:bg-red-600"
+                                  : permit.ragStatus === "yellow"
+                                    ? "[&_[data-slot=progress-indicator]]:bg-amber-500"
+                                    : "[&_[data-slot=progress-indicator]]:bg-teal-700"
+                              }`}
+                            />
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => toggleCardExpanded(permit.id)}
+                              className="h-8 px-2 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                              aria-label={isExpanded ? "Collapse summary" : "Expand summary"}
+                            >
+                              {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                            </Button>
+
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openPermit(permit.id)}
+                              className="h-8 px-2.5 text-xs font-bold border-teal-600/30 text-[#00284d] hover:bg-teal-50"
+                            >
+                              Detail <ArrowRight className="ml-1 size-3.5" />
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                    </button>
+
+                      {/* Expandable Inline Details */}
+                      {isExpanded && (
+                        <div className="border-t border-slate-100 bg-slate-50/70 p-4 sm:p-5 space-y-4 animate-in fade-in-50 duration-200">
+                          {/* Blocker alert if present */}
+                          {permit.blocker && (
+                            <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-xs text-red-950 space-y-1">
+                              <p className="font-bold flex items-center gap-1.5">
+                                <AlertOctagon className="size-3.5 text-red-600" /> Blocker: {permit.blocker.title}
+                              </p>
+                              <p>{permit.blocker.description}</p>
+                              <p className="font-semibold text-red-900">Unblocking action: {permit.blocker.unblockingAction}</p>
+                            </div>
+                          )}
+
+                          {/* 5-Phase Steps Summary */}
+                          <div className="grid gap-2 sm:grid-cols-5 text-xs">
+                            {permit.steps.map((step, idx) => (
+                              <div
+                                key={step.title}
+                                className={`p-2 rounded border text-center ${
+                                  step.state === "done"
+                                    ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+                                    : step.state === "active"
+                                      ? "border-teal-400 bg-teal-50 text-teal-950 ring-1 ring-teal-300 font-bold"
+                                      : step.state === "blocked"
+                                        ? "border-red-300 bg-red-50 text-red-950 font-bold"
+                                        : "border-slate-200 bg-white text-slate-600"
+                                }`}
+                              >
+                                <span className="block text-[10px] text-slate-500 font-mono">Step {idx + 1}</span>
+                                <span className="block font-semibold truncate" title={step.title}>{step.title}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Assigned State Owner & Next Action */}
+                          <div className="flex flex-wrap items-center justify-between gap-3 text-xs border-t border-slate-200 pt-3">
+                            <span className="text-slate-600">
+                              Assigned Owner: <strong className="text-slate-900">{permit.owner.name}</strong> ({permit.owner.title}, {permit.owner.agency})
+                            </span>
+                            <Button
+                              size="sm"
+                              onClick={() => openPermit(permit.id)}
+                              className="bg-[#00284d] text-white font-bold h-7 text-xs hover:bg-[#003c70]"
+                            >
+                              Open Full Dedicated Page <ChevronRight className="ml-1 size-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
 
@@ -1307,7 +1468,7 @@ export default function Home() {
                   <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-500">
                     <Filter className="mx-auto size-8 text-slate-400 mb-2" />
                     <p className="font-bold text-slate-700">No requests found matching your filter</p>
-                    <p className="text-xs mt-1">Try selecting a different category or clearing your search term.</p>
+                    <p className="text-xs mt-1">Try selecting a different status or category above.</p>
                   </div>
                 )}
               </div>
@@ -1316,7 +1477,7 @@ export default function Home() {
         )}
 
         {/* ========================================================================= */}
-        {/* VIEW 4: DEEP REQUEST & ESCALATION DETAIL VIEW                              */}
+        {/* VIEW: DEDICATED DETAIL PAGE (Single Permit / Action Drilldown)             */}
         {/* ========================================================================= */}
         {view === "detail" && selectedPermit && (
           <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12 space-y-8">
@@ -1325,11 +1486,11 @@ export default function Home() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setView("dashboard")}
+                onClick={() => setView("portal")}
                 className="font-bold text-[#00284d]"
               >
                 <ArrowLeft className="mr-2 size-4" />
-                Back to Command Center
+                Back to Operations Overview
               </Button>
 
               <Button
@@ -1364,6 +1525,9 @@ export default function Home() {
                       {categoryIcon(selectedPermit.category)}
                       <span className="ml-1">{selectedPermit.categoryLabel}</span>
                     </Badge>
+                    <Badge variant="outline" className={`text-xs ${jurisdictionBadgeClasses(selectedPermit.agencyLevel)}`}>
+                      {selectedPermit.agencyLevel}
+                    </Badge>
                     <Badge variant="outline" className={`text-xs ${ragBadgeClasses(selectedPermit.ragStatus)}`}>
                       {selectedPermit.ragLabel}
                     </Badge>
@@ -1388,7 +1552,7 @@ export default function Home() {
                 </h1>
 
                 <p className="text-sm text-slate-600">
-                  Applicant: <strong>{selectedPermit.applicant}</strong> ({selectedPermit.organization}) · Lead Agency: <strong>{selectedPermit.leadAgency}</strong>
+                  Applicant: <strong>{selectedPermit.applicant}</strong> ({selectedPermit.organization}) · Reviewing Agency: <strong>{selectedPermit.leadAgency}</strong> ({selectedPermit.agencyLevel})
                 </p>
               </CardHeader>
 
@@ -1484,7 +1648,7 @@ export default function Home() {
                 <div className="grid gap-6 sm:grid-cols-2 pt-4 border-t border-slate-200">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
                     <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                      <User className="size-3.5" /> Assigned State Lead / Owner
+                      <User className="size-3.5" /> Assigned Lead / Owner
                     </h2>
                     <p className="text-sm font-black text-[#00284d]">{selectedPermit.owner.name}</p>
                     <p className="text-xs text-slate-600 font-medium">{selectedPermit.owner.title}</p>

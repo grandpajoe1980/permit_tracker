@@ -8,6 +8,7 @@ import {
   type Agency,
   type DemoAccount,
   type DemoPersona,
+  type JurisdictionLevel,
   type PermitRecord,
   type RAGStatus,
   type RequestCategory,
@@ -114,6 +115,7 @@ export function calculateRAGSummary(items: ServiceRequest[]): RAGSummary {
 export type AgencyWorkloadItem = {
   agencyCode: string;
   agencyName: string;
+  agencyLevel: JurisdictionLevel;
   count: number;
   blockedCount: number;
   onTrackCount: number;
@@ -128,6 +130,7 @@ export function getAgencyWorkload(items: ServiceRequest[]): AgencyWorkloadItem[]
       map[code] = {
         agencyCode: code,
         agencyName: item.leadAgency || code,
+        agencyLevel: item.agencyLevel || "State",
         count: 0,
         blockedCount: 0,
         onTrackCount: 0,
@@ -149,6 +152,7 @@ export type UpcomingDeadline = {
   requestTitle: string;
   category: RequestCategory;
   agencyCode: string;
+  agencyLevel: JurisdictionLevel;
   milestoneTitle: string;
   targetDate: string;
   isCriticalPath: boolean;
@@ -165,6 +169,7 @@ export function getUpcomingDeadlines(items: ServiceRequest[]): UpcomingDeadline[
         requestTitle: item.title,
         category: item.category,
         agencyCode: item.leadAgencyCode,
+        agencyLevel: item.agencyLevel,
         milestoneTitle: activeStep?.title || item.statusLabel,
         targetDate: item.targetDate,
         isCriticalPath: item.isCriticalPath,
@@ -179,6 +184,7 @@ export type IntakeTriageResult = {
   categoryLabel: string;
   suggestedLeadAgency: string;
   suggestedLeadAgencyCode: string;
+  suggestedAgencyLevel: JurisdictionLevel;
   priority: "critical" | "high" | "normal";
   isCriticalPathCandidate: boolean;
   estimatedDays: number;
@@ -192,6 +198,7 @@ export function parsePlainEnglishIntake(text: string): IntakeTriageResult {
   let detectedCategory: RequestCategory = "permit";
   let suggestedLeadAgency = "Louisiana Department of Environmental Quality (LDEQ)";
   let suggestedLeadAgencyCode = "LDEQ";
+  let suggestedAgencyLevel: JurisdictionLevel = "State";
   let priority: "critical" | "high" | "normal" = "normal";
   let isCriticalPathCandidate = false;
   let estimatedDays = 150;
@@ -208,8 +215,9 @@ export function parsePlainEnglishIntake(text: string): IntakeTriageResult {
     lower.includes("transport")
   ) {
     detectedCategory = "road";
-    suggestedLeadAgency = "Louisiana Department of Transportation and Development (DOTD)";
+    suggestedLeadAgency = "Louisiana Department of Transportation & Development (DOTD)";
     suggestedLeadAgencyCode = "DOTD";
+    suggestedAgencyLevel = "State";
     priority = "critical";
     isCriticalPathCandidate = true;
     estimatedDays = 180;
@@ -228,6 +236,7 @@ export function parsePlainEnglishIntake(text: string): IntakeTriageResult {
     detectedCategory = "utility";
     suggestedLeadAgency = "Louisiana Public Service Commission & Entergy Louisiana";
     suggestedLeadAgencyCode = "LPSC / Entergy";
+    suggestedAgencyLevel = "Utility / Regional";
     priority = "critical";
     isCriticalPathCandidate = true;
     estimatedDays = 240;
@@ -237,22 +246,38 @@ export function parsePlainEnglishIntake(text: string): IntakeTriageResult {
     lower.includes("notam") ||
     lower.includes("faa") ||
     lower.includes("coast guard") ||
+    lower.includes("uscg") ||
+    lower.includes("fcc") ||
+    lower.includes("frequency") ||
+    lower.includes("communications") ||
+    lower.includes("radar")
+  ) {
+    detectedCategory = "public_safety";
+    suggestedLeadAgency = "FAA Southwest Region, USCG & FCC";
+    suggestedLeadAgencyCode = "FAA / USCG / FCC";
+    suggestedAgencyLevel = "Federal";
+    priority = "high";
+    isCriticalPathCandidate = true;
+    estimatedDays = 210;
+    statutoryNotice = "FAA Part 450 license and federal spectrum clearances required prior to launch operations.";
+  } else if (
     lower.includes("fire marshal") ||
     lower.includes("cryo") ||
     lower.includes("hazard") ||
     lower.includes("safety") ||
-    lower.includes("corridor") ||
     lower.includes("deluge") ||
     lower.includes("methane") ||
-    lower.includes("lox")
+    lower.includes("lox") ||
+    lower.includes("storage")
   ) {
     detectedCategory = "public_safety";
-    suggestedLeadAgency = "Louisiana State Police & Office of State Fire Marshal (OSFM)";
-    suggestedLeadAgencyCode = "LSP / OSFM";
+    suggestedLeadAgency = "Louisiana Office of State Fire Marshal & State Police";
+    suggestedLeadAgencyCode = "OSFM / LSP";
+    suggestedAgencyLevel = "State";
     priority = "high";
     isCriticalPathCandidate = true;
     estimatedDays = 210;
-    statutoryNotice = "FAA Part 450 license and OSFM hazardous storage reviews required before launch operations.";
+    statutoryNotice = "OSFM industrial hazardous storage reviews required before fueling operations.";
   } else if (
     lower.includes("training") ||
     lower.includes("workforce") ||
@@ -267,6 +292,7 @@ export function parsePlainEnglishIntake(text: string): IntakeTriageResult {
     detectedCategory = "workforce";
     suggestedLeadAgency = "Louisiana Economic Development (LED FastStart) & SLCC";
     suggestedLeadAgencyCode = "LED / SLCC";
+    suggestedAgencyLevel = "State";
     priority = "normal";
     isCriticalPathCandidate = false;
     estimatedDays = 90;
@@ -284,6 +310,7 @@ export function parsePlainEnglishIntake(text: string): IntakeTriageResult {
     detectedCategory = "community";
     suggestedLeadAgency = "Vermilion Parish Police Jury & Department of Health";
     suggestedLeadAgencyCode = "Parish / LDH";
+    suggestedAgencyLevel = "Local / Parish";
     priority = "normal";
     isCriticalPathCandidate = false;
     estimatedDays = 60;
@@ -297,15 +324,15 @@ export function parsePlainEnglishIntake(text: string): IntakeTriageResult {
     lower.includes("coastal")
   ) {
     detectedCategory = "permit";
-    suggestedLeadAgency = "Coastal Protection and Restoration Authority (CPRA) & USACE";
+    suggestedLeadAgency = "Coastal Protection & Restoration Authority (CPRA) & USACE";
     suggestedLeadAgencyCode = "CPRA / USACE";
+    suggestedAgencyLevel = "Federal";
     priority = "high";
     isCriticalPathCandidate = false;
     estimatedDays = 260;
     statutoryNotice = "Joint Coastal Use Permit (CUP) and USACE Section 404 application filed via OCM portal.";
   }
 
-  // Generate a crisp title from plain English
   const firstSentence = text.split(/[.\n]/)[0].trim();
   const extractedTitle = firstSentence.length > 70
     ? `${firstSentence.slice(0, 67)}…`
@@ -316,6 +343,7 @@ export function parsePlainEnglishIntake(text: string): IntakeTriageResult {
     categoryLabel: requestCategories[detectedCategory].label,
     suggestedLeadAgency,
     suggestedLeadAgencyCode,
+    suggestedAgencyLevel,
     priority,
     isCriticalPathCandidate,
     estimatedDays,

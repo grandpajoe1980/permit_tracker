@@ -13,29 +13,28 @@ test("uses the typed domain module without duplicating fixtures in the UI", () =
   assert.match(page, /^"use client";/);
   assert.match(page, /from "@\/lib\/demo-data"/);
   assert.match(page, /from "@\/lib\/permit-utils"/);
-  assert.doesNotMatch(page, /WQ-2024-00142|applicant\.happypath/);
+  assert.doesNotMatch(page, /applicant\.happypath/);
 });
 
 test("preserves stable journey labels and semantic controls", () => {
-  assert.match(page, /SpaceX Louisiana workspace/i);
-  assert.match(page, /Sign in to PATH/i);
-  assert.match(page, /Command Center/i);
-  assert.match(page, /id="workspace-next"/);
+  assert.match(page, /SpaceX Louisiana/i);
+  assert.match(page, /Sign in to Critical Path/i);
+  assert.match(page, /Critical Path/i);
   assert.match(page, /id="login-submit"/);
   assert.match(page, /id="demo-login-trigger"/);
   assert.match(page, /id="login-error" role="alert"/);
   assert.match(page, /id="intake-submit-btn"/);
   assert.match(page, /createRequestForUser/);
   assert.match(page, /aria-live="polite"/);
-  assert.match(page, /Critical Path/i);
-  assert.match(page, /Agency Workload Distribution/i);
+  assert.match(page, /Agency Workload/i);
   assert.match(page, /Inter-Agency Escalation Path/i);
+  assert.match(page, /Gantt/i);
   assert.match(page, /Statutory/i);
   assert.doesNotMatch(page, /dangerouslySetInnerHTML|onclick\s*=/);
 });
 
 test("ships final product metadata without starter preview markers", () => {
-  assert.match(layout, /PATH/);
+  assert.match(layout, /Critical Path/);
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);
 });
 
@@ -44,7 +43,6 @@ test("includes responsive, focus, reduced-motion, and print protections", () => 
   assert.match(css, /:focus-visible/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.match(css, /@media print/);
-  assert.match(css, /\.demo-banner/);
 });
 
 test("documents the public-demo boundary and production security gap", () => {

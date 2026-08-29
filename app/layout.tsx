@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PATH — Permit Application Tracker",
+  title: "Critical Path — SpaceX Louisiana Project Operations",
   description:
-    "An accessible demonstration of permit status, milestone, deadline, and next-step tracking for applicants.",
+    "Cross-agency infrastructure coordination, government service requests, milestone Gantt tracking, and escalation paths.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
