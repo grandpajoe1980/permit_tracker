@@ -233,3 +233,36 @@ test("plain-English intake parser correctly detects categories, agencies, and ju
   const communityIntake = utils.parsePlainEnglishIntake("Local resident water well monitoring and parish town hall coordination.");
   assert.equal(communityIntake.detectedCategory, "community");
 });
+
+test("exports roleDefinitions and initialTeamUsers with granular permission mapping", () => {
+  assert.ok(data.roleDefinitions);
+  assert.ok(data.roleDefinitions.admin);
+  assert.ok(data.roleDefinitions.submitter);
+  assert.ok(data.roleDefinitions.reviewer);
+  assert.ok(data.roleDefinitions.infrastructure);
+  assert.ok(data.roleDefinitions.community);
+  assert.ok(data.roleDefinitions.viewer);
+
+  assert.ok(data.roleDefinitions.admin.defaultPermissions.includes("manage_roles"));
+  assert.ok(data.roleDefinitions.admin.defaultPermissions.includes("edit_workflow"));
+  assert.ok(data.roleDefinitions.admin.defaultPermissions.includes("add_blockers"));
+  assert.ok(data.roleDefinitions.admin.defaultPermissions.includes("resolve_blockers"));
+
+  assert.ok(Array.isArray(data.initialTeamUsers));
+  assert.ok(data.initialTeamUsers.length >= 6);
+
+  for (const user of data.initialTeamUsers) {
+    assert.ok(user.id);
+    assert.ok(user.name);
+    assert.ok(user.email);
+    assert.ok(user.roleId in data.roleDefinitions);
+    assert.ok(Array.isArray(user.permissions));
+  }
+
+  const maya = data.initialTeamUsers.find((u) => u.email === "maya.chen@spacex.test");
+  assert.ok(maya);
+  assert.equal(maya.roleId, "admin");
+  assert.ok(maya.permissions.includes("manage_roles"));
+  assert.ok(maya.permissions.includes("edit_workflow"));
+});
+

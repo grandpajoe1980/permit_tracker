@@ -207,6 +207,153 @@ export type DemoPersona = {
   group: "SpaceX Louisiana Program" | "Applicant Scenarios";
 };
 
+export type RoleId = "admin" | "submitter" | "reviewer" | "infrastructure" | "community" | "viewer";
+
+export type PermissionKey =
+  | "manage_roles"
+  | "edit_workflow"
+  | "submit_requests"
+  | "add_blockers"
+  | "resolve_blockers"
+  | "escalate_liaison"
+  | "reassign_agency";
+
+export type RoleDefinition = {
+  id: RoleId;
+  name: string;
+  description: string;
+  badge: string;
+  defaultPermissions: PermissionKey[];
+};
+
+export const roleDefinitions: Record<RoleId, RoleDefinition> = {
+  admin: {
+    id: "admin",
+    name: "Program Administrator / Supervisor",
+    description: "Full access to edit workflows, manage team roles & permissions, escalate blockers, and reassign agencies.",
+    badge: "Administrator",
+    defaultPermissions: [
+      "manage_roles",
+      "edit_workflow",
+      "submit_requests",
+      "add_blockers",
+      "resolve_blockers",
+      "escalate_liaison",
+      "reassign_agency",
+    ],
+  },
+  submitter: {
+    id: "submitter",
+    name: "SpaceX Project Lead / Submitter",
+    description: "Submit plain-English needs, update project notes, and track critical path milestones.",
+    badge: "Project Lead",
+    defaultPermissions: ["submit_requests", "escalate_liaison"],
+  },
+  reviewer: {
+    id: "reviewer",
+    name: "Agency Technical Reviewer",
+    description: "Review statutory technical submittals, advance review stages, and request technical clarification.",
+    badge: "Reviewer",
+    defaultPermissions: ["edit_workflow", "add_blockers", "resolve_blockers"],
+  },
+  infrastructure: {
+    id: "infrastructure",
+    name: "Infrastructure & Utility Lead",
+    description: "Manage civil road reinforcements, high-voltage interconnections, and contractor sign-offs.",
+    badge: "Infrastructure",
+    defaultPermissions: ["edit_workflow", "add_blockers", "resolve_blockers", "escalate_liaison"],
+  },
+  community: {
+    id: "community",
+    name: "Community & Hearing Coordinator",
+    description: "Schedule public hearings, coordinate parish liaison town halls, and publish water quality updates.",
+    badge: "Community",
+    defaultPermissions: ["edit_workflow"],
+  },
+  viewer: {
+    id: "viewer",
+    name: "Applicant / Read-Only Stakeholder",
+    description: "View-only access to authorized filing records, timelines, and decision notices.",
+    badge: "Stakeholder",
+    defaultPermissions: [],
+  },
+};
+
+export type TeamUser = {
+  id: string;
+  name: string;
+  email: string;
+  roleId: RoleId;
+  organization: string;
+  agency: string;
+  permissions: PermissionKey[];
+};
+
+export const initialTeamUsers: TeamUser[] = [
+  {
+    id: "user-maya-chen",
+    name: "Maya Chen",
+    email: "maya.chen@spacex.test",
+    roleId: "admin",
+    organization: "SpaceX Louisiana",
+    agency: "Spaceport Executive Team",
+    permissions: [
+      "manage_roles",
+      "edit_workflow",
+      "submit_requests",
+      "add_blockers",
+      "resolve_blockers",
+      "escalate_liaison",
+      "reassign_agency",
+    ],
+  },
+  {
+    id: "user-alex-martin",
+    name: "Alex Martin",
+    email: "alex.martin@spacex.test",
+    roleId: "submitter",
+    organization: "SpaceX Louisiana",
+    agency: "Launch Complex Operations",
+    permissions: ["submit_requests", "escalate_liaison"],
+  },
+  {
+    id: "user-jordan-lee",
+    name: "Jordan Lee",
+    email: "jordan.lee@spacex.test",
+    roleId: "reviewer",
+    organization: "Louisiana DEQ",
+    agency: "Water Quality Division (State)",
+    permissions: ["edit_workflow", "add_blockers", "resolve_blockers"],
+  },
+  {
+    id: "user-sam-rivera",
+    name: "Sam Rivera",
+    email: "sam.rivera@spacex.test",
+    roleId: "infrastructure",
+    organization: "Louisiana DOTD / Entergy",
+    agency: "District 03 Civil Projects (State)",
+    permissions: ["edit_workflow", "add_blockers", "resolve_blockers", "escalate_liaison"],
+  },
+  {
+    id: "user-riley-brooks",
+    name: "Riley Brooks",
+    email: "riley.brooks@spacex.test",
+    roleId: "community",
+    organization: "Vermilion Parish",
+    agency: "Parish Intergovernmental Office (Local)",
+    permissions: ["edit_workflow"],
+  },
+  {
+    id: "user-jordan-thibodaux",
+    name: "Jordan Thibodaux",
+    email: "applicant.happypath",
+    roleId: "viewer",
+    organization: "Riverdale Infrastructure LLC",
+    agency: "Applicant Team",
+    permissions: [],
+  },
+];
+
 export const demoPersonas: DemoPersona[] = [
   {
     id: "alex-martin",

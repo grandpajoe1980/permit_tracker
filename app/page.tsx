@@ -19,6 +19,7 @@ import {
   ChevronUp,
   Circle,
   Clock3,
+  Edit3,
   ExternalLink,
   FilePlus2,
   FileText,
@@ -29,6 +30,7 @@ import {
   HardHat,
   HelpCircle,
   Info,
+  KeyRound,
   Landmark,
   Layers,
   Lightbulb,
@@ -38,18 +40,24 @@ import {
   MapPin,
   Maximize2,
   Phone,
+  Plus,
   Printer,
   Radio,
   Route,
+  Save,
   Search,
   Send,
+  Shield,
   ShieldAlert,
   ShieldCheck,
+  Sliders,
   Sparkles,
+  Trash2,
   TrendingUp,
   Truck,
   User,
   UserCheck,
+  UserCog,
   Users,
   Wrench,
   X,
@@ -74,17 +82,22 @@ import { Progress } from "@/components/ui/progress";
 import {
   DEMO_PASSWORD,
   demoPersonas,
+  initialTeamUsers,
   pecanIslandRequests,
   requestCategories,
+  roleDefinitions,
   type DemoAccount,
   type DemoPersona,
   type JurisdictionLevel,
+  type PermissionKey,
   type PermitRecord,
   type PermitStatus,
   type RAGStatus,
   type RequestCategory,
+  type RoleId,
   type ServiceRequest,
   type StepState,
+  type TeamUser,
 } from "@/lib/demo-data";
 import {
   calculateRAGSummary,
@@ -106,7 +119,7 @@ import {
 } from "@/lib/supabase-browser";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
-type View = "portal" | "detail";
+type View = "portal" | "detail" | "admin";
 
 function categoryIcon(category: RequestCategory) {
   switch (category) {
@@ -208,8 +221,23 @@ export default function Home() {
   const [loginError, setLoginError] = useState("");
   const [loadingData, setLoadingData] = useState(false);
 
-  // Requests Data
+  // Requests Data & Team Roles State
   const [userPermits, setUserPermits] = useState<ServiceRequest[]>(pecanIslandRequests);
+  const [teamUsers, setTeamUsers] = useState<TeamUser[]>(initialTeamUsers);
+  const [adminFeedback, setAdminFeedback] = useState<string>("");
+
+  // Workflow Editor State (for the active request)
+  const [isEditingFlow, setIsEditingFlow] = useState(false);
+  const [newStepPhase, setNewStepPhase] = useState("Phase 3 · Inter-Agency Clearance");
+  const [newStepTitle, setNewStepTitle] = useState("");
+  const [newStepMeta, setNewStepMeta] = useState("Target: Next 30 Days");
+  const [newStepState, setNewStepState] = useState<StepState>("future");
+
+  // Blocker Modal Form State
+  const [showBlockerModal, setShowBlockerModal] = useState(false);
+  const [blockerTitle, setBlockerTitle] = useState("");
+  const [blockerDescription, setBlockerDescription] = useState("");
+  const [blockerUnblockingAction, setBlockerUnblockingAction] = useState("");
 
   // Plain-English Intake State
   const [intakeText, setIntakeText] = useState("");
@@ -226,6 +254,16 @@ export default function Home() {
   const intakePreview = intakeText.trim()
     ? parsePlainEnglishIntake(intakeText)
     : null;
+
+  // Find permissions of current user
+  const loggedInTeamUser = teamUsers.find(
+    (u) => u.email.toLowerCase() === currentUser?.username.toLowerCase()
+  );
+  const userRole = loggedInTeamUser ? loggedInTeamUser.roleId : "admin";
+  const userPermissions = loggedInTeamUser ? loggedInTeamUser.permissions : roleDefinitions.admin.defaultPermissions;
+
+  const canManageRoles = userPermissions.includes("manage_roles") || userRole === "admin";
+  const canEditWorkflow = userPermissions.includes("edit_workflow") || userRole === "admin";
 
   useEffect(() => {
     let active = true;
@@ -344,6 +382,7 @@ export default function Home() {
 
   function openPermit(permitId: string) {
     setSelectedPermitId(permitId);
+    setIsEditingFlow(false);
     setView("detail");
   }
 
@@ -363,6 +402,181 @@ export default function Home() {
     setLoginError("");
     setUserPermits(pecanIslandRequests);
     setView("portal");
+  }
+
+  // Admin Permission Handlers
+  function handleUpdateUserRole(userId: string, newRoleId: RoleId) {
+    const roleDef = roleDefinitions[newRoleId];
+    setTeamUsers((prev) =>
+      prev.map((user) =>
+        user.id === userId
+          ? {
+              ...user,
+              roleId: newRoleId,
+              permissions: [...roleDef.defaultPermissions],
+            }
+          : user
+      )
+    );
+    setAdminFeedback(`✓ Updated role for user to "${roleDef.name}"`);
+    setTimeout(() => setAdminFeedback(""), 4000);
+  }
+
+  function handleToggleUserPermission(userId: string, permKey: PermissionKey) {
+    setTeamUsers((prev) =>
+      prev.map((user) => {
+        if (user.id !== userId) return user;
+        const has = user.permissions.includes(permKey);
+        const updated = has
+          ? user.permissions.filter((p) => p !== permKey)
+          : [...user.permissions, permKey];
+        return { ...user, permissions: updated };
+      })
+    );
+  }
+
+  // Workflow Flow Editing Handlers
+  function handleAdvanceWorkflow(requestId: string) {
+    setUserPermits((prev) =>
+      prev.map((req) => {
+        if (req.id !== requestId) return req;
+        const activeIdx = req.steps.findIndex((s) => s.state === "active" || s.state === "blocked");
+        if (activeIdx === -1) return req;
+
+        const updatedSteps = req.steps.map((step, idx) => {
+          if (idx === activeIdx) return { ...step, state: "done" as StepState };
+          if (idx === activeIdx + 1) return { ...step, state: "active" as StepState };
+          return step;
+        });
+
+        const isCompleted = activeIdx + 1 >= req.steps.length;
+        return {
+          ...req,
+          steps: updatedSteps,
+          status: isCompleted ? "approved" : "in-review",
+          statusLabel: isCompleted ? "Approved · Completed" : `In Progress · Step ${activeIdx + 2}`,
+          ragStatus: "green",
+          ragLabel: isCompleted ? "Approved" : "On Track",
+          blocker: undefined,
+        };
+      })
+    );
+  }
+
+  function handleUpdateStepState(requestId: string, stepIndex: number, newState: StepState) {
+    setUserPermits((prev) =>
+      prev.map((req) => {
+        if (req.id !== requestId) return req;
+        const updatedSteps = req.steps.map((step, idx) =>
+          idx === stepIndex ? { ...step, state: newState } : step
+        );
+        return {
+          ...req,
+          steps: updatedSteps,
+          ragStatus: newState === "blocked" ? "red" : newState === "hearing" ? "yellow" : req.ragStatus,
+        };
+      })
+    );
+  }
+
+  function handleAddStep(requestId: string) {
+    if (!newStepTitle.trim()) return;
+    const newStep = {
+      phase: newStepPhase,
+      title: newStepTitle.trim(),
+      meta: newStepMeta.trim() || "Milestone Stage",
+      state: newStepState,
+    };
+
+    setUserPermits((prev) =>
+      prev.map((req) => {
+        if (req.id !== requestId) return req;
+        return {
+          ...req,
+          steps: [...req.steps, newStep],
+        };
+      })
+    );
+
+    setNewStepTitle("");
+    setNewStepMeta("Target: Next 30 Days");
+  }
+
+  function handleDeleteStep(requestId: string, stepIndex: number) {
+    setUserPermits((prev) =>
+      prev.map((req) => {
+        if (req.id !== requestId) return req;
+        return {
+          ...req,
+          steps: req.steps.filter((_, idx) => idx !== stepIndex),
+        };
+      })
+    );
+  }
+
+  function handleAddBlockerSubmit(requestId: string) {
+    if (!blockerTitle.trim()) return;
+    setUserPermits((prev) =>
+      prev.map((req) => {
+        if (req.id !== requestId) return req;
+        const updatedSteps = req.steps.map((step) =>
+          step.state === "active" ? { ...step, state: "blocked" as StepState } : step
+        );
+        return {
+          ...req,
+          ragStatus: "red",
+          ragLabel: "Blocked",
+          status: "action-needed",
+          statusLabel: `Blocked: ${blockerTitle.trim()}`,
+          blocker: {
+            title: blockerTitle.trim(),
+            description: blockerDescription.trim() || "Action required before review can resume.",
+            severity: "critical",
+            blockedSince: "Just now",
+            unblockingAction: blockerUnblockingAction.trim() || "Submit requested documentation to lead agency.",
+          },
+          steps: updatedSteps,
+        };
+      })
+    );
+    setShowBlockerModal(false);
+    setBlockerTitle("");
+    setBlockerDescription("");
+    setBlockerUnblockingAction("");
+  }
+
+  function handleResolveBlocker(requestId: string) {
+    setUserPermits((prev) =>
+      prev.map((req) => {
+        if (req.id !== requestId) return req;
+        const updatedSteps = req.steps.map((step) =>
+          step.state === "blocked" ? { ...step, state: "active" as StepState } : step
+        );
+        return {
+          ...req,
+          ragStatus: "green",
+          ragLabel: "On Track",
+          status: "in-review",
+          statusLabel: "Active Review Resumed",
+          blocker: undefined,
+          steps: updatedSteps,
+        };
+      })
+    );
+  }
+
+  function handleReassignAgency(requestId: string, agencyName: string, agencyCode: string, level: JurisdictionLevel) {
+    setUserPermits((prev) =>
+      prev.map((req) => {
+        if (req.id !== requestId) return req;
+        return {
+          ...req,
+          leadAgency: agencyName,
+          leadAgencyCode: agencyCode,
+          agencyLevel: level,
+        };
+      })
+    );
   }
 
   async function handleIntakeSubmit(event: FormEvent<HTMLFormElement>) {
@@ -513,9 +727,26 @@ export default function Home() {
             </span>
           </button>
 
-          {currentUser ? (
-            <div className="flex items-center gap-3">
-              {/* Account Dropdown in Top Right */}
+          <div className="flex items-center gap-3">
+            {/* Admin Permissions Tab Button */}
+            {currentUser && canManageRoles && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setView(view === "admin" ? "portal" : "admin")}
+                className={`border-white/30 text-xs font-bold ${
+                  view === "admin"
+                    ? "bg-amber-400 text-[#00284d] hover:bg-amber-300"
+                    : "bg-white/10 text-white hover:bg-white/20"
+                }`}
+              >
+                <UserCog className="mr-1.5 size-3.5" />
+                {view === "admin" ? "Exit Admin" : "Manage Roles & Permissions"}
+              </Button>
+            )}
+
+            {currentUser ? (
+              /* Account Dropdown in Top Right */
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -572,18 +803,148 @@ export default function Home() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
+            ) : (
               <Badge className="border border-white/20 bg-white/10 text-white text-xs">
                 Public Access Portal
               </Badge>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </header>
 
       <main id="main-content">
+        {/* ========================================================================= */}
+        {/* VIEW: ADMIN / USER ROLES & PERMISSIONS MANAGEMENT                         */}
+        {/* ========================================================================= */}
+        {view === "admin" && (
+          <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+              <div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setView("portal")}
+                  className="text-xs font-bold text-slate-600 mb-2"
+                >
+                  <ArrowLeft className="mr-1 size-3.5" /> Back to Project Operations
+                </Button>
+                <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-black text-[#00284d]">
+                  Access Control, User Roles & Permissions Management
+                </h1>
+                <p className="text-xs text-slate-600">
+                  Assign administrative, technical reviewer, and contractor roles. Modify granular permissions and approval authority.
+                </p>
+              </div>
+
+              {adminFeedback && (
+                <Badge className="bg-emerald-100 text-emerald-900 border-emerald-300 font-bold text-xs px-3 py-1">
+                  {adminFeedback}
+                </Badge>
+              )}
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+              {/* Team User List & Role Matrix */}
+              <div className="space-y-4">
+                {teamUsers.map((user) => {
+                  const currentRole = roleDefinitions[user.roleId];
+                  return (
+                    <Card key={user.id} className="border border-slate-200 bg-white shadow-xs p-5 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-sm text-[#00284d]">{user.name}</span>
+                            <Badge variant="outline" className="text-[10px] font-bold border-teal-600 bg-teal-50 text-teal-900">
+                              {currentRole.badge}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-slate-500 font-mono mt-0.5">{user.email} · {user.organization} ({user.agency})</p>
+                        </div>
+
+                        {/* Change Role Selector */}
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor={`role-select-${user.id}`} className="text-xs font-bold text-slate-600 whitespace-nowrap">
+                            Role:
+                          </Label>
+                          <select
+                            id={`role-select-${user.id}`}
+                            value={user.roleId}
+                            onChange={(e) => handleUpdateUserRole(user.id, e.target.value as RoleId)}
+                            className="rounded-lg border border-slate-300 bg-white p-1.5 text-xs font-bold text-slate-800 shadow-xs focus:border-teal-700"
+                          >
+                            {(Object.keys(roleDefinitions) as RoleId[]).map((rId) => (
+                              <option key={rId} value={rId}>
+                                {roleDefinitions[rId].name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Granular Permissions Checkboxes */}
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                          Granular Workflow Permissions
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                          {[
+                            ["manage_roles", "Manage Team Roles"],
+                            ["edit_workflow", "Edit Workflow & Steps"],
+                            ["submit_requests", "Submit Plain-English Needs"],
+                            ["add_blockers", "Flag Project Blockers"],
+                            ["resolve_blockers", "Resolve Active Blockers"],
+                            ["escalate_liaison", "Escalate to Liaison Desk"],
+                            ["reassign_agency", "Reassign Review Agency"],
+                          ].map(([key, label]) => {
+                            const pKey = key as PermissionKey;
+                            const isChecked = user.permissions.includes(pKey);
+                            return (
+                              <label
+                                key={pKey}
+                                className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition ${
+                                  isChecked
+                                    ? "border-teal-300 bg-teal-50/70 text-teal-950 font-semibold"
+                                    : "border-slate-200 bg-white text-slate-500"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => handleToggleUserPermission(user.id, pKey)}
+                                  className="size-3.5 rounded text-teal-700 focus:ring-teal-700"
+                                />
+                                <span className="text-[11px] select-none">{label}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+
+              {/* Role Descriptions Summary */}
+              <Card className="border border-slate-200 bg-white shadow-xs p-5 space-y-3 h-fit">
+                <CardTitle className="text-sm font-black text-[#00284d] flex items-center gap-1.5">
+                  <Shield className="size-4 text-teal-700" /> Standard Role Hierarchy
+                </CardTitle>
+                <div className="space-y-3 text-xs">
+                  {(Object.keys(roleDefinitions) as RoleId[]).map((rId) => {
+                    const def = roleDefinitions[rId];
+                    return (
+                      <div key={rId} className="border-b border-slate-100 pb-2">
+                        <p className="font-bold text-[#00284d]">{def.name}</p>
+                        <p className="text-[11px] text-slate-600 leading-snug mt-0.5">{def.description}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            </div>
+          </div>
+        )}
+
         {/* ========================================================================= */}
         {/* VIEW: MAIN PORTAL (Interactive Dashboard + Inline Login if logged out)    */}
         {/* ========================================================================= */}
@@ -915,15 +1276,27 @@ export default function Home() {
 
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 pt-1 border-t border-slate-100">
                         <span>Lead Agency: <strong className="text-slate-900">{item.leadAgency}</strong></span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openPermit(item.id)}
-                          className="h-8 border-red-300 bg-red-50 text-red-950 font-bold hover:bg-red-100"
-                        >
-                          View Blocker & Escalation Path
-                          <ChevronRight className="ml-1 size-3.5" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          {canEditWorkflow && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleResolveBlocker(item.id)}
+                              className="h-8 border-emerald-500 bg-emerald-50 text-emerald-950 font-bold hover:bg-emerald-100"
+                            >
+                              <Check className="mr-1 size-3.5 text-emerald-700" /> Resolve Blocker
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openPermit(item.id)}
+                            className="h-8 border-red-300 bg-red-50 text-red-950 font-bold hover:bg-red-100"
+                          >
+                            View Blocker & Escalation Path
+                            <ChevronRight className="ml-1 size-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1410,15 +1783,27 @@ export default function Home() {
                         </div>
                       </div>
 
-                      {/* Expandable Inline Details */}
+                      {/* Expandable Inline Details & Quick Flow Editing */}
                       {isExpanded && (
                         <div className="border-t border-slate-100 bg-slate-50/70 p-4 sm:p-5 space-y-4 animate-in fade-in-50 duration-200">
                           {/* Blocker alert if present */}
                           {permit.blocker && (
                             <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-xs text-red-950 space-y-1">
-                              <p className="font-bold flex items-center gap-1.5">
-                                <AlertOctagon className="size-3.5 text-red-600" /> Blocker: {permit.blocker.title}
-                              </p>
+                              <div className="flex items-center justify-between">
+                                <p className="font-bold flex items-center gap-1.5">
+                                  <AlertOctagon className="size-3.5 text-red-600" /> Blocker: {permit.blocker.title}
+                                </p>
+                                {canEditWorkflow && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleResolveBlocker(permit.id)}
+                                    className="h-7 text-xs border-emerald-500 bg-emerald-50 text-emerald-950 font-bold hover:bg-emerald-100"
+                                  >
+                                    <Check className="mr-1 size-3 text-emerald-700" /> Resolve Blocker
+                                  </Button>
+                                )}
+                              </div>
                               <p>{permit.blocker.description}</p>
                               <p className="font-semibold text-red-900">Unblocking action: {permit.blocker.unblockingAction}</p>
                             </div>
@@ -1445,9 +1830,49 @@ export default function Home() {
                             ))}
                           </div>
 
-                          {/* Assigned State Owner & Next Action */}
-                          <div className="flex flex-wrap items-center justify-between gap-3 text-xs border-t border-slate-200 pt-3">
-                            <span className="text-slate-600">
+                          {/* Quick Stage Controls if user has edit_workflow permission */}
+                          {canEditWorkflow && (
+                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200">
+                              <span className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                                <Sliders className="size-3 text-teal-700" /> Quick Flow Actions:
+                              </span>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleAdvanceWorkflow(permit.id)}
+                                className="h-7 text-xs border-teal-600 bg-teal-50 text-teal-950 font-bold hover:bg-teal-100"
+                              >
+                                <Check className="mr-1 size-3" /> Advance Next Stage
+                              </Button>
+
+                              {!permit.blocker && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setSelectedPermitId(permit.id);
+                                    setShowBlockerModal(true);
+                                  }}
+                                  className="h-7 text-xs border-red-300 bg-red-50 text-red-900 font-bold hover:bg-red-100"
+                                >
+                                  <AlertOctagon className="mr-1 size-3" /> Flag Blocker
+                                </Button>
+                              )}
+
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openPermit(permit.id)}
+                                className="h-7 text-xs font-semibold text-slate-700 hover:bg-slate-200 ml-auto"
+                              >
+                                Full Flow Editor & Milestones <ChevronRight className="ml-1 size-3" />
+                              </Button>
+                            </div>
+                          )}
+
+                          {/* Assigned State Owner */}
+                          <div className="flex flex-wrap items-center justify-between gap-3 text-xs border-t border-slate-200 pt-2 text-slate-600">
+                            <span>
                               Assigned Owner: <strong className="text-slate-900">{permit.owner.name}</strong> ({permit.owner.title}, {permit.owner.agency})
                             </span>
                             <Button
@@ -1477,11 +1902,11 @@ export default function Home() {
         )}
 
         {/* ========================================================================= */}
-        {/* VIEW: DEDICATED DETAIL PAGE (Single Permit / Action Drilldown)             */}
+        {/* VIEW: DEDICATED DETAIL PAGE (Single Permit / Workflow Editor)             */}
         {/* ========================================================================= */}
         {view === "detail" && selectedPermit && (
           <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12 space-y-8">
-            {/* Top Navigation & Print Trigger */}
+            {/* Top Navigation, Print Trigger, and Flow Editor Toggle */}
             <div className="flex flex-wrap items-center justify-between gap-4 print-hide">
               <Button
                 type="button"
@@ -1493,15 +1918,33 @@ export default function Home() {
                 Back to Operations Overview
               </Button>
 
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => window.print()}
-                className="border-slate-300 text-slate-700 hover:bg-slate-100"
-              >
-                <Printer className="mr-2 size-4" />
-                Print Executive Summary
-              </Button>
+              <div className="flex items-center gap-2">
+                {canEditWorkflow && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsEditingFlow(!isEditingFlow)}
+                    className={`font-bold text-xs ${
+                      isEditingFlow
+                        ? "bg-amber-400 text-[#00284d] border-amber-500 hover:bg-amber-300"
+                        : "border-teal-700 bg-teal-50 text-teal-950 hover:bg-teal-100"
+                    }`}
+                  >
+                    <Edit3 className="mr-1.5 size-3.5" />
+                    {isEditingFlow ? "Close Flow Editor" : "Edit Request Workflow & Stages"}
+                  </Button>
+                )}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => window.print()}
+                  className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                >
+                  <Printer className="mr-2 size-4" />
+                  Print Executive Summary
+                </Button>
+              </div>
             </div>
 
             {/* Request Header Card */}
@@ -1551,18 +1994,141 @@ export default function Home() {
                   {selectedPermit.title}
                 </h1>
 
-                <p className="text-sm text-slate-600">
-                  Applicant: <strong>{selectedPermit.applicant}</strong> ({selectedPermit.organization}) · Reviewing Agency: <strong>{selectedPermit.leadAgency}</strong> ({selectedPermit.agencyLevel})
-                </p>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600 pt-1">
+                  <p>
+                    Applicant: <strong>{selectedPermit.applicant}</strong> ({selectedPermit.organization}) · Reviewing Agency: <strong>{selectedPermit.leadAgency}</strong>
+                  </p>
+
+                  {/* Reassign Agency quick select if user can reassign */}
+                  {canEditWorkflow && isEditingFlow && (
+                    <div className="flex items-center gap-2 bg-slate-50 border p-2 rounded-lg text-xs">
+                      <span className="font-bold text-slate-700">Reassign Level:</span>
+                      <select
+                        value={selectedPermit.agencyLevel}
+                        onChange={(e) =>
+                          handleReassignAgency(
+                            selectedPermit.id,
+                            selectedPermit.leadAgency,
+                            selectedPermit.leadAgencyCode,
+                            e.target.value as JurisdictionLevel
+                          )
+                        }
+                        className="rounded border border-slate-300 p-1 font-bold text-xs"
+                      >
+                        <option value="Federal">Federal</option>
+                        <option value="State">State</option>
+                        <option value="Local / Parish">Local / Parish</option>
+                        <option value="Utility / Regional">Utility / Regional</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
               </CardHeader>
 
               <CardContent className="p-6 sm:p-8 space-y-8">
+                {/* WORKFLOW EDITING TOOLBAR (When Flow Editor is active) */}
+                {isEditingFlow && (
+                  <div className="rounded-xl border-2 border-teal-600 bg-teal-50/70 p-5 space-y-4 shadow-sm animate-in fade-in-50 duration-200">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-teal-200 pb-3">
+                      <div className="flex items-center gap-2">
+                        <Edit3 className="size-4 text-teal-800" />
+                        <h2 className="font-black text-sm text-[#00284d] uppercase">
+                          Interactive Request Flow & Milestone Editor
+                        </h2>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleAdvanceWorkflow(selectedPermit.id)}
+                          className="h-8 text-xs bg-teal-800 text-white font-bold hover:bg-teal-900"
+                        >
+                          <Check className="mr-1.5 size-3.5" /> Advance to Next Stage
+                        </Button>
+                        {!selectedPermit.blocker ? (
+                          <Button
+                            size="sm"
+                            onClick={() => setShowBlockerModal(true)}
+                            className="h-8 text-xs bg-red-600 text-white font-bold hover:bg-red-700"
+                          >
+                            <AlertOctagon className="mr-1.5 size-3.5" /> Flag Blocker
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={() => handleResolveBlocker(selectedPermit.id)}
+                            className="h-8 text-xs bg-emerald-600 text-white font-bold hover:bg-emerald-700"
+                          >
+                            <Check className="mr-1.5 size-3.5" /> Resolve Blocker
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Add New Milestone Step Form */}
+                    <div className="space-y-2 pt-1">
+                      <p className="text-xs font-bold text-teal-950 uppercase">Add New Milestone / Review Step</p>
+                      <div className="grid gap-2 sm:grid-cols-4">
+                        <Input
+                          placeholder="Phase (e.g. Phase 3 · Technical Review)"
+                          value={newStepPhase}
+                          onChange={(e) => setNewStepPhase(e.target.value)}
+                          className="h-9 text-xs bg-white"
+                        />
+                        <Input
+                          placeholder="Step Title (e.g. USACE Joint Sign-off)"
+                          value={newStepTitle}
+                          onChange={(e) => setNewStepTitle(e.target.value)}
+                          className="h-9 text-xs bg-white"
+                        />
+                        <Input
+                          placeholder="Meta / Date (e.g. Target: July 20)"
+                          value={newStepMeta}
+                          onChange={(e) => setNewStepMeta(e.target.value)}
+                          className="h-9 text-xs bg-white"
+                        />
+                        <div className="flex gap-2">
+                          <select
+                            value={newStepState}
+                            onChange={(e) => setNewStepState(e.target.value as StepState)}
+                            className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-800 h-9"
+                          >
+                            <option value="future">Future</option>
+                            <option value="active">Active</option>
+                            <option value="done">Done</option>
+                            <option value="hearing">Hearing</option>
+                            <option value="blocked">Blocked</option>
+                          </select>
+                          <Button
+                            size="sm"
+                            type="button"
+                            onClick={() => handleAddStep(selectedPermit.id)}
+                            className="h-9 bg-[#00284d] text-white font-bold hover:bg-[#003c70]"
+                          >
+                            <Plus className="size-4" /> Add
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* 1. Blocker & Escalation Banner (if applicable) */}
                 {selectedPermit.blocker && (
                   <div className="rounded-xl border-2 border-red-500 bg-red-50 p-5 space-y-3">
-                    <div className="flex items-center gap-2 text-red-950 font-black text-base">
-                      <AlertOctagon className="size-5 text-red-600" />
-                      <span>{selectedPermit.blocker.title}</span>
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 text-red-950 font-black text-base">
+                        <AlertOctagon className="size-5 text-red-600" />
+                        <span>{selectedPermit.blocker.title}</span>
+                      </div>
+                      {canEditWorkflow && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleResolveBlocker(selectedPermit.id)}
+                          className="bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700"
+                        >
+                          <Check className="mr-1.5 size-3.5" /> Resolve Blocker & Resume
+                        </Button>
+                      )}
                     </div>
                     <p className="text-sm text-slate-800">{selectedPermit.blocker.description}</p>
                     <div className="rounded-lg bg-white p-3 border border-red-200 text-xs text-red-900 font-semibold flex items-center gap-2">
@@ -1611,11 +2177,24 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* 3. 5-Phase Timeline */}
+                {/* 3. 5-Phase Timeline & Step State Modifiers */}
                 <div className="space-y-4">
-                  <h2 className="text-sm font-extrabold uppercase tracking-wider text-[#00284d] flex items-center gap-2">
-                    <Route className="size-4 text-teal-700" /> Review & Execution Milestones
-                  </h2>
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-extrabold uppercase tracking-wider text-[#00284d] flex items-center gap-2">
+                      <Route className="size-4 text-teal-700" /> Review & Execution Milestones ({selectedPermit.steps.length} Steps)
+                    </h2>
+                    {canEditWorkflow && !isEditingFlow && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setIsEditingFlow(true)}
+                        className="text-xs font-bold text-teal-800 hover:bg-teal-50"
+                      >
+                        <Edit3 className="mr-1 size-3.5" /> Edit Steps
+                      </Button>
+                    )}
+                  </div>
+
                   <ol className="relative border-l-2 border-slate-200 ml-3 space-y-6">
                     {selectedPermit.steps.map((step, index) => (
                       <li key={step.title} className="ml-6 relative">
@@ -1626,11 +2205,54 @@ export default function Home() {
                         >
                           {stepIcon(step.state)}
                         </span>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-500">{step.phase}</span>
-                            <span className="font-mono text-xs text-slate-400">Step {index + 1}</span>
+                        <div className="space-y-1 bg-white p-3 rounded-lg border border-slate-100 shadow-2xs">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-500">{step.phase}</span>
+                              <span className="font-mono text-xs text-slate-400">Step {index + 1}</span>
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] font-bold ${
+                                  step.state === "done"
+                                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                    : step.state === "active"
+                                      ? "bg-teal-50 text-teal-800 border-teal-300"
+                                      : step.state === "blocked"
+                                        ? "bg-red-50 text-red-800 border-red-300"
+                                        : "bg-slate-50 text-slate-600"
+                                }`}
+                              >
+                                {step.state.toUpperCase()}
+                              </Badge>
+                            </div>
+
+                            {/* State Modifier Dropdown when in edit mode */}
+                            {isEditingFlow && canEditWorkflow && (
+                              <div className="flex items-center gap-1.5">
+                                <select
+                                  value={step.state}
+                                  onChange={(e) => handleUpdateStepState(selectedPermit.id, index, e.target.value as StepState)}
+                                  className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs font-bold text-slate-800"
+                                >
+                                  <option value="done">Done</option>
+                                  <option value="active">Active</option>
+                                  <option value="blocked">Blocked</option>
+                                  <option value="hearing">Hearing</option>
+                                  <option value="future">Future</option>
+                                </select>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleDeleteStep(selectedPermit.id, index)}
+                                  className="h-7 px-1.5 text-red-600 hover:bg-red-50"
+                                  title="Delete step"
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </Button>
+                              </div>
+                            )}
                           </div>
+
                           <h3 className="text-base font-bold text-[#00284d]">{step.title}</h3>
                           <p className="text-xs text-slate-600">{step.meta}</p>
                           {step.note && (
@@ -1684,6 +2306,71 @@ export default function Home() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* BLOCKER MODAL DIALOG */}
+            {showBlockerModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-in fade-in-50">
+                <Card className="w-full max-w-lg border-2 border-red-500 bg-white shadow-2xl">
+                  <CardHeader className="bg-red-50 border-b border-red-100 p-5">
+                    <CardTitle className="text-base font-black text-red-950 flex items-center gap-2">
+                      <AlertOctagon className="size-5 text-red-600" /> Flag Critical Roadblock on {selectedPermit.id}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-5 space-y-4">
+                    <div>
+                      <Label htmlFor="blocker-title" className="text-xs font-bold text-slate-700">Blocker Summary Title</Label>
+                      <Input
+                        id="blocker-title"
+                        placeholder="e.g. Coastal Drainage Concurrence Required from CPRA"
+                        value={blockerTitle}
+                        onChange={(e) => setBlockerTitle(e.target.value)}
+                        className="mt-1 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="blocker-desc" className="text-xs font-bold text-slate-700">Detailed Description of Blocker</Label>
+                      <textarea
+                        id="blocker-desc"
+                        rows={2}
+                        placeholder="Detail why the application cannot proceed..."
+                        value={blockerDescription}
+                        onChange={(e) => setBlockerDescription(e.target.value)}
+                        className="w-full rounded-md border border-slate-300 p-2 text-xs text-slate-900 mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="blocker-action" className="text-xs font-bold text-slate-700">Immediate Unblocking Action</Label>
+                      <Input
+                        id="blocker-action"
+                        placeholder="e.g. Upload updated 100-year storm runoff model"
+                        value={blockerUnblockingAction}
+                        onChange={(e) => setBlockerUnblockingAction(e.target.value)}
+                        className="mt-1 text-xs"
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowBlockerModal(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => handleAddBlockerSubmit(selectedPermit.id)}
+                        className="bg-red-600 text-white font-bold hover:bg-red-700"
+                      >
+                        Flag Blocker & Escalate
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
         )}
       </main>
