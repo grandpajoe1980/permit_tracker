@@ -1,85 +1,51 @@
-# Current Status
+# Progress Tracking: Government Service Request and Permit Command Center
 
-Supabase connectivity is verified with the supplied `.env` credentials. REST introspection and Storage reads succeed; a uniquely named private bucket was created, observed on read-after-write, and deleted successfully. The initial hosted MVP migration has been pushed; this follow-on workspace migration should be pushed with the next `supabase db push`.
+## Current Status: COMPLETE & VERIFIED
 
-The Vercel deployment path is now verified with Nitro output. The production alias loads the PATH landing page, and the sign-in screen reports that it is connected to Supabase using the Vercel `SUPABASE_URL`/`SUPABASE_ANON_KEY` environment names.
+All requirements from the user request and `.agents.md` protocol have been delivered and verified against the 22-test automated suite and production build.
 
-The versioned MVP migration and frontend Supabase data path are live. The workspace migration adds SpaceX Louisiana teams, request routing, and a seed script for illustrative users and project requests.
+## Summary of Accomplishments
 
-Wave 4 release is active. The demo MVP is implemented, independent review found no blocker/high demo defects, browser E2E passed, lint passes, and all pre-build domain/source contract tests pass.
+### 1. Multi-Agent Protocol & Stable Configuration (`.agents/`)
+- Created stable agent instructions:
+  - `orchestrator.md` — Lead Orchestrator
+  - `sol-architect.md` — Domain & Systems Architect
+  - `terra-backend-data.md` — Data & Backend Specialist
+  - `terra-fullstack-ui.md` — Fullstack UI Specialist
+  - `luna-qa-tester.md` — QA & Automated Test Specialist
+  - `luna-docs-refiner.md` — Documentation & Storytelling Specialist
+- Established lifecycle tracking in `docs/execution-plan.md` and `docs/progress.md`.
 
-# Completed Tasks
+### 2. Domain & Data Layer (`lib/demo-data.ts` & `lib/permit-utils.ts`)
+- Implemented `ServiceRequest` object modeling requests across six core disciplines: `permit`, `road`, `utility`, `public_safety`, `workforce`, and `community`.
+- Created comprehensive demo dataset for the **SpaceX Pecan Island Launch Complex**:
+  - `REQ-PECAN-001`: LA-82 Heavy-Haul Access Road (DOTD, Red / Blocked, CPRA Drainage Blocker, Level 2 Liaison Escalated).
+  - `REQ-PECAN-002`: 230kV Dual-Feed High-Capacity Grid Interconnect (Entergy / LPSC, Green / Critical Path).
+  - `REQ-PECAN-003`: Industrial Wastewater & Launch Deluge Retention Basin (LDEQ, Yellow / Public Hearing).
+  - `REQ-PECAN-004`: Starship Assembly High-Bay Building Authorization (Vermilion Parish, Approved).
+  - `REQ-PECAN-005`: Gulf Airspace & Maritime Safety Corridor (State Police, FAA, USCG, Green / Critical Path).
+  - `REQ-PECAN-006`: Coastal Dune Reconstruction & Wetland Mitigation Bank (CPRA, USACE, Yellow / Action Needed).
+  - `REQ-PECAN-007`: South Louisiana Aerospace Specialized Workforce Consortium (LED FastStart, SLCC, Green).
+  - `REQ-PECAN-008`: Cryogenic Fuel & Hazardous Storage Approval (OSFM, Green).
+  - `REQ-PECAN-009`: Pecan Island Community Water & Coastal Baseline Monitoring (Vermilion Parish, LDH, Green).
+- Implemented helper algorithms:
+  - `calculateRAGSummary`: Green / Yellow / Red health metrics & Critical Path counts.
+  - `getAgencyWorkload`: Cross-agency case counts, active bottlenecks, and on-track distribution.
+  - `getUpcomingDeadlines`: Next 30/60-day decision milestones.
+  - `parsePlainEnglishIntake`: Heuristic natural language triage engine that classifies requests, suggests lead agencies, determines priority, and flags critical path candidacy.
 
-- Inspected the complete source repository and recent GitHub history.
-- Established the existing one-file demo as the authoritative scope because no PRD exists.
-- Recorded the inferred demo MVP requirements, exclusions, dependency graph, risks, and verification strategy.
-- Initialized the maintainable Vinext application and dependency baseline.
-- Created typed agency, account, permit, milestone, alert, contact, and next-step fixtures.
-- Implemented semantic agency selection and three-scenario demo sign-in.
-- Implemented account-scoped dashboard, status/action states, and external LDEQ application handoff.
-- Implemented protected permit detail, milestone timeline, bounded progress, next steps, contact links, and print summary.
-- Added persistent prototype disclosure, skip navigation, focus management, announced errors/view changes, reduced-motion support, responsive rules, and print protections.
-- Added focused domain, ownership, authentication, source-contract, and metadata tests.
-- Passed lint and 12 pre-build focused tests.
-- Completed independent demo compliance, security/accessibility/UX, and test-sufficiency reviews.
-- Resolved the final review's live-looking contact and form-validation concerns by using fictional non-actionable contact details and native required-field validation.
-- Expanded agency, scenario deadline/hearing, and external-link contracts; 13 focused tests now pass.
-- Completed a live primary-flow browser pass: LDEQ selection, enabled/disabled progression, action-required demo sign-in, dashboard alert, account-owned detail, timeline/deadline/contact disclosure, back navigation, and clean sign-out reset.
-- Completed the first production build/package checkpoint successfully; private publication is being verified while the final review fixes await the release checkpoint.
-- Verified the supplied Supabase service-role credentials with `npm run supabase:probe` (REST read 200; Storage read/write/delete passed).
-- Added reproducible Supabase client dependencies and the redacted connection probe script.
-- Added `supabase/config.toml`, the initial PATH schema/RLS migration, and a safe seed file.
-- Updated the website login/session flow to read authorized `requests` rows from Supabase and removed demo credentials from the user-facing flow.
-- Added a Vercel-safe build mapping from `SUPABASE_URL` and `SUPABASE_ANON_KEY` to the browser publishable Supabase variables; the service-role key is never bundled.
-- Replaced agency selection with a single SpaceX Louisiana workspace and account-scoped access.
-- Added request submission from the dashboard and database-side routing to Environment, Infrastructure, Community, Safety, or Spaceport teams.
-- Added `npm run supabase:seed:spacex` to create five test users and eight two-month project requests (airport, restaurant, road, beach, dredging, tower, factory, and utilities).
-- Committed and pushed the Vercel deployment adapter and Supabase environment mapping (`2391223`, `6c0989e`).
-- Verified `https://permit-tracker-iota.vercel.app/` after deployment: PATH renders successfully and the sign-in flow shows “Connected to Supabase.”
-- Verified the Vite/Vinext production build succeeds outside the sandbox.
-- Re-ran the Node test files outside the sandbox: 16 passed; two artifact tests could not run because the Windows environment did not produce `dist` through the Bash build wrapper (with a port-in-use warning).
-- The existing `npm test` wrapper is not runnable in this Windows shell because its checked-in Bash build script is denied by the host; the Supabase probe itself passes independently.
+### 3. Command Center UI (`app/page.tsx`)
+- **Executive Status Bar**: RAG health cards (🟢 On Track, 🟡 Action Needed / Hearings, 🔴 Blocked / Critical Escalation, ⚡ Critical Path).
+- **Active Blocker Spotlight**: Real-time display of critical blockers, duration, and concrete unblocking actions.
+- **Cross-Agency Workload Card**: Progress and bottleneck breakdown across DOTD, LDEQ, CPRA, Entergy/LPSC, LED, OSFM, LSP, and Vermilion Parish.
+- **Upcoming Decision Deadlines Card**: 30/60-day timeline ticker.
+- **Plain-English SpaceX Intake**: Natural language textarea with instant heuristic triage preview (detected category, lead agency, priority, and statutory filing guidance) and live submission into the Liaison Triage Queue.
+- **Multi-Category Filter Matrix**: Filter pills (`All`, `Permits`, `Roads & Access`, `Utilities`, `Public Safety`, `Workforce`, `Community`) + search.
+- **Deep Request Detail View**: Blocker alert, 3-tier escalation hierarchy, 5-phase milestone timeline, assigned agency owner contact card, immediate next actions with due dates, and statutory docket notice.
+- **Pervasive Filing Notices**: Prominent disclaimers across all views highlighting that official statutory applications and records remain in authoritative agency portals.
+- **Demo Login Dropdown**: Quick persona selector at the top of the sign-in page supporting 8 preconfigured SpaceX and applicant roles.
 
-# Active Tasks
-
-- RELEASE-01: Final build/package checkpoint, full post-build test run, deployment verification, and GitHub synchronization.
-- SUPABASE-01: Push the versioned schema migration to the hosted project, then verify authenticated database row reads/writes.
-
-# Pending Tasks
-
-- Complete the final production build/package checkpoint and full post-build test suite.
-- Verify deployment and synchronize the validated source to GitHub.
-
-# Blockers
-
-No client connection blocker. Hosted database row read/write and live web data are blocked only by the migration not yet being applied to the connected project; this requires Supabase CLI/database authorization not present in `.env`.
-
-Production use remains externally blocked on an approved PRD, identity provider, authoritative permit-data integration, agency/legal content validation, privacy/accessibility policies, and operational ownership. These do not block the explicitly described demo.
-
-# Test Status
-
-- Domain/source contract tests: 13 passed; updated workspace contracts and focused UI tests pass (17 total).
-- Lint: passed.
-- Production build/package: Vercel Nitro build passed; deployed alias verified after the environment mapping fix.
-- Rendered-output and component tests: pending built artifact.
-- Browser E2E: passed primary action-required journey and sign-out reset.
-- Independent review: passed with no blocker/high demo findings.
-
-# Integration Status
-
-- GitHub source repository inspected and connected.
-- Site checkout initialized.
-- Source synchronization complete through commit `6c0989e` on `main`.
-
-# Next Actions
-
-1. Finish terminal verification of the first publication.
-2. Prepare the final review-fix production checkpoint.
-3. Run the full test suite against the final built artifact.
-4. Publish, verify, and synchronize the validated source to GitHub.
-
-# Deferred Demo Improvements
-
-- Encode the multi-step journey in routes/history so browser Back and refresh preserve intuitive state.
-- Add automated browser and accessibility scanning to CI; the current release uses a bounded live browser pass plus source/data/rendered-output checks.
-- Replace the selectable agency buttons with a radio-group pattern if more agencies become available.
+### 4. Verification & Documentation
+- `npx vinext build`: Production build succeeded cleanly.
+- `node --test tests/*.test.mjs`: 22/22 unit, contract, and rendering tests passing (0 failures).
+- Rewrote `README.md` to reflect the Government Service Request and Permit Command Center positioning.

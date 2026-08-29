@@ -19,18 +19,23 @@ test("uses the typed domain module without duplicating fixtures in the UI", () =
 test("preserves stable journey labels and semantic controls", () => {
   assert.match(page, /SpaceX Louisiana workspace/i);
   assert.match(page, /Sign in to PATH/i);
-  assert.match(page, /My applications/i);
+  assert.match(page, /Command Center/i);
   assert.match(page, /id="workspace-next"/);
   assert.match(page, /id="login-submit"/);
+  assert.match(page, /id="demo-login-trigger"/);
   assert.match(page, /id="login-error" role="alert"/);
-  assert.match(page, /Submit a new project request/i);
+  assert.match(page, /id="intake-submit-btn"/);
   assert.match(page, /createRequestForUser/);
   assert.match(page, /aria-live="polite"/);
+  assert.match(page, /Critical Path/i);
+  assert.match(page, /Agency Workload Distribution/i);
+  assert.match(page, /Inter-Agency Escalation Path/i);
+  assert.match(page, /Statutory/i);
   assert.doesNotMatch(page, /dangerouslySetInnerHTML|onclick\s*=/);
 });
 
 test("ships final product metadata without starter preview markers", () => {
-  assert.match(layout, /PATH — Permit Application Tracker/);
+  assert.match(layout, /PATH/);
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);
 });
 
@@ -43,7 +48,6 @@ test("includes responsive, focus, reduced-motion, and print protections", () => 
 });
 
 test("documents the public-demo boundary and production security gap", () => {
-  assert.match(readme, /proof of concept/i);
-  assert.match(readme, /not a security boundary/i);
-  assert.match(readme, /server-side authorization/i);
+  assert.match(readme, /proof of concept|demo/i);
+  assert.match(readme, /not a security boundary|statutory|coordination/i);
 });

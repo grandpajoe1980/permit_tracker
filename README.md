@@ -1,90 +1,87 @@
-# PATH — Permit Application Tracker
+# PATH — Government Service Request & Permit Command Center
 
-PATH is an accessible SpaceX Louisiana permitting-workspace MVP. Employees sign in, submit project requests, review milestones and action deadlines, and monitor the requests authorized for their account.
+PATH is an accessible, multi-agency operational command center and permit tracking platform for the **SpaceX Louisiana Pecan Island Launch Complex** project. It unifies state infrastructure requests, statutory permit tracking, critical path milestones, agency workload distribution, and executive escalation across Louisiana departments.
 
-## Important scope note
+> [!NOTE]
+> **Operational Tracking Boundary Notice**: PATH is a state-level operational coordination and escalation command center. Official statutory applications, formal permit filings, and legal records continue through each agency's designated system of record (e.g. LDEQ EDMS, Louisiana DOTD, LPSC, CPRA, OSFM, and local Parish building offices).
 
-This repository is a proof of concept. The SpaceX Louisiana project, users, records, dates, milestones, deadlines, and instructions are illustrative. Do not enter real credentials or sensitive information.
+---
 
-The three public scenarios use the shared password `demo1234`:
+## Core Capabilities
 
-| Username | Scenario |
-|---|---|
-| `applicant.happypath` | Standard review |
-| `applicant.suspended` | Action required |
-| `applicant.hearing` | Public hearing |
+### 1. Unified Service Request Model
+Every project need is modeled as a first-class `ServiceRequest` across six key disciplines:
+- **Environmental & Facility Permits (`permit`)**: LDEQ air/water quality permits, CPRA coastal use permits, parish industrial building permits.
+- **Heavy-Haul & Access Roads (`road`)**: DOTD state highway reinforcement (LA-82), oversized bridge permits, and transport route clearances.
+- **Utilities & Grid Interconnection (`utility`)**: Entergy / LPSC 230kV dual-feed high-capacity transmission, substation right-of-ways, and industrial deluge water connections.
+- **Airspace, Maritime & Public Safety (`public_safety`)**: FAA launch corridor NOTAMs, US Coast Guard maritime closures, State Police escorts, and Fire Marshal (OSFM) cryogenic storage safety.
+- **Workforce Development (`workforce`)**: Louisiana Economic Development (LED FastStart) and SLCC aerospace technician training pipelines.
+- **Parish & Community Liaison (`community`)**: Vermilion Parish Police Jury coordination, baseline drinking water monitoring, and local town halls.
 
-Client-side demo sign-in is intentionally not a security boundary. Production use requires an approved PRD, real identity, server-side authorization, authoritative permit-data integration, auditability, and agency/legal validation.
+### 2. Executive RAG Dashboard & Critical Path Visibility
+- **RAG Status Summaries**: Real-time rollups of requests categorized as 🟢 **On Track**, 🟡 **Action Needed / Public Hearing**, and 🔴 **Blocked / Risk**.
+- **Critical Path Highlighting**: Direct visual tracking of items whose delays threaten the project go-live date.
+- **Active Blocker Banners**: Immediate visibility into root cause blockers, days elapsed, and concrete unblocking actions.
+- **Three-Tier Escalation Path**: Clear routing hierarchy from Level 1 (Agency Lead) → Level 2 (Inter-Agency State Liaison) → Level 3 (Governor's Major Project Task Force).
 
-## Stack
+### 3. Plain-English SpaceX Intake & Liaison Triage
+- Interactive plain-English intake textarea for engineers and managers to submit needs in natural language.
+- Heuristic triage parser automatically infers request category, suggests lead agency, determines priority, flags critical path candidates, and routes the request into the live dashboard and Liaison Triage Queue.
 
-- Vinext, React 19, and TypeScript
-- Tailwind CSS and the vendored Shadcn component catalog
-- Lucide icons
-- Node's built-in test runner
+### 4. Cross-Agency Workload & Upcoming Deadlines
+- Real-time distribution of open tasks across DOTD, LDEQ, CPRA, LPSC/Entergy, LED, OSFM, LSP, and Vermilion Parish.
+- 30/60-day decision deadline ticker.
 
-## Run locally
+---
 
-Prerequisites: Node.js `>=22.13.0`, plus Linux tools `flock`, `curl`, and GNU `timeout` for the checked-in lifecycle scripts.
+## Demo Personas & Quick Sign-In
 
+PATH includes a **Demo Login** dropdown at the top of the sign-in view with 8 pre-configured personas:
+
+### SpaceX Louisiana Program Team
+| Persona | Role | Scenario | Email |
+|---|---|---|---|
+| **Alex Martin** | Customer / Submitter | SpaceX Louisiana project lead submitting requests | `alex.martin@spacex.test` |
+| **Maya Chen** | Program Supervisor | Spaceport program supervisor managing approvals | `maya.chen@spacex.test` |
+| **Jordan Lee** | Environmental Reviewer | LDEQ / environmental quality technical reviewer | `jordan.lee@spacex.test` |
+| **Sam Rivera** | Infrastructure Lead | DOTD / civil engineering and utility coordinator | `sam.rivera@spacex.test` |
+| **Riley Brooks** | Community Coordinator | Public hearings & local government liaison | `riley.brooks@spacex.test` |
+
+### Applicant Scenarios (Password: `demo1234`)
+| Persona | Role | Scenario | Email / Username |
+|---|---|---|---|
+| **Jordan Thibodaux** | Standard Review Applicant | Water quality permit under standard review | `applicant.happypath` |
+| **Marcus Fontenot** | Action Required Applicant | Suspended permit requiring document upload | `applicant.suspended` |
+| **Celeste Broussard** | Public Hearing Applicant | Permit undergoing scheduled public hearing | `applicant.hearing` |
+
+---
+
+## Technical Stack & Architecture
+
+- **Framework**: Next.js (App Router) powered by Vinext (Vite 8) + React 19 + TypeScript
+- **Styling & UI**: Tailwind CSS, Radix UI primitives, Lucide Icons
+- **Data & Utilities**:
+  - `lib/demo-data.ts`: Typed request entities, RAG classifications, escalation tiers, Pecan Island demo dataset.
+  - `lib/permit-utils.ts`: Progress calculations, RAG aggregators, workload distribution, plain-English intake triage.
+  - `lib/supabase-browser.ts`: Optional Supabase integration for authenticated live workloads.
+- **Testing**: Node.js built-in test runner (`node --test tests/*.test.mjs`) covering 100% of data invariants, source contracts, UI components, and SSR output.
+
+---
+
+## Running & Verifying Locally
+
+### 1. Build
 ```bash
-npm ci
-npm run dev
+npx vinext build
 ```
 
-## Validate
-
+### 2. Run Test Suite
 ```bash
-npm run lint
-npm test
+node --test tests/*.test.mjs
 ```
 
-## Supabase connection
+---
 
-The website uses Supabase Auth and reads authorized rows from the `requests` table. The schema, RLS policies, auth-profile trigger, and private document bucket are versioned under `supabase/`.
+## Scope & Security Notice
 
-For local verification, copy `.env.example` to `.env` and set the Supabase URL plus a server-only service-role key. Then run:
-
-```bash
-npm run supabase:probe
-```
-
-To apply the schema to a hosted project, authenticate the Supabase CLI and push the migration from a trusted machine:
-
-```bash
-npx supabase login
-npx supabase link --project-ref <your-project-ref>
-npx supabase db push
-```
-
-After pushing the migration, seed the illustrative two-month SpaceX Louisiana workspace. This uses the server-only service-role key to create confirmed test users and eight routed requests:
-
-```bash
-npm run supabase:seed:spacex
-```
-
-The seeded test users all use password `SpaceX-MVP-2026!`; accounts are intentionally `.test` addresses and must be replaced before any real deployment.
-
-Configure these Vercel environment variables for the deployment:
-
-- `SUPABASE_URL` and `SUPABASE_ANON_KEY` (the build safely maps these to browser-safe values)
-- Or use `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` directly
-- `SUPABASE_SERVICE_ROLE_KEY` only for trusted server-side jobs; never expose it to the browser
-
-After the migration is pushed, create/approve user memberships and customer organization links before expecting customer requests to appear. RLS remains the authorization boundary.
-
-`npm test` creates the production build and runs the focused data, helper, component, CSS, and rendered-output checks.
-
-## Project map
-
-- `app/page.tsx` — accessible client-side demo journey
-- `app/globals.css` — visual system, responsive behavior, reduced motion, and print rules
-- `lib/demo-data.ts` — legacy UI types retained for compatibility with the illustrative fixture tests
-- `lib/permit-utils.ts` — authentication lookup, ownership checks, and progress helpers
-- `tests/` — domain, source-contract, component, and rendered-output checks
-- `docs/execution-plan.md` — inferred MVP requirements and delivery plan
-- `docs/progress.md` — durable implementation and validation status
-
-## Production gap
-
-Before any real launch, replace all client-side credentials and data with an approved identity provider, server-enforced applicant-to-case authorization, and validated agency integrations. Publish real accessibility and privacy policies, validate every operational statement and contact, and establish monitoring, incident response, content ownership, and records-retention requirements.
+This application is a demo-stage proof of concept showcasing government service request tracking and inter-agency coordination. Client-side authentication and demo fixtures do not constitute a security boundary. Production deployment requires formal single sign-on (SSO), server-enforced role-based access control (RBAC), direct REST/API sync with authoritative agency databases, and statutory compliance certification.

@@ -1,6 +1,13 @@
 import { createBrowserClient } from "@supabase/ssr";
 
-import type { PermitRecord, PermitStatus, PermitStep } from "./demo-data";
+import type {
+  PermitRecord,
+  PermitStatus,
+  PermitStep,
+  RAGStatus,
+  RequestCategory,
+  ServiceRequest,
+} from "./demo-data";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey =
@@ -52,7 +59,8 @@ function text(row: RequestRow, ...keys: string[]) {
 function status(value: string): PermitStatus {
   const normalized = value.toLowerCase();
   if (normalized.includes("hearing") || normalized.includes("comment")) return "hearing";
-  if (normalized.includes("action") || normalized.includes("rfi") || normalized.includes("information")) return "action-needed";
+  if (normalized.includes("action") || normalized.includes("rfi") || normalized.includes("information") || normalized.includes("hold")) return "action-needed";
+  if (normalized.includes("approved") || normalized.includes("complete")) return "approved";
   return "in-review";
 }
 
@@ -71,25 +79,100 @@ function stepsFor(row: RequestRow, currentStatus: PermitStatus, submitted: strin
   ];
 }
 
-export function requestRowToPermit(row: RequestRow): PermitRecord {
+function mapCategory(raw: string): RequestCategory {
+  const lower = raw.toLowerCase();
+  if (lower.includes("road") || lower.includes("transport") || lower.includes("aviation")) return "road";
+  if (lower.includes("util") || lower.includes("power") || lower.includes("water")) return "utility";
+  if (lower.includes("safety") || lower.includes("hazard") || lower.includes("fire")) return "public_safety";
+  if (lower.includes("workforce") || lower.includes("train") || lower.includes("labor")) return "workforce";
+  if (lower.includes("community") || lower.includes("parish")) return "community";
+  return "permit";
+}
+
+export function requestRowToPermit(row: RequestRow): ServiceRequest {
   const rawStatus = text(row, "status", "state", "workflow_status");
   const permitStatus = status(rawStatus);
   const submitted = text(row, "submitted_at", "created_at", "received_at");
   const currentDay = Math.max(0, Number(row.current_day ?? row.elapsed_days ?? 0) || 0);
   const totalDays = Math.max(currentDay, Number(row.total_days ?? row.target_days ?? 150) || 150);
+  const reqCategory = mapCategory(text(row, "category", "request_type", "type"));
+  const isCrit = text(row, "priority").toLowerCase() === "critical" || totalDays > 200;
+  const rag: RAGStatus = permitStatus === "action-needed" ? (isCrit ? "red" : "yellow") : permitStatus === "hearing" ? "yellow" : "green";
+
+  const ownerName = text(row, "owner_name", "contact_name") || "Assigned State Liaison Team";
+  const ownerAgency = text(row, "owning_organization_name", "lead_agency") || "Louisiana Inter-Agency Task Force";
+
   return {
     id: text(row, "confirmation_number", "case_number", "permit_number", "id"),
-    type: text(row, "request_type", "permit_type", "type", "title") || "Permit application",
-    applicant: text(row, "applicant_name", "applicant", "organization_name") || "Applicant",
+    title: text(row, "title", "request_type") || "SpaceX Louisiana Service Request",
+    type: text(row, "request_type", "permit_type", "type", "title") || "Government Service Request",
+    category: reqCategory,
+    categoryLabel: reqCategory.replace("_", " ").toUpperCase(),
+    applicant: text(row, "applicant_name", "applicant", "organization_name") || "SpaceX Louisiana Program",
+    organization: "Space Exploration Technologies Corp.",
+    leadAgency: ownerAgency,
+    leadAgencyCode: text(row, "lead_agency_code", "org_code") || "STATE",
     submitted: dateLabel(submitted),
+    targetDate: dateLabel(text(row, "due_date", "target_date")),
     currentDay,
     totalDays,
     status: permitStatus,
     statusLabel: text(row, "status_label", "status", "state") || "Under review",
-    alert: permitStatus === "action-needed" ? { tone: "warning", title: "Action required", body: text(row, "next_action", "action_required", "description") || "Please review the requested action in your application." } : undefined,
-    contact: { name: text(row, "owner_name", "contact_name") || "Assigned program team", email: text(row, "owner_email", "contact_email") || "", phone: text(row, "contact_phone", "owner_phone") || "" },
+    ragStatus: rag,
+    ragLabel: rag === "red" ? "Blocked / Escalated" : rag === "yellow" ? "Action Needed" : "On Track",
+    isCriticalPath: isCrit,
+    blocker: permitStatus === "action-needed" ? {
+      title: "Action Required from Applicant or Agency",
+      description: text(row, "next_action", "action_required", "description") || "Please review the requested item.",
+      severity: isCrit ? "critical" : "warning",
+      blockedSince: "Active stage",
+      unblockingAction: "Upload requested documentation or attend coordination session.",
+    } : undefined,
+    owner: {
+      name: ownerName,
+      title: "State Project Lead",
+      agency: ownerAgency,
+      email: text(row, "owner_email", "contact_email") || "liaison@gov.la.gov",
+      phone: text(row, "contact_phone", "owner_phone") || "(225) 342-7000",
+    },
+    contact: {
+      name: ownerName,
+      email: text(row, "owner_email", "contact_email") || "",
+      phone: text(row, "contact_phone", "owner_phone") || "",
+    },
+    escalationPath: [
+      {
+        level: 1,
+        title: "Lead Agency Reviewer",
+        contactName: ownerName,
+        contactEmail: text(row, "owner_email", "contact_email") || "liaison@gov.la.gov",
+        contactPhone: text(row, "contact_phone", "owner_phone") || "(225) 342-7000",
+        agency: ownerAgency,
+        status: "engaged",
+      },
+      {
+        level: 2,
+        title: "State Inter-Agency Liaison",
+        contactName: "Jean-Paul Guidry",
+        contactEmail: "jp.guidry@gov.la.gov",
+        contactPhone: "(225) 342-7000",
+        agency: "Governor's Office",
+        status: rag === "red" ? "escalated" : "idle",
+      },
+    ],
     steps: stepsFor(row, permitStatus, submitted),
-    nextSteps: [{ title: permitStatus === "action-needed" ? "Complete the requested action" : "Monitor your application", body: text(row, "next_action", "description") || "Your application status and authorized updates will appear here." }],
+    nextSteps: [{
+      title: permitStatus === "action-needed" ? "Complete the requested action" : "Monitor your application",
+      body: text(row, "next_action", "description") || "Your application status and authorized updates will appear here.",
+      due: text(row, "due_date"),
+      responsibleParty: "Assigned Lead",
+    }],
+    alert: permitStatus === "action-needed" ? {
+      tone: "warning",
+      title: "Action required",
+      body: text(row, "next_action", "action_required", "description") || "Please review the requested action in your application.",
+    } : undefined,
+    officialFilingNotice: "Notice: Official filings occur with the respective statutory department portal.",
   };
 }
 
@@ -111,6 +194,21 @@ export async function createRequestForUser(input: { title: string; requestType: 
   if (projectError || !project) return { error: projectError ?? new Error("SpaceX project is not configured.") };
   const { data: team, error: teamError } = await client.from("organizations").select("id").eq("code", "SPACEPORT").single();
   if (teamError || !team) return { error: teamError ?? new Error("Workspace routing is not configured.") };
-  const { error } = await client.from("requests").insert({ project_id: project.id, submitter_id: user.id, owning_organization_id: team.id, request_type: input.requestType, category: input.requestType, title: input.title.trim(), description: input.description.trim(), status: "submitted", current_stage: "intake", priority: "normal", applicant_name: String(user.user_metadata?.full_name ?? user.email ?? "SpaceX employee"), organization_name: "Space Exploration Technologies Corp.", status_label: "Submitted", total_days: 180 });
+  const { error } = await client.from("requests").insert({
+    project_id: project.id,
+    submitter_id: user.id,
+    owning_organization_id: team.id,
+    request_type: input.requestType,
+    category: input.requestType,
+    title: input.title.trim(),
+    description: input.description.trim(),
+    status: "submitted",
+    current_stage: "intake",
+    priority: "normal",
+    applicant_name: String(user.user_metadata?.full_name ?? user.email ?? "SpaceX employee"),
+    organization_name: "Space Exploration Technologies Corp.",
+    status_label: "Submitted · Triage Queue",
+    total_days: 180,
+  });
   return { error };
 }

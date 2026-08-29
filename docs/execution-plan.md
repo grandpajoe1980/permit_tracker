@@ -1,108 +1,61 @@
-# Objective
+# Government Service Request and Permit Command Center — Execution Plan
 
-Turn PATH into a maintainable, accessible SpaceX Louisiana permitting-workspace MVP: authenticated employees submit project requests, internal teams receive them through database routing, and program leaders monitor progress in Supabase.
+## 1. Objective
+Evolve PATH from a permit tracker into a comprehensive **Government Service Request and Permit Command Center** for the **SpaceX Pecan Island Launch Complex** project in Louisiana. The platform acts as an operational tracking, cross-agency coordination, and escalation center spanning permits, roads, utilities, public safety, workforce, and community infrastructure.
 
-# Current State
+## 2. Positioning & Boundaries
+- **Demo-Ready Storytelling**: Focus on clarity, visual impact, and realistic project milestones rather than deep security or production hardening.
+- **Unified Request Object**: Any request can be a permit, road access request, utility interconnection, public safety plan, workforce initiative, or community item.
+- **Pervasive Disclaimer**: Prominently emphasize that official statutory filings continue in designated agency portals; PATH provides tracking, visibility, and escalation.
 
-- The source repository contains only `index.html` and a two-line README.
-- The HTML file embeds all styles, demo accounts, permit records, and navigation logic.
-- The initial LDEQ demo has been replaced by one SpaceX Louisiana workspace with internal Environment, Infrastructure, Community, Safety, and Spaceport teams.
-- Supabase Auth, Postgres/RLS, Storage, request routing, and seed tooling are versioned; hosted migration application is complete.
+## 3. Requirements Matrix
 
-# MVP Definition of Done
+| ID | Requirement | Priority | Status | Description | Verification |
+|---|---|---|---|---|---|
+| REQ-OBJ-01 | Unified Service Request Object | P0 | Planned | Model requests across `permit`, `road`, `utility`, `public_safety`, `workforce`, `community` with owners, blockers, escalation paths, and next actions | `tests/permit-data.test.mjs` |
+| REQ-DATA-01 | Pecan Island Demo Dataset | P0 | Planned | Realistic multi-agency requests for SpaceX Louisiana with real timelines, blockers, and dependencies | `tests/permit-data.test.mjs` |
+| REQ-EXEC-01 | Executive Command Center Dashboard | P0 | Planned | RAG status summary (Green/Yellow/Red), Critical Path visualizer, 30/60-day deadlines, and agency workload distribution | UI component & contract tests |
+| REQ-INTAKE-01 | Plain-English SpaceX Intake & Triage | P0 | Planned | Conversational intake form that parses needs, auto-assigns category & agency, and routes to liaison triage queue | Journey tests & contract tests |
+| REQ-DETAIL-01 | Detailed Request & Escalation View | P0 | Planned | Step-by-step milestone timeline, active blockers, direct agency owner, and 3-tier escalation path | Manual & contract tests |
+| REQ-NOTICE-01 | Pervasive Official Filing Disclaimer | P0 | Planned | Visible disclosure that PATH is for operational coordination and official filings happen elsewhere | `tests/source-contract.test.mjs` |
+| REQ-DOCS-01 | Positioning & README Overhaul | P0 | Planned | Updated README and docs reflecting the Command Center mission | Documentation review |
 
-The MVP is complete when a SpaceX employee can sign in, see only authorized requests, submit a new request, and inspect status/timeline data while internal team members can receive requests through RLS-protected routing. Seed data remains clearly illustrative.
-
-# Requirements Matrix
-
-| ID | Requirement | Priority | Initial status | Main areas | Dependencies | Acceptance criteria | Verification |
-|---|---|---:|---|---|---|---|---|
-| DEMO-01 | Disclose prototype/demo status and data limitations | P0 | Partial | App shell, copy | None | Every route/view retains a conspicuous demo notice; no real-time or official-service claim remains | Source and rendered HTML tests |
-| FLOW-01 | Enter the single SpaceX Louisiana workspace | P0 | Complete | Landing/sign-in | DEMO-01 | No agency selector; account access determines workspace permissions | Browser journey |
-| AUTH-01 | Enter a demo account and sign out | P0 | Partial | Sign-in, session state | FLOW-01 | Three supplied scenarios authenticate with the shared demo password; invalid input shows a safe accessible error; sign-out clears state | Unit tests and manual journey |
-| DASH-01 | View the signed-in scenario's application summary | P0 | Partial | Dashboard, permit data | AUTH-01 | Dashboard shows linked application ID, permit type, date, status, and bounded progress; action-required scenario is conspicuous | Data/unit tests and manual journey |
-| DETAIL-01 | View application metadata, timeline, next steps, and contact | P0 | Partial | Detail view, timeline | DASH-01 | Detail represents completed/current/future states and all scenario-specific alerts and next steps | Data tests and manual journey |
-| PRINT-01 | Print a useful application summary | P1 | Partial | Detail view, print CSS | DETAIL-01 | Print hides navigation/actions and preserves the application summary and demo disclaimer | CSS/source test and print preview check |
-| APPLY-01 | Submit a new project request | P0 | Complete | Dashboard request form | AUTH-01 | Authenticated employee can write a request and receive a routed team | Supabase/RLS verification |
-| A11Y-01 | Support keyboard, assistive technology, reduced motion, and responsive layouts | P0 | Missing | All views, CSS | FLOW-01 through DETAIL-01 | Semantic controls, visible focus, announced errors/status, focus on view changes, reduced-motion and mobile rules | Static checks and manual keyboard pass |
-| ENG-01 | Provide maintainable build, lint, tests, and run documentation | P0 | Missing | Project config, tests, README | All implementation | Production build, lint, and focused tests pass; README documents scope and commands | CI-equivalent commands |
-| PROD-01 | Real identity, server-side authorization, and authoritative agency data | P3 | Not started | Backend/integrations | External identity and agency systems | Explicitly excluded from demo; documented as required before production use | Documentation review |
-| PROD-02 | Additional agencies and proactive notifications | P3 | Not started | Integrations | PROD-01 and agency agreements | Explicitly excluded from demo | Documentation review |
-
-# Architecture
-
-- Vinext/React client interface using the existing Sites starter and vendored UI primitives.
-- Typed, immutable demo records in `lib/demo-data.ts`.
-- Pure helpers for authentication lookup and progress calculations in `lib/permit-utils.ts`.
-- A single client-side state machine in `app/page.tsx` for the narrow demo journey.
-- Responsive and print styling in `app/globals.css`.
-- Node's built-in test runner for data, helper, source, and rendered-output assertions.
-
-Supabase Auth + Postgres/RLS provide the MVP persistence and authorization boundary. `scripts/seed-spacex-demo.mjs` creates non-production `.test` users and illustrative requests; replace them before any real deployment.
-
-# Task Dependency Graph
+## 4. Task Dependency Graph
 
 ```text
-FOUNDATION-01 typed demo model and helpers
-  |-- UI-01 shell, agency selection, and sign-in
-  |     `-- UI-02 dashboard and action alerts
-  |           `-- UI-03 detail timeline and print summary
-  `-- TEST-01 data/helper tests
-
-UI-01 + UI-02 + UI-03
-  `-- QUALITY-01 accessibility, responsive, and copy hardening
-        `-- TEST-02 build/lint/rendered-output verification
-              `-- RELEASE-01 documentation, checkpoint, and deployment
+WAVE 1 (Data & Architecture)
+  `-- REQ-OBJ-01 & REQ-DATA-01: lib/demo-data.ts & lib/permit-utils.ts
+        |
+WAVE 2 (Fullstack UI & Command Center)
+  `-- REQ-EXEC-01 + REQ-INTAKE-01 + REQ-DETAIL-01 + REQ-NOTICE-01: app/page.tsx
+        |
+WAVE 3 (QA & Testing)
+  `-- Test updates across permit-data, source-contract, and ui-components
+        |
+WAVE 4 (Documentation & Checkpoint)
+  `-- REQ-DOCS-01: README.md, docs/progress.md, execution-plan.md
 ```
 
-# Work Waves
+## 5. Work Waves
 
-## Wave 1 — Foundation
+### Wave 1 — Domain Data & Schemas
+- Define `RequestType`, `RAGStatus`, `EscalationTier`, `ServiceRequest` types in `lib/demo-data.ts`.
+- Build comprehensive SpaceX Pecan Island project dataset with realistic inter-agency dependencies (DOTD, LDEQ, Entergy/LPSC, Vermilion Parish, CPRA/USACE, FAA/USCG, LED/SLCC, OSFM/GOHSEP).
+- Implement utilities in `lib/permit-utils.ts` for RAG computation, category filtering, workload aggregation, critical path detection, and intake parsing.
 
-- FOUNDATION-01: Create typed demo data and pure helpers.
-- DOCS-01: Establish this execution plan and persistent progress record.
+### Wave 2 — Command Center UI & Plain-English Intake
+- Executive Summary Bar with RAG badges and critical path badge.
+- Interactive category filter tabs (`All`, `Permits`, `Roads`, `Utilities`, `Public Safety`, `Workforce`, `Community`).
+- SpaceX Plain-English Intake card with instant category detection, estimated lead agency, and direct submission to the Liaison Triage Queue.
+- Agency Workload distribution overview card.
+- Upcoming statutory and agency decision deadlines card.
+- Deep request detail view with Blocker Banner, Escalation Matrix, and immediate next steps.
+- Prominent official filing disclaimers in header, login, dashboard, and detail views.
 
-## Wave 2 — Core Journey
+### Wave 3 — Testing & Verification
+- Expand test suite in `tests/permit-data.test.mjs` and `tests/source-contract.test.mjs`.
+- Execute `vinext build` and `node --test tests/*.test.mjs`.
 
-- UI-01: Build the demo shell, agency selection, and sign-in.
-- UI-02: Build the application dashboard and action-required alert.
-- UI-03: Build the permit detail timeline, next steps, contact, and print action.
-
-## Wave 3 — Quality
-
-- QUALITY-01: Apply semantic controls, focus management, reduced motion, responsive and print behavior, and honest demo labeling.
-- TEST-01/02: Add focused data, helper, source, and rendered-output tests; run build and lint.
-
-## Wave 4 — Release
-
-- REVIEW-01: Independently review inferred requirements, quality/security, and tests.
-- RELEASE-01: Resolve high findings, update progress, publish a verified checkpoint, and synchronize source to GitHub.
-
-# Risks
-
-- No PRD exists, so scope is inferred from the repository's demo and must not be mistaken for a production portal specification.
-- Agency workflow details, contact information, deadlines, and legal language are illustrative and unverified.
-- Client-side demo authentication provides no security. Production use requires an identity provider, server-side sessions, authorization, auditability, and authoritative data integration.
-- External application URLs can change and require owner validation before a production launch.
-
-# Testing Strategy
-
-1. Type/build validation through the existing production build.
-2. Pure helper and demo-data integrity tests with `node:test`.
-3. Source/rendered-output assertions for metadata, demo disclosure, accessibility markers, and print/reduced-motion CSS.
-4. Focused manual journey for each scenario: select agency, sign in, dashboard, detail, print trigger, back navigation, and sign out.
-
-# Completion Checklist
-
-- [x] DEMO-01 through ENG-01 implemented
-- [x] Three demo journeys represented accurately
-- [x] Invalid sign-in and sign-out behavior covered by implementation/contracts
-- [x] Keyboard, focus, responsive, reduced-motion, and print behavior covered
-- [x] Critical demo workflow passed live browser E2E
-- [ ] Production build passes
-- [x] Lint passes
-- [ ] Automated tests pass
-- [ ] No known blocker/high findings remain
-- [ ] README and progress record are current
-- [ ] Verified deployment completed
-- [ ] Completed source synchronized to GitHub
+### Wave 4 — Documentation & Positioning
+- Rewrite `README.md` to reflect the Government Service Request and Permit Command Center.
+- Update `docs/progress.md`.
