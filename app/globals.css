@@ -114,6 +114,34 @@ input {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Interactive & Hover Highlighting Rules */
+button,
+[role="button"],
+a[href],
+.clickable,
+[data-slot="button"],
+select {
+  cursor: pointer;
+}
+
+button:not(:disabled):hover,
+[role="button"]:not([aria-disabled="true"]):hover,
+a[href]:hover,
+.clickable:hover,
+[data-slot="button"]:not(:disabled):hover {
+  transition: filter 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background-color 120ms ease;
+  filter: brightness(1.05) contrast(1.02);
+}
+
+button:not(:disabled):active,
+[role="button"]:not([aria-disabled="true"]):active,
+a[href]:active,
+.clickable:active,
+[data-slot="button"]:not(:disabled):active {
+  filter: brightness(0.95);
+  transform: translateY(1px);
+}
+
 .skip-link {
   position: fixed;
   left: 1rem;
