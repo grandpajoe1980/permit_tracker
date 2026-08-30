@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
+import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import {
   AlertOctagon,
   ArrowRight,
@@ -9,6 +9,7 @@ import {
   BookOpen,
   Building2,
   CalendarClock,
+  CalendarDays,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -16,6 +17,10 @@ import {
   Clock3,
   FileCheck2,
   FileText,
+  Download,
+  ExternalLink,
+  FilePlus2,
+  Gauge,
   HelpCircle,
   Info,
   Landmark,
@@ -25,7 +30,10 @@ import {
   Mail,
   Menu,
   MessageSquare,
+  MapPin,
   Paperclip,
+  Pencil,
+  Phone,
   Route,
   Send,
   Settings2,
@@ -33,8 +41,10 @@ import {
   Sparkles,
   User,
   UserCog,
+  UserRound,
   Users,
   X,
+  UploadCloud,
   Zap,
 } from "lucide-react";
 
@@ -84,11 +94,19 @@ import {
   type WorkActionId,
   type WorkspaceMode,
 } from "@/lib/operational-ux";
+import {
+  CUSTOMER_ORGANIZATION_NAME,
+  customerVisibleProfiles,
+  filingModeLabel,
+  getProjectOverview,
+  projectProfiles,
+  type ProjectOverview,
+} from "@/lib/customer-portal";
 import { WorkstreamGraphGantt } from "@/components/cockpits/WorkstreamGraphGantt";
 import { DocumentVaultPanel } from "@/components/cockpits/DocumentVaultPanel";
 import { WorkflowDesignerPanel } from "@/components/cockpits/WorkflowDesignerPanel";
 
-type Route = "my-work" | "agency-queue" | "rfis" | "coordination" | "documents" | "project" | "notifications" | "secondary" | "admin" | "detail";
+type Route = "my-work" | "agency-queue" | "rfis" | "coordination" | "documents" | "project" | "notifications" | "secondary" | "admin" | "detail" | "requests" | "schedule" | "contacts" | "help" | "profile";
 type SecondaryTool = "schedule" | "vault" | "catalog";
 type DialogState = { action: WorkActionId; itemId: string } | null;
 
@@ -168,7 +186,7 @@ function workspaceTitle(workspace: WorkspaceMode) {
   return "Reviewer Workspace";
 }
 
-function syncRequestState(request: ServiceRequest, workstreamState?: ReturnType<typeof repository.getWorkstreamById>) {
+function syncRequestState(request: ServiceRequest, workstreamState?: ReturnType<typeof repository.getWorkstreamById>): ServiceRequest {
   if (!workstreamState) return request;
   const completed = workstreamState.operationalState === "complete";
   const blocked = ["blocked", "waiting_government", "waiting_applicant", "waiting_external"].includes(workstreamState.operationalState);
@@ -189,7 +207,7 @@ function syncRequestState(request: ServiceRequest, workstreamState?: ReturnType<
       ...step,
       state: completed ? "done" as const : index === request.steps.findIndex((entry) => entry.state === "active" || entry.state === "blocked") ? blocked ? "blocked" as const : "active" as const : step.state,
     })),
-  };
+  } as ServiceRequest;
 }
 
 export default function Home() {
@@ -223,6 +241,20 @@ export default function Home() {
   const [escalationType, setEscalationType] = useState("Supervisor decision");
   const [intakeText, setIntakeText] = useState("");
   const [intakeStatus, setIntakeStatus] = useState("");
+  const [requestCenterMode, setRequestCenterMode] = useState<"menu" | "permit" | "service" | "escalation">("menu");
+  const [selectedCatalogPermitId, setSelectedCatalogPermitId] = useState("cat-usace-404");
+  const [requestTitle, setRequestTitle] = useState("");
+  const [requestOutcome, setRequestOutcome] = useState("");
+  const [requestDescription, setRequestDescription] = useState("");
+  const [requestArea, setRequestArea] = useState("Pecan Island Launch Complex");
+  const [requestDate, setRequestDate] = useState("");
+  const [requestAgency, setRequestAgency] = useState("");
+  const [requestBlocksWork, setRequestBlocksWork] = useState(false);
+  const [externalReference, setExternalReference] = useState("");
+  const [externalRecordUrl, setExternalRecordUrl] = useState("");
+  const [externalStatus, setExternalStatus] = useState("submitted");
+  const [profileStatus, setProfileStatus] = useState("");
+  const [profileDraft, setProfileDraft] = useState({ displayTitle: "", organizationalUnit: "", workEmail: "", officePhone: "", mobilePhone: "", officeLocation: "", preferredContactMethod: "email" as "email" | "phone" | "text" | "teams", availabilityStatus: "available" as "available" | "limited" | "out_of_office" });
   const headingRef = useRef<HTMLHeadingElement>(null);
   const usernameRef = useRef<HTMLInputElement>(null);
 
@@ -242,6 +274,24 @@ export default function Home() {
   const ragSummary = calculateRAGSummary(userPermits);
   const intakePreview = intakeText.trim() ? parsePlainEnglishIntake(intakeText) : null;
   const loggedIn = Boolean(currentUser && currentPersona);
+  const projectRecord = repository.getProject();
+  const projectOverview: ProjectOverview = getProjectOverview(projectRecord, repository.getWorkstreams(), repository.getCustomerRequests(), repository.getExternalFilings());
+  const currentProfile = repository.getProfileByUserId(activePersona.id.startsWith("user-") ? activePersona.id : `user-${activePersona.id}`) ?? projectProfiles.find((profile) => profile.fullName === activePersona.name);
+
+  function profileDraftForPersona(persona: DemoPersona) {
+    const operational = getOperationalPersona(persona);
+    const profile = repository.getProfileByUserId(operational.id.startsWith("user-") ? operational.id : `user-${operational.id}`) ?? projectProfiles.find((entry) => entry.fullName === operational.name);
+    return profile ? {
+      displayTitle: profile.displayTitle,
+      organizationalUnit: profile.organizationalUnit ?? "",
+      workEmail: profile.workEmail,
+      officePhone: profile.officePhone ?? "",
+      mobilePhone: profile.mobilePhone ?? "",
+      officeLocation: profile.officeLocation ?? "",
+      preferredContactMethod: profile.preferredContactMethod,
+      availabilityStatus: profile.availabilityStatus,
+    } : profileDraft;
+  }
 
   useEffect(() => {
     let active = true;
@@ -253,11 +303,12 @@ export default function Home() {
       const persona = makeAuthenticatedPersona(user.email ?? "authenticated@path.local", String(user.user_metadata?.full_name ?? user.email ?? "Authenticated User"));
       const permits = loaded.permits.length > 0 ? loaded.permits : pecanIslandRequests;
       setCurrentPersona(persona);
+      setProfileDraft(profileDraftForPersona(persona));
       setCurrentUser({ username: user.email ?? "", name: persona.name, agencyId: "spaceport", applicationIds: permits.map((item) => item.id), scenario: persona.role });
       setUserPermits(permits);
       setRoute("my-work");
     });
-    const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = client.auth.onAuthStateChange((_event: string, session: { user?: { email?: string | null; user_metadata?: Record<string, unknown> } } | null) => {
       if (!session?.user) {
         setCurrentUser(null);
         setCurrentPersona(null);
@@ -337,6 +388,7 @@ export default function Home() {
     setLoadingData(false);
     setLoginError(loaded.error ? `Signed in, but the project queue could not be loaded: ${loaded.error.message}` : "");
     setCurrentPersona(persona);
+    setProfileDraft(profileDraftForPersona(persona));
     setCurrentUser({ username: user.email ?? username, name: persona.name, agencyId: "spaceport", applicationIds: permits.map((item) => item.id), scenario: persona.role });
     setUserPermits(permits);
     setRoute("my-work");
@@ -360,6 +412,7 @@ export default function Home() {
       : pecanIslandRequests);
     const finalPermits = permits.length > 0 ? permits : pecanIslandRequests;
     setCurrentPersona(persona);
+    setProfileDraft(profileDraftForPersona(persona));
     setCurrentUser({ username: persona.email, name: persona.name, agencyId: "spaceport", applicationIds: finalPermits.map((item) => item.id), scenario: `${persona.role} · ${persona.scenario}` });
     setUserPermits(finalPermits);
     setSelectedItemId(null);
@@ -392,6 +445,148 @@ export default function Home() {
     }
     setIntakeStatus(`Submitted to the ${preview.suggestedLeadAgency} triage queue.`);
     setIntakeText("");
+  }
+
+  function actorUserId() {
+    return activePersona.id.startsWith("user-") ? activePersona.id : `user-${activePersona.id}`;
+  }
+
+  function submitCustomerRequest(event: FormEvent<HTMLFormElement>, requestType: "permit_authorization" | "government_help" | "project_question" | "blocker_coordination" | "escalation") {
+    event.preventDefault();
+    if (!requestDescription.trim() && !requestTitle.trim()) return;
+    const inferredServiceType = requestTitle === "Project question" ? "project_question" : requestTitle === "Project blocker or coordination problem" ? "blocker_coordination" : requestTitle === "Concierge help" ? "concierge" : "government_help";
+    const effectiveRequestType = requestType === "government_help" && requestCenterMode === "service" ? inferredServiceType : requestType;
+    const selectedPermit = repository.getCatalog().find((permit) => permit.id === selectedCatalogPermitId);
+    const request = repository.createCustomerRequest({
+      projectId: projectRecord.id,
+      requestType: effectiveRequestType,
+      title: requestTitle.trim() || selectedPermit?.name || "Customer project request",
+      description: requestDescription.trim() || requestOutcome.trim() || "Customer request submitted through PATH.",
+      requestedOutcome: requestOutcome.trim() || undefined,
+      locationOrAffectedArea: requestArea.trim() || undefined,
+      desiredDate: requestDate || undefined,
+      scheduleImportance: requestBlocksWork ? "critical" : "normal",
+      knownAgencyCode: requestAgency || selectedPermit?.responsibleOrgCode,
+      knownPermitTypeId: effectiveRequestType === "permit_authorization" ? selectedCatalogPermitId : undefined,
+      submittedByUserId: actorUserId(),
+      submittedByName: activePersona.name,
+      relatedWorkstreamId: selectedPermit?.responsibleOrgCode === "CPRA" ? "WS-WETLANDS-PAD-A" : undefined,
+      blocksActiveWork: requestBlocksWork,
+      attachmentDocumentVersionIds: [],
+    });
+    if (effectiveRequestType === "permit_authorization" && selectedPermit?.filingMode === "EXTERNAL_PORTAL") {
+      repository.createExternalFiling({
+        projectId: projectRecord.id,
+        workstreamId: request.relatedWorkstreamId ?? "WS-WETLANDS-PAD-A",
+        permitTypeId: selectedPermit.id,
+        authorityOrganizationId: selectedPermit.responsibleOrgId,
+        authorityOrganizationName: selectedPermit.agencyContactName ? `${selectedPermit.responsibleOrgCode} · ${selectedPermit.agencyContactName}` : selectedPermit.responsibleOrgCode,
+        filingMethod: selectedPermit.filingMode,
+        officialPortalUrl: selectedPermit.officialFilingUrl,
+        externalReferenceNumber: externalReference.trim() || undefined,
+        externalRecordUrl: externalRecordUrl.trim() || undefined,
+        externalStatus: externalStatus as "submitted" | "under_review" | "additional_information" | "approved" | "denied" | "closed" | "not_started" | "draft",
+        submittedAt: requestDate || new Date().toISOString().slice(0, 10),
+        submittedByUserId: actorUserId(),
+        submittedByName: activePersona.name,
+        lastStatusVerifiedAt: new Date().toISOString().slice(0, 10),
+        lastStatusVerifiedBy: activePersona.name,
+        authoritativeSystemName: selectedPermit.responsibleOrgCode,
+        notes: "Manually tracked in PATH; the agency system remains authoritative.",
+        receiptDocumentVersionIds: [],
+      });
+    }
+    setRequestTitle("");
+    setRequestOutcome("");
+    setRequestDescription("");
+    setExternalReference("");
+    setExternalRecordUrl("");
+    setToast(`${request.confirmationNumber} submitted. The State Project Office triage queue was notified.`);
+    setMutationVersion((value) => value + 1);
+  }
+
+  function saveCustomerDraft() {
+    if (!requestDescription.trim() && !requestTitle.trim()) return;
+    const selectedPermit = repository.getCatalog().find((permit) => permit.id === selectedCatalogPermitId);
+    const requestType = requestCenterMode === "escalation" ? "escalation" : requestTitle === "Project question" ? "project_question" : requestTitle === "Project blocker or coordination problem" ? "blocker_coordination" : requestTitle === "Concierge help" ? "concierge" : "government_help";
+    const request = repository.createCustomerRequest({
+      projectId: projectRecord.id,
+      requestType,
+      title: requestTitle.trim() || selectedPermit?.name || "Customer project request",
+      description: requestDescription.trim() || requestOutcome.trim() || "Customer request draft.",
+      requestedOutcome: requestOutcome.trim() || undefined,
+      locationOrAffectedArea: requestArea.trim() || undefined,
+      desiredDate: requestDate || undefined,
+      scheduleImportance: requestBlocksWork ? "critical" : "normal",
+      knownAgencyCode: requestAgency || selectedPermit?.responsibleOrgCode,
+      knownPermitTypeId: undefined,
+      submittedByUserId: actorUserId(),
+      submittedByName: activePersona.name,
+      relatedWorkstreamId: selectedPermit?.responsibleOrgCode === "CPRA" ? "WS-WETLANDS-PAD-A" : undefined,
+      blocksActiveWork: requestBlocksWork,
+      attachmentDocumentVersionIds: [],
+      status: "draft",
+    });
+    setRequestCenterMode("menu");
+    setToast(`${request.confirmationNumber} saved as a draft.`);
+    setMutationVersion((value) => value + 1);
+  }
+
+  function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!currentProfile) return;
+    const updated = repository.updateProfile({ userId: currentProfile.userId, actorUserId: actorUserId(), updates: profileDraft, isAdmin: activePersona.workspace === "admin" });
+    if (!updated) {
+      setProfileStatus("Only your own contact fields can be edited from this profile view.");
+      return;
+    }
+    setProfileStatus("Profile saved. Your updated contact details are now available to authorized project participants.");
+    setToast("Profile updated.");
+    setMutationVersion((value) => value + 1);
+  }
+
+  function downloadVersion(documentId: string, versionId: string) {
+    const document = repository.getDocuments().find((entry) => entry.id === documentId);
+    const version = document?.versions.find((entry) => entry.id === versionId);
+    if (!document || !version) return;
+    const storagePath = version.storagePath ?? version.storageUri;
+    if (storagePath.startsWith("data:") || storagePath.startsWith("blob:")) {
+      const anchor = window.document.createElement("a");
+      anchor.href = storagePath;
+      anchor.download = version.fileName;
+      anchor.click();
+      return;
+    }
+    const payload = `PATH document download\n${document.title}\n${version.versionTag}\nFile: ${version.fileName}\nSHA-256: ${version.sha256Hash}`;
+    const blob = new Blob([payload], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const anchor = window.document.createElement("a");
+    anchor.href = url;
+    anchor.download = version.fileName || `${document.title}-${version.versionTag}.txt`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function uploadCustomerRevision(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    const document = repository.getDocuments()[0];
+    if (!file || !document) return;
+    const buffer = await file.arrayBuffer();
+    const digest = await crypto.subtle.digest("SHA-256", buffer);
+    const hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error ?? new Error("Unable to read the selected file."));
+      reader.readAsDataURL(file);
+    });
+    const versionNumber = document.currentVersionNumber + 1;
+    const version = repository.createDocumentVersion(document.id, { versionNumber, versionLabel: `v${versionNumber}.0`, storagePath: dataUrl, fileName: file.name, mimeType: file.type || "application/octet-stream", fileSizeBytes: file.size, sha256Hash: hash, uploadedByName: activePersona.name, uploadedByOrgName: CUSTOMER_ORGANIZATION_NAME, changeNotes: "Customer revision uploaded through the PATH document center.", reviewingAgencyCodes: ["DOTD", "CPRA"] });
+    if (version) {
+      setToast(`${version.versionTag} uploaded. Agency review assignments were reset for the new immutable version.`);
+      setMutationVersion((value) => value + 1);
+    }
+    event.target.value = "";
   }
 
   async function handleConfirmAction(event: FormEvent<HTMLFormElement>) {
@@ -505,6 +700,25 @@ export default function Home() {
     }
 
     if (dialog.action === "escalate") {
+      if (activePersona.isCustomer) {
+        const escalation = repository.createCustomerRequest({
+          projectId: projectRecord.id,
+          requestType: "escalation",
+          title: `Escalation request · ${item.workstreamTitle}`,
+          description: actionNote.trim() || `${escalationType} requested for ${item.workstreamTitle}.`,
+          requestedOutcome: escalationType,
+          locationOrAffectedArea: projectRecord.locationDescription,
+          scheduleImportance: item.isCriticalPath ? "critical" : "normal",
+          knownAgencyCode: item.ownerOrganization,
+          submittedByUserId: actorUserId(),
+          submittedByName: activePersona.name,
+          relatedWorkstreamId: workstreamId,
+          blocksActiveWork: item.isCriticalPath,
+          attachmentDocumentVersionIds: [],
+        });
+        notify(`${escalation.confirmationNumber} submitted. The project office will acknowledge the escalation.`);
+        return;
+      }
       if (!workstreamId) {
         setDialogError("This work item is not connected to a configured workstream.");
         return;
@@ -648,7 +862,7 @@ export default function Home() {
 
   const canAdmin = activePersona.workspace === "admin" || activePersona.workspace === "supervisor";
   const primaryNav: Array<{ id: Route; label: string; icon: ReactNode; count?: number }> = activePersona.isCustomer
-    ? [{ id: "my-work", label: "My Work", icon: <LayoutList className="size-4" /> }, { id: "project", label: "Project status", icon: <Building2 className="size-4" /> }, { id: "rfis", label: "Requests from government", icon: <HelpCircle className="size-4" /> }, { id: "notifications", label: "Notifications", icon: <Bell className="size-4" /> }]
+    ? [{ id: "project", label: "Home / Project overview", icon: <Building2 className="size-4" /> }, { id: "my-work", label: "My actions", icon: <LayoutList className="size-4" />, count: queueGroups[0]?.items.length }, { id: "requests", label: "Requests & permits", icon: <FilePlus2 className="size-4" /> }, { id: "schedule", label: "Schedule", icon: <CalendarClock className="size-4" /> }, { id: "documents", label: "Documents", icon: <FileCheck2 className="size-4" /> }, { id: "contacts", label: "Contacts", icon: <Users className="size-4" /> }, { id: "help", label: "Help & escalation", icon: <ShieldAlert className="size-4" /> }, { id: "notifications", label: "Notifications", icon: <Bell className="size-4" /> }]
     : [{ id: "my-work", label: "My Work", icon: <LayoutList className="size-4" />, count: queueGroups[0]?.items.length }, { id: "agency-queue", label: activePersona.workspace === "supervisor" ? "Supervisor queue" : "My agency queue", icon: <Building2 className="size-4" /> }, { id: "rfis", label: "RFIs", icon: <HelpCircle className="size-4" /> }, { id: "coordination", label: "Coordination requests", icon: <Users className="size-4" /> }, { id: "documents", label: "Documents to review", icon: <FileCheck2 className="size-4" /> }, { id: "project", label: "Project", icon: <Route className="size-4" /> }, { id: "notifications", label: "Notifications", icon: <Bell className="size-4" /> }];
 
   function renderWorkCard(item: OperationalWorkItem) {
@@ -704,6 +918,40 @@ export default function Home() {
     return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Operational queue</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">{title}</h1><p className="mt-2 text-sm text-slate-600">Every item below explains its owner, due date, and the next action available to you.</p></div>{filtered.length > 0 ? <div className="space-y-3">{filtered.map(renderWorkCard)}</div> : <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">No items are currently routed to this queue.</div>}</div>;
   }
 
+  function renderCustomerOverview() {
+    const filings = repository.getExternalFilings();
+    const catalog = repository.getCatalog();
+    return <div className="space-y-6">
+      <section className="rounded-2xl border border-teal-300 bg-white p-6 shadow-md sm:p-8"><div className="flex flex-wrap items-start justify-between gap-5"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-teal-800">Customer project command center</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 max-w-4xl text-3xl font-black tracking-tight text-[#00284d] outline-none sm:text-4xl">SpaceX Pecan Island Launch Complex</h1><p className="mt-2 text-sm font-semibold text-slate-600">{projectRecord.code} · {projectRecord.locationDescription}</p></div><span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-black uppercase text-amber-900">Overall health · {projectOverview.healthLabel}</span></div><div className="mt-7 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2 lg:grid-cols-5"><div><p className="text-[11px] font-black uppercase text-slate-500">Project stage</p><p className="mt-1 text-sm font-black text-[#00284d]">{projectOverview.stage}</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Baseline launch</p><p className="mt-1 text-sm font-black text-[#00284d]">{formatDate(projectOverview.baseline)}</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Current forecast</p><p className="mt-1 text-sm font-black text-[#00284d]">{formatDate(projectOverview.forecast)}</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Variance</p><p className="mt-1 text-sm font-black text-rose-700">+{projectOverview.varianceDays} days</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Location</p><p className="mt-1 text-sm font-black text-[#00284d]">{projectRecord.parish}, Louisiana</p></div></div></section>
+      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-base font-black text-[#00284d]"><Gauge className="size-4 text-teal-700" /> Schedule summary</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">{projectOverview.criticalPathCount} critical-path workstreams · {projectOverview.blockedWorkstreamCount} waiting or blocked</p><p className="mt-3 text-sm font-black text-[#00284d]">Next milestone: {projectOverview.nextMilestone.title}</p><p className="mt-1 text-xs text-slate-500">{formatDate(projectOverview.nextMilestone.date)} · {projectOverview.nextMilestone.owner}</p><Button type="button" onClick={() => navigate("schedule")} className="mt-4 w-full bg-[#00284d] text-xs font-bold">Open Schedule <ArrowRight className="size-3.5" /></Button></CardContent></Card>{projectOverview.customerActions.map((action) => <Card key={action.label}><CardHeader><CardTitle className="text-base font-black text-[#00284d]">{action.label}</CardTitle></CardHeader><CardContent><p className="text-3xl font-black text-teal-800">{action.count}</p><p className="mt-1 text-xs text-slate-500">{action.detail}</p><Button type="button" variant="outline" onClick={() => navigate(action.label.includes("Documents") ? "documents" : "requests")} className="mt-4 w-full text-xs font-bold">View details</Button></CardContent></Card>)}</section>
+      <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Building2 className="size-5 text-teal-700" /> Government workstreams</CardTitle><p className="text-sm text-slate-600">Customer-visible stage, next milestone, owner, and whether SpaceX action is required.</p></CardHeader><CardContent className="space-y-3">{projectOverview.governmentActions.map((action) => <div key={action.title} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-black text-[#00284d]">{action.title}</p><p className="mt-1 text-xs font-semibold text-slate-500">{action.agency} · {action.stage}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${action.customerAction.toLowerCase() !== "none" ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"}`}>{action.customerAction.toLowerCase() !== "none" ? "SpaceX action" : "Government-led"}</span></div><div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600"><span>Target {formatDate(action.targetDate)}</span><span>Next: {action.stage}</span></div></div>)}</CardContent></Card><div className="space-y-5"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-amber-700" /> Critical path and blockers</CardTitle></CardHeader><CardContent className="space-y-3">{projectOverview.blockers.length > 0 ? projectOverview.blockers.map((blocker) => <div key={blocker.title} className="rounded-lg border border-amber-200 bg-amber-50 p-3"><p className="text-sm font-black text-amber-950">{blocker.title}</p><p className="mt-1 text-xs text-amber-900">Responsible: {blocker.owner} · {blocker.impact}</p><p className="mt-1 text-xs text-amber-800">Expected resolution: {blocker.expectedResolution}</p></div>) : <p className="text-sm text-slate-600">No active blockers are reported.</p>}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><CalendarDays className="size-5 text-teal-700" /> Upcoming events and decisions</CardTitle></CardHeader><CardContent className="space-y-3">{projectOverview.upcomingEvents.length > 0 ? projectOverview.upcomingEvents.map((event) => <div key={`${event.type}-${event.title}`} className="flex gap-3 border-b border-slate-100 pb-3 last:border-0"><div className="rounded-lg bg-teal-50 p-2 text-center text-[10px] font-black uppercase text-teal-800">{formatDate(event.date)}</div><div><p className="text-sm font-black text-[#00284d]">{event.title}</p><p className="mt-1 text-xs text-slate-500">{event.type} · {event.detail}</p></div></div>) : <p className="text-sm text-slate-600">No upcoming events have been published.</p>}</CardContent></Card></div></div>
+      <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><FileText className="size-5 text-teal-700" /> Permit and authorization portfolio</CardTitle><p className="text-sm text-slate-600">PATH workflow status and authoritative external filing status are shown separately.</p></CardHeader><CardContent className="space-y-3">{catalog.map((permit) => { const filing = filings.find((entry) => entry.permitTypeId === permit.id); const request = userPermits.find((entry) => entry.leadAgencyCode.includes(permit.responsibleOrgCode)); return <div key={permit.id} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-black text-[#00284d]">{permit.name}</p><p className="mt-1 text-xs font-semibold text-slate-500">{permit.responsibleOrgCode} · {request?.title ?? "Catalog authorization"} · {filingModeLabel(permit.filingMode)}</p></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase text-slate-700">PATH: {request?.statusLabel ?? "Not started"}</span></div><div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-4"><span>External ref: <strong>{filing?.externalReferenceNumber ?? "Not recorded"}</strong></span><span>External status: <strong>{filing?.externalStatus?.replaceAll("_", " ") ?? "Not filed"}</strong></span><span>Submitted: <strong>{formatDate(filing?.submittedAt)}</strong></span><span>Decision target: <strong>{formatDate(request?.targetDate)}</strong></span></div><div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs"><p className="font-black uppercase tracking-wider text-slate-500">Verified resources</p><div className="mt-2 flex flex-wrap gap-2">{(permit.resources ?? []).slice(0, 3).map((resource) => <a key={resource.id} href={resource.url} target="_blank" rel="noreferrer" className="font-bold text-teal-800 underline-offset-2 hover:underline">{resource.resourceName} · {resource.versionTag}</a>)}</div></div><div className="mt-3 flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={() => { setSelectedCatalogPermitId(permit.id); setRequestCenterMode("permit"); navigate("requests"); }} className="text-xs font-bold">Open permit details</Button>{permit.officialFilingUrl && <a href={permit.officialFilingUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Official filing site <ExternalLink className="size-3.5" /></a>}</div></div>; })}</CardContent></Card>
+      <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserRound className="size-5 text-teal-700" /> Project contacts</CardTitle></CardHeader><CardContent className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-600">Your State concierge, lead agencies, SpaceX team, and customer-visible reviewers are in one directory.</p><Button type="button" onClick={() => navigate("contacts")} className="bg-[#00284d] text-xs font-bold">Open Contact Directory</Button></CardContent></Card>
+    </div>;
+  }
+
+  function renderCustomerRequestCenter() {
+    const catalog = repository.getCatalog();
+    const permit = catalog.find((entry) => entry.id === selectedCatalogPermitId) ?? catalog[0];
+    const recent = repository.getCustomerRequests().filter((entry) => entry.submittedByUserId === actorUserId());
+    const choice = (label: string, detail: string, icon: ReactNode, onClick: () => void) => <button type="button" onClick={onClick} className="rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-teal-400 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><span className="flex size-10 items-center justify-center rounded-lg bg-teal-50 text-teal-800">{icon}</span><span className="mt-4 block text-base font-black text-[#00284d]">{label}</span><span className="mt-1 block text-sm leading-6 text-slate-600">{detail}</span></button>;
+    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer intake</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">Requests & permits</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Start with the outcome you need. PATH creates a trackable request, routes it to the State Project Office, and keeps authoritative agency filings clearly identified.</p></div>{requestCenterMode === "menu" && <><div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{choice("Submit / track a permit or authorization", "Select an authorization, review prerequisites and official resources, then create a PATH tracking record.", <FilePlus2 className="size-5" />, () => setRequestCenterMode("permit"))}{choice("Request government help / service", "Tell the project office the service or outcome you need, including date and schedule impact.", <HelpCircle className="size-5" />, () => { setRequestTitle("Government service request"); setRequestCenterMode("service"); })}{choice("Ask a project question", "Send a structured question to the project office with the context needed for a useful answer.", <MessageSquare className="size-5" />, () => { setRequestTitle("Project question"); setRequestCenterMode("service"); })}{choice("Report a blocker / coordination problem", "Identify what is blocked, who may need to act, and the date that matters.", <AlertOctagon className="size-5" />, () => { setRequestTitle("Project blocker or coordination problem"); setRequestBlocksWork(true); setRequestCenterMode("service"); })}{choice("Request escalation", "Ask for assistance when a critical-path risk or delayed dependency needs project-office attention.", <ShieldAlert className="size-5" />, () => setRequestCenterMode("escalation"))}{choice("I'm not sure what I need", "Use the PATH concierge to describe the situation in plain English and receive a suggested route.", <Sparkles className="size-5" />, () => { setRequestCenterMode("service"); setRequestTitle("Concierge help"); })}</div><Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Track my PATH requests</CardTitle></CardHeader><CardContent className="space-y-3">{recent.length > 0 ? recent.map((request) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-slate-500">{request.status.replaceAll("_", " ")} · {request.description}</p></div><span className="text-xs font-bold text-teal-800">{formatDate(request.updatedAt)}</span></div>) : <p className="text-sm text-slate-600">No requests submitted from this profile yet.</p>}</CardContent></Card></>}{requestCenterMode === "permit" && permit && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">Permit / authorization submission wizard</CardTitle><p className="mt-1 text-sm text-slate-600">Step 2 of 6 · Choose the authorization from the verified catalog.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent className="space-y-5"><div><Label htmlFor="permit-catalog">Authorization or permit</Label><select id="permit-catalog" value={permit.id} onChange={(event) => setSelectedCatalogPermitId(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm">{catalog.map((entry) => <option key={entry.id} value={entry.id}>{entry.name} · {entry.responsibleOrgCode}</option>)}</select></div><div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2"><div><p className="text-xs font-black uppercase text-slate-500">What triggers it</p><p className="mt-1 text-slate-700">{permit.triggerExplanation}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Expected duration</p><p className="mt-1 text-slate-700">{permit.expectedLeadTimeDays} days · statutory minimum {permit.minimumStatutoryDays} days</p></div><div><p className="text-xs font-black uppercase text-slate-500">Prerequisites</p><p className="mt-1 text-slate-700">{permit.prerequisites.join(" · ")}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Agency contact</p><p className="mt-1 text-slate-700">{permit.agencyContactName ?? permit.responsibleOrgCode} · {permit.agencyContactEmail ?? "Contact through official portal"}</p></div></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-black text-amber-950">Filing method: {filingModeLabel(permit.filingMode)}</p><p className="mt-1 text-sm leading-6 text-amber-900">{permit.filingMode === "EXTERNAL_PORTAL" ? `This application is submitted in the authoritative ${permit.responsibleOrgCode} system. PATH will track it as part of the SpaceX project.` : "PATH will show the next supported submission step before filing."}</p>{permit.officialFilingUrl && <a href={permit.officialFilingUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#00284d] px-3 py-2 text-xs font-bold text-white">Open official filing site <ExternalLink className="size-3.5" /></a>}</div><form onSubmit={(event) => submitCustomerRequest(event, "permit_authorization")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="permit-request-title">PATH tracking title</Label><Input id="permit-request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder={permit.name} required /></div><div><Label htmlFor="permit-submission-date">Submission date</Label><Input id="permit-submission-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="permit-request-description">Supporting context and requested outcome</Label><textarea id="permit-request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe the project scope, filing intent, and any known prerequisites." /></div>{permit.filingMode === "EXTERNAL_PORTAL" && <div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="external-reference">External case / application number</Label><Input id="external-reference" value={externalReference} onChange={(event) => setExternalReference(event.target.value)} placeholder="Enter after filing" /></div><div><Label htmlFor="external-record-url">External record URL</Label><Input id="external-record-url" type="url" value={externalRecordUrl} onChange={(event) => setExternalRecordUrl(event.target.value)} placeholder="https://..." /></div><div><Label htmlFor="external-status">Authoritative external status</Label><select id="external-status" value={externalStatus} onChange={(event) => setExternalStatus(event.target.value)} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="submitted">Submitted</option><option value="under_review">Under review</option><option value="additional_information">Additional information requested</option></select></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">PATH does not scrape or synchronize this system. Status is manually verified by a project participant.</div></div>}<Button type="submit" className="bg-[#00284d] font-bold">Create PATH tracking record <Send className="size-4" /></Button></form></CardContent></Card>}{(requestCenterMode === "service" || requestCenterMode === "escalation") && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">{requestCenterMode === "escalation" ? "Request escalation / assistance" : "Project help request"}</CardTitle><p className="mt-1 text-sm text-slate-600">Complete the structured intake so the right team can respond without a follow-up round trip.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent><form onSubmit={(event) => submitCustomerRequest(event, requestCenterMode === "escalation" ? "escalation" : "government_help")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="request-title">Request title</Label><Input id="request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder="What do you need?" required /></div><div><Label htmlFor="request-agency">Known agency (optional)</Label><Input id="request-agency" value={requestAgency} onChange={(event) => setRequestAgency(event.target.value)} placeholder="DOTD, CPRA, LDEQ..." /></div><div><Label htmlFor="request-outcome">Requested outcome</Label><Input id="request-outcome" value={requestOutcome} onChange={(event) => setRequestOutcome(event.target.value)} placeholder="A decision, meeting, review, or referral" /></div><div><Label htmlFor="request-date">Desired date</Label><Input id="request-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="request-area">Location / affected area</Label><Input id="request-area" value={requestArea} onChange={(event) => setRequestArea(event.target.value)} /></div><div><Label htmlFor="request-description">Describe the situation</Label><textarea id="request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={5} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder={requestCenterMode === "escalation" ? "Describe the critical-path risk, delayed dependency, or assistance needed." : "Include the context the project office needs to respond."} /></div><label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3"><input type="checkbox" checked={requestBlocksWork} onChange={(event) => setRequestBlocksWork(event.target.checked)} className="mt-1 size-4 accent-teal-700" /><span><span className="block text-sm font-bold text-[#00284d]">This blocks active project work</span><span className="block text-xs text-slate-500">Use this to help triage urgency; PATH will not infer a legal determination.</span></span></label><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={saveCustomerDraft}>Save draft</Button><Button type="submit" className="bg-[#00284d] font-bold">Submit request <Send className="size-4" /></Button></div></form></CardContent></Card>}</div>;
+  }
+
+  function renderCustomerDocuments() {
+    const documents = repository.getDocuments();
+    return <div className="space-y-6"><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer document center</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">Documents</h1><p className="mt-2 text-sm text-slate-600">Upload a new immutable revision, download exact versions, and see whether an authorized agency review is pending.</p></div><label htmlFor="customer-document-upload" className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-[#00284d] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#003c70]"><UploadCloud className="size-4" /> Upload new revision<input id="customer-document-upload" type="file" className="sr-only" onChange={(event) => void uploadCustomerRevision(event)} /></label></div>{documents.map((document) => <Card key={document.id}><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">{document.title}</CardTitle><p className="mt-1 text-sm text-slate-600">{document.category.replaceAll("_", " ")} · {document.ownerOrgCode} · {document.versions.length} immutable version(s)</p></div><span className="rounded-full bg-teal-50 px-2 py-1 text-[10px] font-black uppercase text-teal-800">Current v{document.currentVersionNumber}.0</span></div></CardHeader><CardContent className="space-y-3">{document.versions.map((version) => <div key={version.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{version.versionTag} · {version.fileName}</p><p className="mt-1 text-xs text-slate-500">Uploaded {formatDate(version.uploadedAt)} by {version.uploadedByName} · SHA-256 {version.sha256Hash.slice(0, 12)}…</p><p className="mt-1 text-xs font-bold uppercase text-slate-600">{version.status ?? "recorded"}</p></div><Button type="button" variant="outline" onClick={() => downloadVersion(document.id, version.id)} className="text-xs font-bold"><Download className="size-3.5" /> Download exact version</Button></div>)}</CardContent></Card>)}</div>;
+  }
+
+  function renderContacts() {
+    const profiles = activePersona.isCustomer ? customerVisibleProfiles() : projectProfiles.filter((profile) => profile.isActive);
+    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Project team</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">Contacts and my profile</h1><p className="mt-2 max-w-3xl text-sm text-slate-600">Contact details and project responsibilities are data-driven. Customer-visible contacts exclude internal-only administrators and notes.</p></div><div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Users className="size-5 text-teal-700" /> Project contact directory</CardTitle></CardHeader><CardContent className="space-y-3">{profiles.map((profile) => <div key={profile.id} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-black text-[#00284d]">{profile.fullName}</p><p className="mt-1 text-xs font-bold text-teal-800">{profile.displayTitle}</p><p className="mt-1 text-xs text-slate-600">{profile.organizationName} · {profile.organizationalUnit}</p></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase text-slate-700">{profile.projectRole}</span></div><div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600"><a href={`mailto:${profile.workEmail}`} className="font-bold text-teal-800 hover:underline">{profile.workEmail}</a>{profile.officePhone && <a href={`tel:${profile.officePhone}`} className="inline-flex items-center gap-1"><Phone className="size-3.5" />{profile.officePhone}</a>}<span>{profile.availabilityStatus.replaceAll("_", " ")}</span></div></div>)}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Pencil className="size-5 text-teal-700" /> My profile</CardTitle><p className="text-sm text-slate-600">You can edit your contact details. Organization membership, roles, capabilities, and visibility remain administrator-controlled.</p></CardHeader><CardContent>{currentProfile ? <form onSubmit={saveProfile} className="space-y-4"><div className="rounded-lg bg-slate-50 p-3"><p className="text-sm font-black text-[#00284d]">{currentProfile.fullName}</p><p className="mt-1 text-xs text-slate-600">{currentProfile.organizationName} · {currentProfile.projectRole}</p></div><div><Label htmlFor="profile-title">Professional / display title</Label><Input id="profile-title" value={profileDraft.displayTitle} onChange={(event) => setProfileDraft((current) => ({ ...current, displayTitle: event.target.value }))} /></div><div><Label htmlFor="profile-unit">Organizational unit / division</Label><Input id="profile-unit" value={profileDraft.organizationalUnit} onChange={(event) => setProfileDraft((current) => ({ ...current, organizationalUnit: event.target.value }))} /></div><div><Label htmlFor="profile-email">Work email</Label><Input id="profile-email" type="email" value={profileDraft.workEmail} onChange={(event) => setProfileDraft((current) => ({ ...current, workEmail: event.target.value }))} required /></div><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="profile-office-phone">Office phone</Label><Input id="profile-office-phone" value={profileDraft.officePhone} onChange={(event) => setProfileDraft((current) => ({ ...current, officePhone: event.target.value }))} /></div><div><Label htmlFor="profile-mobile-phone">Mobile phone (optional)</Label><Input id="profile-mobile-phone" value={profileDraft.mobilePhone} onChange={(event) => setProfileDraft((current) => ({ ...current, mobilePhone: event.target.value }))} /></div></div><div><Label htmlFor="profile-location">Office / location</Label><Input id="profile-location" value={profileDraft.officeLocation} onChange={(event) => setProfileDraft((current) => ({ ...current, officeLocation: event.target.value }))} /></div><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="profile-contact-method">Preferred contact method</Label><select id="profile-contact-method" value={profileDraft.preferredContactMethod} onChange={(event) => setProfileDraft((current) => ({ ...current, preferredContactMethod: event.target.value as typeof current.preferredContactMethod }))} className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="email">Email</option><option value="phone">Phone</option><option value="text">Text</option><option value="teams">Teams</option></select></div><div><Label htmlFor="profile-availability">Availability</Label><select id="profile-availability" value={profileDraft.availabilityStatus} onChange={(event) => setProfileDraft((current) => ({ ...current, availabilityStatus: event.target.value as typeof current.availabilityStatus }))} className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="available">Available</option><option value="limited">Limited</option><option value="out_of_office">Out of office</option></select></div></div><Button type="submit" className="bg-[#00284d] font-bold">Save profile</Button>{profileStatus && <p role="status" className="text-sm font-bold text-teal-800">{profileStatus}</p>}</form> : <p className="text-sm text-slate-600">No profile is configured for this persona.</p>}</CardContent></Card></div></div>;
+  }
+
+  function renderHelp() {
+    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer assistance</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">Help and escalation</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Use a structured request when a normal project question is not enough. A PATH confirmation number lets you track the response through acknowledgement and resolution.</p></div><div className="grid gap-4 md:grid-cols-3"><Card><CardHeader><CardTitle className="text-base font-black text-[#00284d]">State concierge</CardTitle></CardHeader><CardContent><p className="text-sm font-black">Sarah Johnson</p><p className="mt-1 text-xs text-slate-600">State Project Manager · Louisiana Governor&apos;s Office of Major Projects &amp; Delivery</p><a href="mailto:sarah.johnson@la.gov" className="mt-3 inline-block text-xs font-bold text-teal-800">sarah.johnson@la.gov</a></CardContent></Card><Card><CardHeader><CardTitle className="text-base font-black text-[#00284d]">Request assistance</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">Ask for help, report a blocker, or request a project-office response.</p><Button type="button" onClick={() => { setRequestCenterMode("service"); navigate("requests"); }} className="mt-4 bg-[#00284d] text-xs font-bold">Start help request</Button></CardContent></Card><Card><CardHeader><CardTitle className="text-base font-black text-[#00284d]">Critical-path escalation</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">For delayed government dependencies or schedule risk requiring acknowledgement.</p><Button type="button" onClick={() => { setRequestCenterMode("escalation"); navigate("requests"); }} className="mt-4 bg-amber-700 text-xs font-bold hover:bg-amber-800">Request escalation</Button></CardContent></Card></div><Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">What happens after submission</CardTitle></CardHeader><CardContent><ol className="grid gap-3 text-sm text-slate-700 sm:grid-cols-4"><li><strong>1. Submitted</strong><br />PATH issues a confirmation.</li><li><strong>2. Triaged</strong><br />The State Project Office routes the request.</li><li><strong>3. Acknowledged</strong><br />A project participant records the next action.</li><li><strong>4. Resolved</strong><br />You receive a customer-safe update.</li></ol></CardContent></Card></div>;
+  }
+
   function renderNotifications() {
     const notifications = repository.getNotifications();
     const events = repository.getAuditEvents().slice(0, 8);
@@ -711,17 +959,18 @@ export default function Home() {
   }
 
   function renderProject() {
+    if (activePersona.isCustomer) return renderCustomerOverview();
     const workload = getAgencyWorkload(userPermits);
-    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">SpaceX Pecan Island</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">Project context</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Vermilion Parish, Louisiana · shared operational context for the project team.</p></div>{activePersona.isCustomer ? <Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">No surprises</CardTitle></CardHeader><CardContent><p className="text-sm leading-6 text-slate-700">Government agencies are coordinating the next steps. PATH shows SpaceX only the actions and status updates intended for your project team.</p><Button type="button" onClick={() => setSecondaryTool("schedule")} className="mt-4 bg-[#00284d] font-bold">View project timeline <ArrowRight className="size-4" aria-hidden="true" /></Button></CardContent></Card> : <><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-red-200 bg-red-50 p-4"><p className="text-xs font-black uppercase text-red-800">Blocked / at risk</p><p className="mt-2 text-3xl font-black text-red-950">{ragSummary.red}</p></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-black uppercase text-amber-800">Attention</p><p className="mt-2 text-3xl font-black text-amber-950">{ragSummary.yellow}</p></div><div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-black uppercase text-emerald-800">On track</p><p className="mt-2 text-3xl font-black text-emerald-950">{ragSummary.green}</p></div></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Building2 className="size-5 text-teal-700" /> Agency Workload</CardTitle></CardHeader><CardContent className="space-y-3">{workload.slice(0, 8).map((agency) => <div key={agency.agencyCode} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{agency.agencyCode}</p><p className="text-xs text-slate-500">{agency.agencyLevel} · {agency.agencyName}</p></div><div className="text-right text-xs font-bold text-slate-700">{agency.count} workstreams · {agency.blockedCount} blocked</div></div>)}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Route className="size-5 text-teal-700" /> Gantt and dependencies</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">The detailed schedule remains available as a secondary tool. Use it to understand critical-path impact after you identify the work requiring attention.</p><Button type="button" onClick={() => { setSecondaryTool("schedule"); navigate("secondary"); }} className="mt-4 bg-[#00284d] font-bold">Open Gantt <ArrowRight className="size-4" aria-hidden="true" /></Button></CardContent></Card></>}</div>;
+    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">SpaceX Pecan Island</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">Project context</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Vermilion Parish, Louisiana · shared operational context for the project team.</p></div><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-red-200 bg-red-50 p-4"><p className="text-xs font-black uppercase text-red-800">Blocked / at risk</p><p className="mt-2 text-3xl font-black text-red-950">{ragSummary.red}</p></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-black uppercase text-amber-800">Attention</p><p className="mt-2 text-3xl font-black text-amber-950">{ragSummary.yellow}</p></div><div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-black uppercase text-emerald-800">On track</p><p className="mt-2 text-3xl font-black text-emerald-950">{ragSummary.green}</p></div></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Building2 className="size-5 text-teal-700" /> Agency Workload</CardTitle></CardHeader><CardContent className="space-y-3">{workload.slice(0, 8).map((agency) => <div key={agency.agencyCode} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{agency.agencyCode}</p><p className="text-xs text-slate-500">{agency.agencyLevel} · {agency.agencyName}</p></div><div className="text-right text-xs font-bold text-slate-700">{agency.count} workstreams · {agency.blockedCount} blocked</div></div>)}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Route className="size-5 text-teal-700" /> Gantt and dependencies</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">Open the schedule to review the critical path, baseline, forecast, and agency dependencies.</p><Button type="button" onClick={() => { setSecondaryTool("schedule"); navigate("secondary"); }} className="mt-4 bg-[#00284d] font-bold">Open Gantt <ArrowRight className="size-4" aria-hidden="true" /></Button></CardContent></Card></div>;
   }
 
   function renderSecondary() {
-    return <div className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Secondary tools</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">{secondaryTool === "schedule" ? "Schedule" : secondaryTool === "vault" ? "Document Vault" : "Permit Catalog"}</h1></div><div className="flex flex-wrap gap-2">{([["schedule", "Schedule"], ["vault", "Document Vault"], ["catalog", "Permit Catalog"]] as Array<[SecondaryTool, string]>).map(([tool, label]) => <Button key={tool} type="button" variant={secondaryTool === tool ? "default" : "outline"} onClick={() => setSecondaryTool(tool)} className="text-xs font-bold">{label}</Button>)}</div></div>{secondaryTool === "schedule" && <WorkstreamGraphGantt />}{secondaryTool === "vault" && <DocumentVaultPanel />}{secondaryTool === "catalog" && <WorkflowDesignerPanel />}</div>;
+    return <div className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Government tools</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">{secondaryTool === "schedule" ? "Schedule" : secondaryTool === "vault" ? "Document Vault" : "Permit Catalog"}</h1></div><div className="flex flex-wrap gap-2">{([["schedule", "Schedule"], ["vault", "Document Vault"], ["catalog", "Permit Catalog"]] as Array<[SecondaryTool, string]>).map(([tool, label]) => <Button key={tool} type="button" variant={secondaryTool === tool ? "default" : "outline"} onClick={() => setSecondaryTool(tool)} className="text-xs font-bold">{label}</Button>)}</div></div>{secondaryTool === "schedule" && <WorkstreamGraphGantt />}{secondaryTool === "vault" && <DocumentVaultPanel />}{secondaryTool === "catalog" && <WorkflowDesignerPanel />}</div>;
   }
 
   function renderAdmin() {
     const [firstUser] = teamUsers;
-    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">Roles and permissions</h1><p className="mt-2 text-sm text-slate-600">Administration is visible only to supervisors and administrators. Operational reviewers do not need this screen to ask for help or transfer work.</p></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access</CardTitle></CardHeader><CardContent className="space-y-3">{teamUsers.map((user) => <div key={user.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{user.name}</p><p className="text-xs text-slate-500">{user.email} · {user.organization}</p><p className="mt-1 max-w-xl text-xs text-slate-500">{roleDefinitions[user.roleId].description}</p></div><select aria-label={`Role for ${user.name}`} value={user.roleId} onChange={(event) => { const roleId = event.target.value as RoleId; setTeamUsers((current) => current.map((member) => member.id === user.id ? { ...member, roleId, permissions: roleDefinitions[roleId].permissions } : member)); setToast(`Updated ${user.name} to ${roleDefinitions[roleId].name}.`); }} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800">{(Object.keys(roleDefinitions) as RoleId[]).map((role) => <option key={role} value={role}>{roleDefinitions[role].name}</option>)}</select></div>)}<p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Permission changes remain subject to server authorization in production.</p></CardContent></Card></div>;
+    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">Participants, profiles, and roles</h1><p className="mt-2 text-sm text-slate-600">Administrators can manage project participation, profile visibility, roles, workstream responsibility, and access. Ordinary users can edit only their own contact fields.</p></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent className="space-y-3">{teamUsers.map((user) => { const profile = repository.getProfileByUserId(user.id); const participant = repository.getParticipants().find((entry) => entry.userId === user.id); return <div key={user.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{user.name} {user.name === "Joe Skaggs" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] uppercase text-amber-900">Space Czar</span>}</p><p className="text-xs font-bold text-teal-800">{profile?.displayTitle ?? user.displayTitle ?? roleDefinitions[user.roleId].name}</p><p className="text-xs text-slate-500">{profile?.workEmail ?? user.workEmail ?? user.email} · {profile?.organizationName ?? user.organization}</p><p className="mt-1 max-w-xl text-xs text-slate-500">{profile?.organizationalUnit ?? user.organizationalUnit ?? user.agency} · {participant?.workstreamIds.length ?? 0} assigned workstream(s)</p></div><select aria-label={`Role for ${user.name}`} value={user.roleId} onChange={(event) => { const roleId = event.target.value as RoleId; setTeamUsers((current) => current.map((member) => member.id === user.id ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user.name} to ${roleDefinitions[roleId].name}.`); }} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800">{(Object.keys(roleDefinitions) as RoleId[]).map((role) => <option key={role} value={role}>{roleDefinitions[role].name}</option>)}</select></div>; })}<p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Joe Skaggs · joe.skaggs@la.gov · Louisiana Economic Development (LED) · Space Czar.</p></CardContent></Card>{repository.getCustomerRequests().length > 0 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-amber-700" /> Customer request triage</CardTitle><p className="text-sm text-slate-600">Escalations, blockers, service requests, and permit tracking records submitted by SpaceX appear here for government-side follow-up.</p></CardHeader><CardContent className="space-y-3">{repository.getCustomerRequests().slice(0, 8).map((request) => <div key={request.id} className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3"><div><p className="text-sm font-black text-amber-950">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-amber-900">{request.requestType.replaceAll("_", " ")} · {request.description}</p><p className="mt-1 text-xs text-amber-800">{request.submittedByName} · {request.locationOrAffectedArea ?? "Project-wide"}</p></div><span className="rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-900">{request.status}</span></div>)}</CardContent></Card>}</div>;
   }
 
   function renderDetail() {
@@ -754,7 +1003,7 @@ export default function Home() {
       {dialog.action === "mark_blocked" && <><div><Label htmlFor="block-reason">What is preventing you from proceeding?</Label><select id="block-reason" value={blockReason} onChange={(event) => setBlockReason(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="customer">Waiting on SpaceX</option><option value="another_agency">Waiting on another agency</option><option value="internal">Missing internal decision</option><option value="statutory">Scheduled / statutory hold</option><option value="technical">Technical problem</option><option value="legal">Legal / policy question</option><option value="external">External third party</option><option value="other">Other</option></select></div>{blockReason === "another_agency" && <div><Label htmlFor="block-agency">Who needs to act?</Label><select id="block-agency" value={blockAgency} onChange={(event) => setBlockAgency(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>CPRA</option><option>USACE</option><option>DOTD</option><option>Vermilion Parish</option><option>LDEQ</option></select></div>}<div><Label htmlFor="block-need">What do you need from them?</Label><textarea id="block-need" value={blockNeed} onChange={(event) => setBlockNeed(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe the concurrence, document, or decision needed." /></div><div><Label htmlFor="block-due">When is it needed?</Label><Input id="block-due" type="date" value={blockDueDate} onChange={(event) => setBlockDueDate(event.target.value)} className="mt-1" /></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"><strong className="text-[#00284d]">Clock behavior:</strong> PATH derives the wait policy from the selected reason. You are not asked to make a legal/policy determination.</div></>}
       {(dialog.action === "request_information" || dialog.action === "request_clarification") && <><div><Label htmlFor="question-text">What do you need?</Label><textarea id="question-text" value={questionText} onChange={(event) => setQuestionText(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" /></div><div><Label htmlFor="question-due">When is it needed?</Label><Input id="question-due" type="date" value={questionDueDate} onChange={(event) => setQuestionDueDate(event.target.value)} className="mt-1" /></div></>}
       {dialog.action === "transfer" && <><div><Label htmlFor="transfer-type">How should we help?</Label><select id="transfer-type" value={transferType} onChange={(event) => setTransferType(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>Ask another reviewer</option><option>Transfer assignment</option><option>Add co-reviewer</option><option>Send to supervisor</option><option>Request specialist consultation</option></select></div><div><Label htmlFor="transfer-note">What should the supervisor know?</Label><textarea id="transfer-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" /></div></>}
-      {dialog.action === "escalate" && <><div><Label htmlFor="escalation-type">What kind of help do you need?</Label><select id="escalation-type" value={escalationType} onChange={(event) => setEscalationType(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>Supervisor decision</option><option>Cross-agency assistance</option><option>Deadline relief</option><option>Policy / legal determination</option><option>Project office assistance</option><option>Executive intervention</option><option>Other</option></select></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-black uppercase tracking-wider text-amber-900">Next escalation</p><p className="mt-1 text-sm font-black text-amber-950">{recipientPreview.recipients[0]?.name}</p><p className="text-sm text-amber-900">{recipientPreview.recipients[0]?.organization}</p><p className="mt-2 text-xs text-amber-800">If unresolved by September 3, the Louisiana Project Office will be notified.</p></div></>}
+      {dialog.action === "escalate" && <><div><Label htmlFor="escalation-type">What kind of help do you need?</Label><select id="escalation-type" value={escalationType} onChange={(event) => setEscalationType(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>Supervisor decision</option><option>Cross-agency assistance</option><option>Deadline relief</option><option>Policy / legal determination</option><option>Project office assistance</option><option>Executive intervention</option><option>Other</option></select></div>{activePersona.isCustomer && <div><Label htmlFor="escalation-note">Describe the risk or assistance needed</Label><textarea id="escalation-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Tell the project office what is delayed, why it matters, and what outcome would help." /></div>}<div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-black uppercase tracking-wider text-amber-900">Next escalation</p><p className="mt-1 text-sm font-black text-amber-950">{recipientPreview.recipients[0]?.name}</p><p className="text-sm text-amber-900">{recipientPreview.recipients[0]?.organization}</p><p className="mt-2 text-xs text-amber-800">If unresolved by September 3, the Louisiana Project Office will be notified.</p></div></>}
       {(dialog.action === "add_note" || dialog.action === "approve_document" || dialog.action === "approve_with_comments" || dialog.action === "request_revision" || dialog.action === "accept_rfi_response" || dialog.action === "respond") && <div><Label htmlFor="action-note">{dialog.action === "respond" ? "Your response" : "Notes"}</Label><textarea id="action-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={4} required={dialog.action === "add_note" || dialog.action === "respond"} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder={dialog.action === "respond" ? "Describe the response and attached information." : "Add context for the audit history."} /></div>}
       {dialog.action === "upload_documents" && <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="font-black text-[#00284d]">Secure upload handoff</p><p className="mt-1 text-sm text-slate-600">Attach the requested document revision from the customer document workspace. The receiving agency will review the exact version submitted.</p></div>}
       {recipientPreview.recipients.length > 0 && <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-black uppercase tracking-wider text-slate-500">PATH will notify</p><div className="mt-2 space-y-2">{recipientPreview.recipients.map((recipient) => <div key={`${recipient.label}-${recipient.name}`} className="flex items-start gap-2 text-sm"><Mail className="mt-0.5 size-4 shrink-0 text-teal-700" aria-hidden="true" /><span><strong className="text-[#00284d]">{recipient.label}:</strong> {recipient.name} · {recipient.organization}</span></div>)}</div>{recipientPreview.customerMessage && <p className="mt-3 border-t border-slate-200 pt-3 text-xs font-semibold text-slate-600"><strong className="text-slate-800">Customer will see:</strong> {recipientPreview.customerMessage}</p>}</div>}
@@ -766,8 +1015,12 @@ export default function Home() {
   function renderMain() {
     if (route === "detail") return renderDetail();
     if (route === "my-work") return renderMyWork();
-    if (route === "agency-queue" || route === "rfis" || route === "coordination" || route === "documents") return renderQueue(route);
+    if (route === "agency-queue" || route === "rfis" || route === "coordination" || route === "documents") return activePersona.isCustomer && route === "documents" ? renderCustomerDocuments() : renderQueue(route);
     if (route === "project") return renderProject();
+    if (route === "requests") return renderCustomerRequestCenter();
+    if (route === "schedule") return <div className="space-y-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer schedule</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Read-only project delivery schedule for SpaceX. Internal government notes and control actions are not shown.</p></div><WorkstreamGraphGantt customerSafe onSelectWorkstream={(workstreamId) => { const item = workItems.find((entry) => entry.workstreamId === workstreamId); if (item) openItem(item); }} /></div>;
+    if (route === "contacts" || route === "profile") return renderContacts();
+    if (route === "help") return renderHelp();
     if (route === "notifications") return renderNotifications();
     if (route === "secondary") return renderSecondary();
     return renderAdmin();

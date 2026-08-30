@@ -65,6 +65,7 @@ export function findDemoPersona(identifier: string): DemoPersona | null {
       (persona) =>
         persona.id.toLowerCase() === normalized ||
         persona.email.toLowerCase() === normalized ||
+        persona.legacyEmails?.some((email) => email.toLowerCase() === normalized) ||
         persona.name.toLowerCase() === normalized,
     ) ?? null
   );
@@ -467,4 +468,3 @@ export function getDailyCommandCenterExceptions() {
     consolidatedRfiBatch: groupIntoConsolidatedBatch(rfisData),
   };
 }
-

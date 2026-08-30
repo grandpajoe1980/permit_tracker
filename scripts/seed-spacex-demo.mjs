@@ -7,11 +7,12 @@ if (!url || !serviceKey) throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE
 const supabase = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
 const users = [
-  { email: "alex.martin@spacex.test", password: "SpaceX-MVP-2026!", name: "Alex Martin", role: "customer" },
-  { email: "maya.chen@spacex.test", password: "SpaceX-MVP-2026!", name: "Maya Chen", role: "program" },
-  { email: "jordan.lee@spacex.test", password: "SpaceX-MVP-2026!", name: "Jordan Lee", role: "environment" },
-  { email: "sam.rivera@spacex.test", password: "SpaceX-MVP-2026!", name: "Sam Rivera", role: "infrastructure" },
-  { email: "riley.brooks@spacex.test", password: "SpaceX-MVP-2026!", name: "Riley Brooks", role: "community" },
+  { email: "alex.martin@spacex.com", password: "SpaceX-MVP-2026!", name: "Alex Martin", role: "customer" },
+  { email: "maya.chen@spacex.com", password: "SpaceX-MVP-2026!", name: "Maya Chen", role: "program" },
+  { email: "jordan.lee@la.gov", password: "SpaceX-MVP-2026!", name: "Jordan Lee", role: "environment" },
+  { email: "sam.rivera@la.gov", password: "SpaceX-MVP-2026!", name: "Sam Rivera", role: "infrastructure" },
+  { email: "riley.brooks@vermilionparish.org", password: "SpaceX-MVP-2026!", name: "Riley Brooks", role: "community" },
+  { email: "joe.skaggs@la.gov", password: "PATH-MVP-2026!", name: "Joe Skaggs", role: "admin" },
 ];
 
 const requests = [
@@ -43,7 +44,7 @@ for (const spec of users) {
   if (!user) user = (await one(supabase.auth.admin.createUser({ email: spec.email, password: spec.password, email_confirm: true, user_metadata: { full_name: spec.name } }), `create ${spec.email}`)).user;
   authUsers.push({ ...spec, id: user.id });
   await one(supabase.from("profiles").upsert({ id: user.id, email: spec.email, full_name: spec.name, customer_organization_id: spec.role === "customer" ? customer.id : null, status: "active" }), `profile ${spec.email}`);
-  if (spec.role !== "customer") await one(supabase.from("organization_memberships").upsert({ user_id: user.id, organization_id: orgByCode[spec.role.toUpperCase()] ?? orgByCode.SPACEPORT, role: spec.role === "program" ? "supervisor" : "contributor", status: "active" }, { onConflict: "user_id,organization_id" }), `membership ${spec.email}`);
+  if (spec.role !== "customer") await one(supabase.from("organization_memberships").upsert({ user_id: user.id, organization_id: spec.role === "admin" ? orgByCode.LED ?? orgByCode.SPACEPORT : orgByCode[spec.role.toUpperCase()] ?? orgByCode.SPACEPORT, role: spec.role === "program" ? "supervisor" : spec.role === "admin" ? "admin" : "contributor", status: "active" }, { onConflict: "user_id,organization_id" }), `membership ${spec.email}`);
 }
 
 const submitter = authUsers.find((u) => u.role === "customer");

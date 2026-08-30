@@ -532,3 +532,27 @@ Exit criteria: pilot agencies approve workflow outcomes, security controls, acce
 ## 16. Definition of Done
 
 A feature is complete only when it has an approved user flow, backend validation, RLS coverage, audit events, loading/error/empty states, accessibility checks, automated tests proportional to its risk, and documentation for operations/configuration. For privileged features, completion also requires a negative authorization test proving that an unauthorized user cannot read or mutate the protected resource.
+
+## 17. PATH Customer Portal and End-to-End Delivery Requirements
+
+The following requirements extend the original product contract for the SpaceX Pecan Island delivery workspace. They apply to the shared project records and must be implemented with customer-safe projections rather than a second, disconnected domain.
+
+| ID | Requirement | Priority | Acceptance signal |
+|---|---|---:|---|
+| CP-01 | Customer project command center | P0 | SpaceX sees project header, health, schedule summary, actions, government workstreams, blockers, events, and contacts. |
+| CP-02 | Customer-accessible schedule/Gantt | P0 | Schedule is a first-class SpaceX navigation item and opens the existing schedule engine/Gantt with sanitized workstreams, milestones, dependencies, variance, and critical path. |
+| CP-03 | Customer permit and request center | P0 | SpaceX can start, save, submit, and track guided permit, help, question, blocker, escalation, and concierge requests. |
+| CP-04 | External statutory filing tracking | P0 | A structured external filing record separates PATH workflow state from authoritative agency status, stores references/links/receipts, and never claims unsupported synchronization. |
+| CP-05 | Customer escalation requests | P0 | SpaceX can request assistance/escalation, receives a confirmation, sees acknowledgement/resolution, and government staff can act on it. |
+| CP-06 | Profile/contact management | P0 | Users can edit their own allowed contact fields; admins can manage all profiles, roles, memberships, and activation state. |
+| CP-07 | Project participant directory | P0 | Every accountable organization/person is represented by a participant record with role, workstream scope, visibility, and contact details. |
+| CP-08 | Assignment visibility | P0 | Work items expose accountable organization, assigned person, why the item is visible, and whether the next action belongs to the user, agency, customer, or another party. |
+| CP-09 | Complete document lifecycle | P0 | Users can upload, download, create immutable versions, review exact versions, approve/request revision, and see associations and audit events. |
+| CP-10 | Customer permit form/resource library | P0 | Each catalog authorization exposes trigger, duration, prerequisites, verified resources, official instructions, forms, filing mode, and agency contact. |
+| CP-11 | Mutually exclusive personal work queues | P0 | My Work, My Agency Queue, Waiting on Others, Watching/FYI, and customer Action Required classifications are derived from structured ownership; no hardcoded demo exceptions or duplicate primary buckets. |
+| CP-12 | Workflow-driven completion requirements | P0 | Completion gates come from the configured workflow stage and advance the next configured owner; title heuristics cannot mark a stage complete. |
+| CP-13 | Deterministic end-to-end testing | P0 | A namespace-safe reset, manual lifecycle guide, and machine-readable Playwright handoff cover the complete test journey without touching real external filing portals. |
+| CP-14 | Realistic demo identities | P1 | State demos use plausible titles and `@la.gov` or appropriate government domains, SpaceX identities name Space Exploration Technologies Corp., and consultants state representation. |
+| CP-15 | Joe Skaggs PATH administrator | P1 | Joe Skaggs, `joe.skaggs@la.gov`, Louisiana Economic Development, display title Space Czar, appears in the admin/persona fixture with appropriate demo capabilities. |
+
+Customer-visible state must be derived from authoritative project/workstream, permit, document, RFI, coordination, filing, participant, and escalation records. Internal notes, restricted routing, numeric escalation tiers, and private audit details are excluded from customer projections.

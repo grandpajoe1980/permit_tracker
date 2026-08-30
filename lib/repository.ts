@@ -2,17 +2,21 @@ import type {
   AuditEventRecord,
   CommitmentRecord,
   CoordinationRequestRecord,
+  CustomerRequestRecord,
   DecisionRecord,
   DocumentAgencyReviewRecord,
   DocumentRecord,
   DocumentVersionRecord,
+  ExternalFilingRecord,
   MeetingRecord,
   NotificationRecord,
   PermitTypeRecord,
+  ProjectParticipantRecord,
   ProjectRecord,
   RFIRecord,
   RFIResponseRecord,
   WorkstreamRecord,
+  UserProfileRecord,
 } from "./domain-models";
 import {
   commitmentsData,
@@ -27,6 +31,7 @@ import {
   workflowTemplatesData,
   workstreamsData,
 } from "./spacex-megaproject-fixture";
+import { initialExternalFilings, projectParticipants, projectProfiles } from "./customer-portal";
 import { createAuditEvent } from "./engines/audit-engine";
 import { validateStageTransition } from "./engines/workflow-engine";
 import { getSupabaseClient } from "./supabase-client";
@@ -36,6 +41,7 @@ import { getSupabaseClient } from "./supabase-client";
  * with live bi-directional sync to Supabase PostgreSQL / Cloudflare D1.
  */
 class ProjectDeliveryRepository {
+  private readonly browserStorageKey = "path-e2e-demo-state-v1";
   private project: ProjectRecord = JSON.parse(JSON.stringify(spacexProjectRecord));
   private workstreams: WorkstreamRecord[] = JSON.parse(JSON.stringify(workstreamsData));
   private commitments: CommitmentRecord[] = JSON.parse(JSON.stringify(commitmentsData));
@@ -47,7 +53,77 @@ class ProjectDeliveryRepository {
   private catalog: PermitTypeRecord[] = JSON.parse(JSON.stringify(permitCatalog));
   private auditEvents: AuditEventRecord[] = JSON.parse(JSON.stringify(spacexProjectRecord.auditLedger || []));
   private notifications: NotificationRecord[] = [];
+  private profiles: UserProfileRecord[] = JSON.parse(JSON.stringify(projectProfiles));
+  private participants: ProjectParticipantRecord[] = JSON.parse(JSON.stringify(projectParticipants));
+  private externalFilings: ExternalFilingRecord[] = JSON.parse(JSON.stringify(initialExternalFilings));
+  private customerRequests: CustomerRequestRecord[] = [];
   private isDbConnected: boolean = true;
+
+  constructor() {
+    this.hydrateFromBrowserStorage();
+  }
+
+  private getBrowserStorage(): Storage | undefined {
+    if (typeof window === "undefined") return undefined;
+    try {
+      return window.localStorage;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private hydrateFromBrowserStorage(): void {
+    const storage = this.getBrowserStorage();
+    if (!storage) return;
+    try {
+      const raw = storage.getItem(this.browserStorageKey);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as Partial<Record<string, unknown>>;
+      if (saved.project) this.project = saved.project as ProjectRecord;
+      if (saved.workstreams) this.workstreams = saved.workstreams as WorkstreamRecord[];
+      if (saved.commitments) this.commitments = saved.commitments as CommitmentRecord[];
+      if (saved.coordinationRequests) this.coordinationRequests = saved.coordinationRequests as CoordinationRequestRecord[];
+      if (saved.rfis) this.rfis = saved.rfis as RFIRecord[];
+      if (saved.documents) this.documents = saved.documents as DocumentRecord[];
+      if (saved.decisions) this.decisions = saved.decisions as DecisionRecord[];
+      if (saved.meetings) this.meetings = saved.meetings as MeetingRecord[];
+      if (saved.catalog) this.catalog = saved.catalog as PermitTypeRecord[];
+      if (saved.auditEvents) this.auditEvents = saved.auditEvents as AuditEventRecord[];
+      if (saved.notifications) this.notifications = saved.notifications as NotificationRecord[];
+      if (saved.profiles) this.profiles = saved.profiles as UserProfileRecord[];
+      if (saved.participants) this.participants = saved.participants as ProjectParticipantRecord[];
+      if (saved.externalFilings) this.externalFilings = saved.externalFilings as ExternalFilingRecord[];
+      if (saved.customerRequests) this.customerRequests = saved.customerRequests as CustomerRequestRecord[];
+    } catch {
+      storage.removeItem(this.browserStorageKey);
+    }
+  }
+
+  private persistToBrowserStorage(): void {
+    const storage = this.getBrowserStorage();
+    if (!storage) return;
+    try {
+      storage.setItem(this.browserStorageKey, JSON.stringify({
+        project: this.project,
+        workstreams: this.workstreams,
+        commitments: this.commitments,
+        coordinationRequests: this.coordinationRequests,
+        rfis: this.rfis,
+        documents: this.documents,
+        decisions: this.decisions,
+        meetings: this.meetings,
+        catalog: this.catalog,
+        auditEvents: this.auditEvents,
+        notifications: this.notifications,
+        profiles: this.profiles,
+        participants: this.participants,
+        externalFilings: this.externalFilings,
+        customerRequests: this.customerRequests,
+      }));
+    } catch {
+      // Browser storage is a demo durability layer; authoritative records remain server-side.
+    }
+  }
 
 
   // ==========================================
@@ -64,6 +140,9 @@ class ProjectDeliveryRepository {
       documents: this.documents,
       coordinationRequests: this.coordinationRequests,
       auditLedger: this.auditEvents,
+      participants: this.participants,
+      externalFilings: this.externalFilings,
+      customerRequests: this.customerRequests,
     };
   }
 
@@ -111,6 +190,107 @@ class ProjectDeliveryRepository {
     return this.notifications;
   }
 
+  getProfiles(): UserProfileRecord[] {
+    return this.profiles;
+  }
+
+  getProfileByUserId(userId: string): UserProfileRecord | undefined {
+    return this.profiles.find((profile) => profile.userId === userId || profile.id === userId);
+  }
+
+  getParticipants(): ProjectParticipantRecord[] {
+    return this.participants;
+  }
+
+  getExternalFilings(): ExternalFilingRecord[] {
+    return this.externalFilings;
+  }
+
+  getCustomerRequests(): CustomerRequestRecord[] {
+    return this.customerRequests;
+  }
+
+  updateProfile(params: {
+    userId: string;
+    updates: Partial<Pick<UserProfileRecord, "fullName" | "displayTitle" | "organizationalUnit" | "workEmail" | "officePhone" | "mobilePhone" | "officeLocation" | "preferredContactMethod" | "availabilityStatus" | "projectRole" | "avatarUrl">>;
+    actorUserId: string;
+    isAdmin?: boolean;
+  }): UserProfileRecord | null {
+    if (params.actorUserId !== params.userId && !params.isAdmin) return null;
+    const profile = this.getProfileByUserId(params.userId);
+    if (!profile) return null;
+    Object.assign(profile, params.updates);
+    this.auditEvents.unshift(createAuditEvent({
+      entityType: "profile",
+      entityId: profile.userId,
+      actorName: profile.fullName,
+      actorOrgName: profile.organizationName,
+      actionType: "profile_updated",
+      newValue: Object.keys(params.updates).join(", "),
+      reason: params.actorUserId === params.userId ? "Self-service profile update" : "Administrator profile update",
+    }));
+    this.persistToBrowserStorage();
+    return profile;
+  }
+
+  createCustomerRequest(params: Omit<CustomerRequestRecord, "id" | "confirmationNumber" | "status" | "createdAt" | "updatedAt"> & { status?: CustomerRequestRecord["status"] }): CustomerRequestRecord {
+    const sequence = this.customerRequests.length + 1;
+    const now = new Date().toISOString();
+    const request: CustomerRequestRecord = {
+      ...params,
+      id: `customer-request-${Date.now()}-${sequence}`,
+      confirmationNumber: `PATH-${new Date().getUTCFullYear()}-${String(sequence).padStart(4, "0")}`,
+      status: params.status ?? "submitted",
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.customerRequests.unshift(request);
+    this.auditEvents.unshift(createAuditEvent({ entityType: "customer_request", entityId: request.confirmationNumber, actorName: request.submittedByName, actorOrgName: "Space Exploration Technologies Corp. (SpaceX)", actionType: "customer_request_submitted", newValue: `${request.requestType} · ${request.title}`, reason: request.description }));
+    if (request.status !== "draft") {
+      this.dispatchNotification({ userId: "user-sarah-johnson", title: `New customer request ${request.confirmationNumber}`, message: request.title, type: "action_required", linkUrl: `/requests/${request.confirmationNumber}`, urgency: request.blocksActiveWork ? "critical" : "high", metadata: { confirmationNumber: request.confirmationNumber, requestType: request.requestType } });
+    } else {
+      this.persistToBrowserStorage();
+    }
+    return request;
+  }
+
+  createExternalFiling(params: Omit<ExternalFilingRecord, "id" | "createdAt" | "updatedAt">): ExternalFilingRecord {
+    const now = new Date().toISOString();
+    const filing: ExternalFilingRecord = { ...params, id: `external-filing-${Date.now()}`, createdAt: now, updatedAt: now };
+    this.externalFilings.unshift(filing);
+    this.auditEvents.unshift(createAuditEvent({ entityType: "external_filing", entityId: filing.id, actorName: filing.submittedByName ?? "PATH user", actorOrgName: filing.authorityOrganizationName, actionType: "external_filing_recorded", newValue: filing.externalReferenceNumber ?? "Reference pending", reason: filing.notes ?? "Manual tracking record created." }));
+    this.persistToBrowserStorage();
+    return filing;
+  }
+
+  updateExternalFiling(id: string, updates: Partial<Pick<ExternalFilingRecord, "externalReferenceNumber" | "externalRecordUrl" | "externalStatus" | "submittedAt" | "submittedByUserId" | "submittedByName" | "lastStatusVerifiedAt" | "lastStatusVerifiedBy" | "notes" | "receiptDocumentVersionIds">>, actorName: string, actorOrgName: string): ExternalFilingRecord | null {
+    const filing = this.externalFilings.find((entry) => entry.id === id);
+    if (!filing) return null;
+    Object.assign(filing, updates, { updatedAt: new Date().toISOString() });
+    this.auditEvents.unshift(createAuditEvent({ entityType: "external_filing", entityId: filing.id, actorName, actorOrgName, actionType: "external_filing_updated", newValue: filing.externalStatus, reason: filing.notes ?? "External filing status updated." }));
+    this.persistToBrowserStorage();
+    return filing;
+  }
+
+  resetE2EDemo(): void {
+    this.project = JSON.parse(JSON.stringify(spacexProjectRecord));
+    this.workstreams = JSON.parse(JSON.stringify(workstreamsData));
+    this.commitments = JSON.parse(JSON.stringify(commitmentsData));
+    this.coordinationRequests = JSON.parse(JSON.stringify(coordinationRequestsData));
+    this.rfis = JSON.parse(JSON.stringify(rfisData));
+    this.documents = JSON.parse(JSON.stringify(projectDocumentsData));
+    this.decisions = JSON.parse(JSON.stringify(projectDecisionsData));
+    this.meetings = JSON.parse(JSON.stringify(projectMeetingsData));
+    this.catalog = JSON.parse(JSON.stringify(permitCatalog));
+    this.auditEvents = JSON.parse(JSON.stringify(spacexProjectRecord.auditLedger || []));
+    this.notifications = [];
+    this.profiles = JSON.parse(JSON.stringify(projectProfiles));
+    this.participants = JSON.parse(JSON.stringify(projectParticipants));
+    this.externalFilings = JSON.parse(JSON.stringify(initialExternalFilings));
+    this.customerRequests = [];
+    this.getBrowserStorage()?.removeItem(this.browserStorageKey);
+  }
+
   // ==========================================
   // MUTATION METHODS (WITH AUDIT LOGGING)
   // ==========================================
@@ -131,7 +311,7 @@ class ProjectDeliveryRepository {
     needDescription: string;
     dueDate: string;
     attachedDocumentVersionIds?: string[];
-    priority?: "normal" | "urgent" | "critical_path";
+    priority?: "normal" | "high" | "urgent" | "critical_path";
   }): CoordinationRequestRecord {
     const count = this.coordinationRequests.length + 1;
     const code = `CR-00${450 + count}`;
@@ -154,7 +334,7 @@ class ProjectDeliveryRepository {
       dueDate: params.dueDate,
       attachedDocumentVersionIds: params.attachedDocumentVersionIds || [],
       blocksWorkstreamTitle: params.workstreamTitle,
-      priority: params.priority || "normal",
+      priority: params.priority === "urgent" ? "high" : params.priority || "normal",
       status: "pending",
     };
 
@@ -593,6 +773,9 @@ class ProjectDeliveryRepository {
       versionNumber: number;
       versionLabel: string;
       storagePath: string;
+      fileName?: string;
+      mimeType?: string;
+      fileSizeBytes?: number;
       sha256Hash: string;
       uploadedByName: string;
       uploadedByOrgName: string;
@@ -609,24 +792,32 @@ class ProjectDeliveryRepository {
       documentId: doc.id,
       versionNumber: params.versionNumber,
       versionLabel: params.versionLabel,
+      versionTag: params.versionLabel,
       storagePath: params.storagePath,
+      fileName: params.fileName ?? params.storagePath.split("/").pop() ?? `${doc.id}-v${params.versionNumber}`,
+      mimeType: params.mimeType ?? "application/octet-stream",
+      storageUri: params.storagePath,
       sha256Hash: params.sha256Hash,
-      fileSizeBytes: 14500000,
+      fileSizeBytes: params.fileSizeBytes ?? 0,
       uploadedAt: new Date().toISOString(),
       uploadedByName: params.uploadedByName,
       uploadedByOrgName: params.uploadedByOrgName,
       changeNotes: params.changeNotes,
+      isMalwareClean: true,
       status: "under_review",
       agencyReviews: params.reviewingAgencyCodes.map((agencyCode) => ({
         id: `rev-${versionId}-${agencyCode.toLowerCase()}`,
         documentVersionId: versionId,
+        workstreamId: "",
         reviewingOrgId: `org-${agencyCode.toLowerCase()}`,
         reviewingOrgCode: agencyCode,
+        reviewStatus: "under_review",
         status: "under_review",
       })),
     };
 
     doc.versions.unshift(newVersion);
+    doc.currentVersionNumber = params.versionNumber;
     doc.currentVersionId = versionId;
 
     const audit = createAuditEvent({
@@ -639,6 +830,7 @@ class ProjectDeliveryRepository {
       reason: params.changeNotes,
     });
     this.auditEvents.unshift(audit);
+    this.persistToBrowserStorage();
 
     return newVersion;
 
@@ -699,6 +891,7 @@ class ProjectDeliveryRepository {
             reason: comments,
           });
           this.auditEvents.unshift(audit);
+          this.persistToBrowserStorage();
 
           return review;
         }
@@ -825,6 +1018,7 @@ class ProjectDeliveryRepository {
       isRead: false,
     };
     this.notifications.unshift(full);
+    this.persistToBrowserStorage();
     return full;
   }
 }

@@ -3,6 +3,7 @@ import type {
   CoordinationRequestRecord,
   DocumentRecord,
   RFIRecord,
+  WorkflowTemplateRecord,
   WorkstreamRecord,
 } from "./domain-models";
 import {
@@ -20,7 +21,9 @@ import {
   projectDocumentsData,
   rfisData,
   workstreamsData,
+  workflowTemplatesData,
 } from "./spacex-megaproject-fixture";
+import { participantForWorkstream, projectProfiles } from "./customer-portal";
 
 export type WorkspaceMode = "reviewer" | "agency" | "supervisor" | "state_office" | "customer" | "admin";
 
@@ -91,6 +94,11 @@ export type OperationalWorkItem = {
   exactDocumentVersionLabel?: string;
   hasRfiResponse?: boolean;
   customerVisibleSummary?: string;
+  assignedUserId?: string;
+  assignedOrganizationId?: string;
+  requiresCurrentUserAction?: boolean;
+  requiresOrganizationAction?: boolean;
+  visibilityOnly?: boolean;
 };
 
 export type QueueGroup = {
@@ -173,6 +181,7 @@ function roleForPersona(persona: DemoPersona | null): WorkspaceMode {
   if (!persona) return "agency";
   const role = persona?.role.toLowerCase() ?? "";
   if (includesAny(role, ["applicant", "customer", "submitter"])) return "customer";
+  if (includesAny(role, ["path administrator", "program administrator"])) return "admin";
   if (includesAny(role, ["supervisor", "administrator"])) return "supervisor";
   if (includesAny(role, ["state project", "executive"])) return "state_office";
   if (includesAny(role, ["reviewer", "environmental"])) return "reviewer";
@@ -195,14 +204,14 @@ export function getOperationalPersona(persona: DemoPersona | null): OperationalP
   const agencyCode = includesAny(normalizedRole, ["environmental", "reviewer"])
     ? "LDEQ"
     : includesAny(normalizedRole, ["infrastructure"])
-      ? "DOTD / ENTERGY"
+      ? "DOTD"
       : includesAny(normalizedRole, ["community"])
         ? "VERMILION PARISH"
         : workspace === "customer"
           ? "SPACEX"
           : "LA-PROJECTS";
 
-  const teamMember = ["maya.chen@spacex.test", "alex.martin@spacex.test", "jordan.lee@spacex.test", "sam.rivera@spacex.test", "riley.brooks@spacex.test"].includes(email.toLowerCase());
+  const teamMember = Boolean(persona?.organization);
   const roleId: RoleId = workspace === "customer" ? "submitter" : workspace === "reviewer" ? "reviewer" : workspace === "agency" ? "infrastructure" : "admin";
   return {
     id: persona?.id ?? "demo-user",
@@ -210,7 +219,7 @@ export function getOperationalPersona(persona: DemoPersona | null): OperationalP
     email,
     roleId,
     roleLabel: roleLabels[workspace],
-    organization: workspace === "customer" ? "Space Exploration Technologies Corp." : workspace === "state_office" ? "Louisiana State Project Office" : teamMember ? "Louisiana Project Delivery Team" : "PATH Demo Workspace",
+    organization: persona?.organization ?? (workspace === "customer" ? "Space Exploration Technologies Corp. (SpaceX)" : workspace === "state_office" ? "Louisiana Governor's Office of Major Projects & Delivery" : teamMember ? "Louisiana Project Delivery Team" : "PATH Demo Workspace"),
     agencyCode,
     workspace,
     permissions: permissionsForWorkspace(workspace),
@@ -225,7 +234,11 @@ function requestToWorkItem(request: ServiceRequest, persona: OperationalPersona,
   const isComplete = status === "complete" || request.status === "approved";
   const isBlocked = status === "blocked" || Boolean(request.blocker);
   const currentAction = workstream?.currentActionSummary ?? request.blocker?.unblockingAction ?? request.nextSteps[0]?.body ?? "Review the assigned materials and record your determination.";
-  const sameOwner = includesAny(request.owner.name, [persona.name, persona.name.split(" ")[0]]) || sameAgency(request.leadAgencyCode, persona.agencyCode);
+  const participant = workstream ? participantForWorkstream(workstream.id) : undefined;
+  const assignedUserId = workstream?.assignedReviewerUserId ?? participant?.userId;
+  const currentUserId = persona.id.startsWith("user-") ? persona.id : `user-${persona.id}`;
+  const personallyAssigned = Boolean(assignedUserId && assignedUserId === currentUserId);
+  const sameOwner = personallyAssigned || includesAny(request.owner.name, [persona.name, persona.name.split(" ")[0]]);
   const whyHere = persona.isCustomer
     ? "Visible because it is part of the SpaceX project status shared with your team."
     : persona.workspace === "supervisor" || persona.workspace === "state_office"
@@ -272,6 +285,11 @@ function requestToWorkItem(request: ServiceRequest, persona: OperationalPersona,
     sourceRequest: request,
     sourceWorkstream: workstream,
     customerVisibleSummary: customerSummary,
+    assignedUserId,
+    assignedOrganizationId: participant?.organizationId,
+    requiresCurrentUserAction: persona.isCustomer ? Boolean(workstream?.customerActionRequired && workstream.customerActionRequired.toLowerCase() !== "none") : personallyAssigned,
+    requiresOrganizationAction: sameAgency(request.leadAgencyCode, persona.agencyCode),
+    visibilityOnly: persona.isCustomer ? !Boolean(workstream?.customerActionRequired && workstream.customerActionRequired.toLowerCase() !== "none") : !personallyAssigned,
   };
 }
 
@@ -307,6 +325,10 @@ function coordinationToWorkItem(request: CoordinationRequestRecord, persona: Ope
     documents: request.attachedDocumentVersionIds.map((id) => ({ id, label: "Attached supporting version" })),
     sourceCoordination: request,
     customerVisibleSummary: "Government agencies are coordinating this dependency. No SpaceX action is currently required.",
+    assignedUserId: request.assignedToUserName ? participantForWorkstream(request.workstreamId)?.userId : undefined,
+    requiresCurrentUserAction: incoming && Boolean(request.assignedToUserName && request.assignedToUserName.includes(persona.name)),
+    requiresOrganizationAction: incoming,
+    visibilityOnly: !incoming,
   };
 }
 
@@ -341,6 +363,9 @@ function rfiToWorkItem(rfi: RFIRecord, persona: OperationalPersona): Operational
     sourceRfi: rfi,
     hasRfiResponse: Boolean(response),
     customerVisibleSummary: forCustomer ? `Action required from SpaceX: ${rfi.questionText}` : "A response is available for reviewer acceptance.",
+    requiresCurrentUserAction: forCustomer || Boolean(response && persona.workspace !== "customer"),
+    requiresOrganizationAction: forCustomer || sameAgency(rfi.requestingOrgCode, persona.agencyCode),
+    visibilityOnly: !forCustomer && !response,
   };
 }
 
@@ -376,6 +401,9 @@ function documentToWorkItem(document: DocumentRecord, persona: OperationalPerson
     exactDocumentVersionId: currentVersion.id,
     exactDocumentVersionLabel: currentVersion.versionTag,
     customerVisibleSummary: `${document.title} ${currentVersion.versionTag} is under authorized agency review.`,
+    requiresCurrentUserAction: persona.workspace !== "customer" && pendingReviews.some((review) => sameAgency(review.reviewingOrgCode, persona.agencyCode)),
+    requiresOrganizationAction: persona.workspace !== "customer" && pendingReviews.some((review) => sameAgency(review.reviewingOrgCode, persona.agencyCode)),
+    visibilityOnly: false,
   }));
 }
 
@@ -427,9 +455,9 @@ export function getOperationalWorkItems(options: {
       const item = requestToWorkItem(request, persona, workstream);
       const relevant = persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin"
         || persona.workspace === "agency"
-        || sameAgency(request.leadAgencyCode, persona.agencyCode)
+        || item.assignedUserId === `user-${persona.id}`
         || includesAny(request.owner.name, [persona.name, persona.name.split(" ")[0]]);
-      if (relevant || persona.workspace === "reviewer" && request.id === "TASK-T003") items.push(item);
+      if (relevant) items.push(item);
     }
   } else {
     for (const request of requests) items.push(requestToWorkItem(request, persona, workstreamById.get(requestWorkstreamMap[request.id])));
@@ -441,7 +469,8 @@ export function getOperationalWorkItems(options: {
     }
   }
   for (const rfi of options.rfis ?? rfisData) {
-    if (persona.workspace === "customer" || persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin" || sameAgency(rfi.requestingOrgCode, persona.agencyCode) || Boolean(rfi.responses?.some((response) => !response.reviewDecision))) {
+    const responseReadyForAssignedReviewer = rfi.responses?.some((response) => !response.reviewDecision) && persona.id === (participantForWorkstream(rfi.workstreamId)?.userId ?? "");
+    if (persona.workspace === "customer" || persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin" || sameAgency(rfi.requestingOrgCode, persona.agencyCode) || Boolean(responseReadyForAssignedReviewer)) {
       items.push(rfiToWorkItem(rfi, persona));
     }
   }
@@ -462,15 +491,23 @@ export function getOperationalWorkItems(options: {
 
 export function groupMyWork(items: OperationalWorkItem[]): QueueGroup[] {
   const actionItems = items.filter((item) => item.kind !== "workflow" || !item.statusLabel.toLowerCase().includes("complete"));
-  const sections: Array<[QueueSectionId, string, string, (item: OperationalWorkItem) => boolean]> = [
-    ["needs_action", "Needs my action", "The work that can move forward when you act.", (item) => item.statusTone === "red" || item.priorityScore >= 70 && !item.waitLabel?.toLowerCase().includes("waiting")],
-    ["due_today", "Due today", "Commitments and decisions due before the end of today.", (item) => dateRelation(item.dueDate) === "today"],
-    ["overdue", "Overdue", "Past the expected date and needing a recovery decision.", (item) => dateRelation(item.dueDate) === "overdue" && item.statusTone !== "green"],
-    ["waiting", "Waiting on others", "The next move belongs to another person or agency.", (item) => Boolean(item.waitingOn) || Boolean(item.waitLabel)],
-    ["upcoming", "Upcoming", "Next actions with time remaining.", (item) => dateRelation(item.dueDate) === "future" && item.priorityScore < 70],
-    ["recently_completed", "Recently completed", "Work that recently left your active queue.", (item) => item.statusTone === "green"],
+  const sections: Array<[QueueSectionId, string, string]> = [
+    ["needs_action", "Needs my action", "The work that can move forward when you act."],
+    ["due_today", "Due today", "Commitments and decisions due before the end of today."],
+    ["overdue", "Overdue", "Past the expected date and needing a recovery decision."],
+    ["waiting", "Waiting on others", "The next move belongs to another person or agency."],
+    ["upcoming", "Upcoming", "Next actions with time remaining."],
+    ["recently_completed", "Recently completed", "Work that recently left your active queue."],
   ];
-  return sections.map(([id, label, description, predicate]) => ({ id, label, description, items: actionItems.filter(predicate).slice(0, 6) }));
+  const assigned = new Map<QueueSectionId, OperationalWorkItem[]>();
+  for (const [id] of sections) assigned.set(id, []);
+  for (const item of actionItems) {
+    const isActionable = item.requiresCurrentUserAction ?? (item.statusTone === "red" || item.priorityScore >= 70 && !item.waitLabel?.toLowerCase().includes("waiting"));
+    const isWaiting = !isActionable && (Boolean(item.waitingOn) || Boolean(item.waitLabel));
+    const bucket: QueueSectionId = dateRelation(item.dueDate) === "overdue" && item.statusTone !== "green" ? "overdue" : dateRelation(item.dueDate) === "today" ? "due_today" : isActionable ? "needs_action" : isWaiting ? "waiting" : item.statusTone === "green" ? "recently_completed" : "upcoming";
+    assigned.get(bucket)?.push(item);
+  }
+  return sections.map(([id, label, description]) => ({ id, label, description, items: (assigned.get(id) ?? []).slice(0, 6) }));
 }
 
 export function getAvailableActions(item: OperationalWorkItem, persona: OperationalPersona): WorkActionId[] {
@@ -494,10 +531,9 @@ export function getAvailableActions(item: OperationalWorkItem, persona: Operatio
 }
 
 export function getCompletionRequirements(item: OperationalWorkItem) {
-  const isEnvironmental = includesAny(item.workstreamTitle, ["wastewater", "wetland", "environmental"]);
-  const requirements = isEnvironmental
-    ? ["Technical package reviewed", "Required documents present", "Related agency comments resolved", "Reviewer determination recorded"]
-    : ["Assigned work reviewed", "Required documents present", "Open dependencies acknowledged", "Reviewer determination recorded"];
+  const template = workflowTemplatesData.find((candidate) => candidate.permitTypeId === item.sourceWorkstream?.permitTypeId) as WorkflowTemplateRecord | undefined;
+  const stage = template?.versions.find((version) => version.versionNumber === template.activeVersionNumber)?.stages.find((candidate) => candidate.id === item.sourceWorkstream?.currentStageId || item.sourceWorkstream?.currentStageName?.toLowerCase().includes(candidate.name.toLowerCase().split(" ")[0]));
+  const requirements = stage?.completionRequirements?.length ? stage.completionRequirements : ["Assigned work reviewed", "Required documents present", "Open dependencies acknowledged", "Reviewer determination recorded"];
   return requirements.map((label, index) => ({ id: `${item.id}-requirement-${index}`, label, complete: index < 3 || item.statusTone === "green" }));
 }
 
@@ -516,42 +552,34 @@ export function getCompletionPreview(item: OperationalWorkItem) {
 }
 
 export function getRecipientPreview(item: OperationalWorkItem, action: WorkActionId, persona: OperationalPersona): RecipientPreview {
-  void persona;
-  if (action === "mark_blocked" && item.sourceRequest?.id === "TASK-T001") {
+  const concierge = projectProfiles.find((profile) => profile.projectRole.toLowerCase().includes("concierge"));
+  const targetAgency = item.sourceCoordination?.targetOrgCode ?? item.sourceWorkstream?.waitingOnEntity ?? "responsible agency";
+  if (action === "mark_blocked") {
     return {
       recipients: [
-        { label: "Target agency", name: "Jean-Paul Guidry", organization: "CPRA Coastal Permits" },
-        { label: "Project concierge", name: "Sarah Johnson", organization: "Louisiana State Project Office" },
+        { label: "Target agency", name: `${targetAgency} project liaison`, organization: `${targetAgency} coordination team` },
+        { label: "Project concierge", name: concierge?.fullName ?? "State Project Office", organization: concierge ? `${concierge.organizationName} · Concierge` : "Louisiana State Project Office · Concierge" },
       ],
-      customerMessage: "LDEQ/DOTD is awaiting CPRA concurrence. No SpaceX action is currently required.",
+      customerMessage: `${item.ownerOrganization} is waiting on ${targetAgency}. No SpaceX action is currently required unless a request appears in your action queue.`,
     };
   }
   if (action === "request_information") {
     return {
       recipients: [
         { label: "Action owner", name: "SpaceX Regulatory Engineering", organization: "SpaceX" },
-        { label: "Project concierge", name: "Sarah Johnson", organization: "Louisiana State Project Office" },
+        { label: "Project concierge", name: concierge?.fullName ?? "State Project Office", organization: concierge?.organizationName ?? "Louisiana State Project Office" },
       ],
       customerMessage: "A document request will appear in the SpaceX action queue.",
-    };
-  }
-  if (action === "mark_blocked") {
-    return {
-      recipients: [
-        { label: "Target agency", name: "Ecological Assessment Team", organization: "CPRA Coastal Permits" },
-        { label: "Project concierge", name: "Sarah Johnson", organization: "Louisiana State Project Office" },
-      ],
-      customerMessage: "The responsible agencies will be notified. No SpaceX action is currently required unless a request is sent to your team.",
     };
   }
   if (action === "escalate") {
     const tier = item.sourceRequest?.escalationPath.find((entry) => entry.status !== "idle") ?? item.sourceRequest?.escalationPath[0];
     return {
-      recipients: [{ label: "Next escalation", name: tier?.contactName ?? "Dr. Rachel Benoit", organization: tier?.agency ?? "LDEQ Water Permits Supervisor" }],
+      recipients: [{ label: "Next escalation", name: tier?.contactName ?? concierge?.fullName ?? "State Project Office", organization: tier?.agency ?? concierge?.organizationName ?? "Louisiana Project Office" }],
     };
   }
   if (action === "transfer") {
-    return { recipients: [{ label: "Supervisor", name: "Maya Chen", organization: "SpaceX Louisiana Program" }] };
+    return { recipients: [{ label: "Supervisor", name: concierge?.fullName ?? "State Project Office", organization: concierge?.organizationName ?? "Louisiana Project Office" }] };
   }
   return { recipients: [{ label: "Action owner", name: item.ownerName, organization: item.ownerOrganization }] };
 }
@@ -570,7 +598,8 @@ export function sanitizeCustomerItem(item: OperationalWorkItem): Pick<Operationa
 }
 
 export function getPersonaFromEmail(email: string) {
-  return demoPersonas.find((persona) => persona.email.toLowerCase() === email.toLowerCase()) ?? null;
+  const normalized = email.trim().toLowerCase();
+  return demoPersonas.find((persona) => persona.email.toLowerCase() === normalized || persona.legacyEmails?.some((alias) => alias.toLowerCase() === normalized)) ?? null;
 }
 
 export { requestWorkstreamMap, AS_OF_DATE };

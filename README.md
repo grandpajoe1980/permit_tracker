@@ -53,20 +53,31 @@ Every project request notes the Reviewing Agency and its Jurisdiction Level:
 - **Expandable Inline Summaries**: Quick expansion of milestone steps, active blockers, assigned state owners, quick workflow actions, and next steps right within the list.
 - **Dedicated Detail Drilldown**: Complete 5-phase timeline, 3-tier escalation hierarchy (`engaged`, `escalated`, `idle`), contact channels, workflow editor toolbar, and statutory docket notices.
 
+## Customer Portal and E2E Boundary
+
+The SpaceX customer workspace opens with a project command center for the Pecan Island Launch Complex. Its primary navigation includes Project Home, My Actions, Requests & Permits, Schedule, Documents, Contacts, Help & Escalation, and Notifications. Customer-safe Schedule exposes baseline/forecast dates, dependencies, agency-owned milestones, and workstream detail without internal reviewer notes or what-if controls.
+
+Requests & Permits provides six guided intents: permit/authorization, government help/service, project question, blocker/coordination, escalation, and concierge (“I’m not sure what I need”). Permit records show prerequisites, statutory timing, official resources, agency contacts, and whether filing is PATH-supported or remains in an external authoritative system. Customer requests receive a `PATH-YYYY-NNNN` confirmation and are visible to the state project office.
+
+The customer document center creates immutable revisions with file metadata and SHA-256 tracking, exact-version downloads, and agency review assignments. Contacts and My Profile separate editable contact fields from administrator-controlled organization, role, capability, and visibility. The deterministic local demo state persists through browser refresh using `localStorage`; run `node scripts/reset-e2e-demo.mjs` before a clean E2E process.
+
+See [docs/testing/manual-e2e-guide.md](docs/testing/manual-e2e-guide.md), [docs/testing/playwright-handoff.md](docs/testing/playwright-handoff.md), and [docs/testing/playwright-scenarios.json](docs/testing/playwright-scenarios.json) for acceptance flows and stable scenario IDs.
+
 ---
 
 ## Demo Personas & Sign-In
 
-Critical Path provides direct sign-in on the main page along with an account menu in the top right and a **Quick Demo Sign-In** selector with 8 pre-configured personas:
+Critical Path provides direct sign-in on the main page along with an account menu in the top right and a **Quick Demo Sign-In** selector with 9 pre-configured personas:
 
 ### SpaceX Louisiana Program Team
 | Persona | Role | Scenario | Email |
 |---|---|---|---|
-| **Alex Martin** | Customer / Submitter | SpaceX Louisiana project lead submitting requests | `alex.martin@spacex.test` |
-| **Maya Chen** | Program Supervisor | Spaceport program supervisor managing approvals & roles | `maya.chen@spacex.test` |
-| **Jordan Lee** | Environmental Reviewer | LDEQ / environmental quality technical reviewer | `jordan.lee@spacex.test` |
-| **Sam Rivera** | Infrastructure Lead | DOTD / civil engineering and utility coordinator | `sam.rivera@spacex.test` |
-| **Riley Brooks** | Community Coordinator | Public hearings & local government liaison | `riley.brooks@spacex.test` |
+| **Alex Martin** | Customer / Submitter | SpaceX Louisiana project lead submitting requests | `alex.martin@spacex.com` |
+| **Maya Chen** | Program Supervisor | SpaceX regulatory program supervisor | `maya.chen@spacex.com` |
+| **Jordan Lee** | Environmental Reviewer | LDEQ / environmental quality technical reviewer | `jordan.lee@la.gov` |
+| **Sam Rivera** | Infrastructure Lead | DOTD / civil engineering and utility coordinator | `sam.rivera@la.gov` |
+| **Riley Brooks** | Community Coordinator | Vermilion Parish / local government liaison | `riley.brooks@vermilionparish.org` |
+| **Joe Skaggs** | PATH Administrator | LED administrator / Space Czar | `joe.skaggs@la.gov` |
 
 ### Applicant Scenarios (Password: `demo1234`)
 | Persona | Role | Scenario | Email / Username |

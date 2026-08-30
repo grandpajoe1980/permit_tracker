@@ -600,3 +600,91 @@ export const notifications = sqliteTable("notifications", {
   createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
 
+// ==========================================
+// 10. CUSTOMER PORTAL, PARTICIPANTS & EXTERNAL FILINGS
+// ==========================================
+
+export const userProfiles = sqliteTable("user_profiles", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id),
+  fullName: text("full_name").notNull(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationName: text("organization_name").notNull(),
+  displayTitle: text("display_title").notNull(),
+  organizationalUnit: text("organizational_unit"),
+  workEmail: text("work_email").notNull(),
+  officePhone: text("office_phone"),
+  mobilePhone: text("mobile_phone"),
+  officeLocation: text("office_location"),
+  preferredContactMethod: text("preferred_contact_method", { enum: ["email", "phone", "text", "teams"] }).default("email").notNull(),
+  availabilityStatus: text("availability_status", { enum: ["available", "limited", "out_of_office"] }).default("available").notNull(),
+  projectRole: text("project_role").notNull(),
+  avatarUrl: text("avatar_url"),
+  isCustomerVisible: integer("is_customer_visible", { mode: "boolean" }).default(true).notNull(),
+  isActive: integer("is_active", { mode: "boolean" }).default(true).notNull(),
+  updatedAt: text("updated_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const projectParticipants = sqliteTable("project_participants", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id").notNull().references(() => projects.id),
+  userId: text("user_id").notNull().references(() => users.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationName: text("organization_name").notNull(),
+  projectRole: text("project_role").notNull(),
+  workstreamIds: text("workstream_ids").notNull(),
+  assignedTaskIds: text("assigned_task_ids"),
+  reviewResponsibility: text("review_responsibility"),
+  notificationResponsibility: text("notification_responsibility"),
+  visibilityScope: text("visibility_scope", { enum: ["customer", "project", "agency", "admin"] }).default("project").notNull(),
+  startsOn: text("starts_on"),
+  endsOn: text("ends_on"),
+  isActive: integer("is_active", { mode: "boolean" }).default(true).notNull(),
+});
+
+export const externalFilings = sqliteTable("external_filings", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id").notNull().references(() => projects.id),
+  workstreamId: text("workstream_id").notNull().references(() => workstreams.id),
+  permitTypeId: text("permit_type_id").references(() => permitTypes.id),
+  authorityOrganizationId: text("authority_organization_id").notNull().references(() => organizations.id),
+  authorityOrganizationName: text("authority_organization_name").notNull(),
+  filingMethod: text("filing_method", { enum: ["PATH_SUPPORTED", "EXTERNAL_PORTAL", "EMAIL_PAPER_OTHER", "TRACK_ONLY"] }).notNull(),
+  officialPortalUrl: text("official_portal_url"),
+  externalReferenceNumber: text("external_reference_number"),
+  externalRecordUrl: text("external_record_url"),
+  externalStatus: text("external_status").default("not_started").notNull(),
+  submittedAt: text("submitted_at"),
+  submittedByUserId: text("submitted_by_user_id").references(() => users.id),
+  lastStatusVerifiedAt: text("last_status_verified_at"),
+  lastStatusVerifiedBy: text("last_status_verified_by"),
+  authoritativeSystemName: text("authoritative_system_name"),
+  notes: text("notes"),
+  receiptDocumentVersionIds: text("receipt_document_version_ids"),
+  createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+  updatedAt: text("updated_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const customerRequests = sqliteTable("customer_requests", {
+  id: text("id").primaryKey(),
+  confirmationNumber: text("confirmation_number").notNull().unique(),
+  projectId: text("project_id").notNull().references(() => projects.id),
+  requestType: text("request_type", { enum: ["permit_authorization", "government_help", "project_question", "blocker_coordination", "escalation", "concierge"] }).notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  requestedOutcome: text("requested_outcome"),
+  locationOrAffectedArea: text("location_or_affected_area"),
+  desiredDate: text("desired_date"),
+  scheduleImportance: text("schedule_importance", { enum: ["low", "normal", "critical"] }).default("normal").notNull(),
+  knownAgencyCode: text("known_agency_code"),
+  knownPermitTypeId: text("known_permit_type_id").references(() => permitTypes.id),
+  submittedByUserId: text("submitted_by_user_id").references(() => users.id),
+  submittedByName: text("submitted_by_name").notNull(),
+  relatedWorkstreamId: text("related_workstream_id").references(() => workstreams.id),
+  blocksActiveWork: integer("blocks_active_work", { mode: "boolean" }).default(false).notNull(),
+  status: text("status", { enum: ["draft", "submitted", "triage", "in_progress", "resolved", "closed"] }).default("submitted").notNull(),
+  attachmentDocumentVersionIds: text("attachment_document_version_ids"),
+  createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+  updatedAt: text("updated_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+

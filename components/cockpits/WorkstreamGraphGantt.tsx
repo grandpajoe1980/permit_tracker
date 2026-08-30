@@ -26,7 +26,7 @@ import { evaluateProjectSchedule } from "@/lib/engines/schedule-engine";
 
 import { InteractiveScheduleSimulator } from "./InteractiveScheduleSimulator";
 
-export function WorkstreamGraphGantt() {
+export function WorkstreamGraphGantt({ customerSafe = false, onSelectWorkstream }: { customerSafe?: boolean; onSelectWorkstream?: (workstreamId: string) => void }) {
   const project = getFullProjectRecord();
   const schedule = evaluateProjectSchedule(project.workstreams);
   const [activeTab, setActiveTab] = useState<"graph" | "simulator" | "delays" | "acceleration">("graph");
@@ -40,15 +40,15 @@ export function WorkstreamGraphGantt() {
           <div>
             <div className="flex items-center gap-2">
               <Badge className="bg-purple-100 text-purple-800 border-purple-200">
-                Critical Path Execution Graph & Intelligence
+                {customerSafe ? "Customer-safe project schedule" : "Critical Path Execution Graph & Intelligence"}
               </Badge>
               <span className="text-xs font-mono text-slate-500">{project.code}</span>
             </div>
             <h1 className="mt-2 text-2xl font-black text-slate-900">
-              Project Delivery Schedule & Variance Engine
+              {customerSafe ? "SpaceX project schedule" : "Project Delivery Schedule & Variance Engine"}
             </h1>
             <p className="mt-1 text-sm text-slate-600">
-              Deterministic critical-path dependency graph, immutable baseline tracking, and delay attribution.
+              {customerSafe ? "Baseline and forecast dates, dependencies, critical path indicators, and government-owned milestones. Internal notes and authorization controls are not shown." : "Deterministic critical-path dependency graph, immutable baseline tracking, and delay attribution."}
             </p>
           </div>
 
@@ -70,14 +70,14 @@ export function WorkstreamGraphGantt() {
 
         {/* View Switcher Tabs */}
         <div className="mt-6 flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
-          <Button
+          {!customerSafe && <Button
             variant={activeTab === "simulator" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab("simulator")}
             className="text-xs gap-1.5 font-bold bg-indigo-600 hover:bg-indigo-700 text-white"
           >
             <Zap className="size-3.5" /> Interactive &quot;What-If&quot; Simulator
-          </Button>
+          </Button>}
           <Button
             variant={activeTab === "graph" ? "default" : "ghost"}
             size="sm"
@@ -86,27 +86,27 @@ export function WorkstreamGraphGantt() {
           >
             <GitBranch className="size-3.5" /> Workstream DAG & Baseline Comparison
           </Button>
-          <Button
+          {!customerSafe && <Button
             variant={activeTab === "delays" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab("delays")}
             className="text-xs gap-1.5"
           >
             <Clock3 className="size-3.5" /> Delay Taxonomy Attribution
-          </Button>
-          <Button
+          </Button>}
+          {!customerSafe && <Button
             variant={activeTab === "acceleration" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab("acceleration")}
             className="text-xs gap-1.5 text-emerald-700"
           >
             <Sparkles className="size-3.5" /> Parallel Acceleration Opportunities ({schedule.accelerationOpportunities.length})
-          </Button>
+          </Button>}
         </div>
       </div>
 
       {/* Tab: Interactive What-If Simulator */}
-      {activeTab === "simulator" && (
+      {!customerSafe && activeTab === "simulator" && (
         <InteractiveScheduleSimulator />
       )}
 
@@ -127,7 +127,7 @@ export function WorkstreamGraphGantt() {
 
             <div className="divide-y divide-slate-100">
               {project.workstreams.map((ws) => (
-                <div key={ws.id} className="grid grid-cols-12 items-center px-4 py-3.5 hover:bg-slate-50/80 transition-colors text-sm">
+                <div key={ws.id} role={onSelectWorkstream ? "button" : undefined} tabIndex={onSelectWorkstream ? 0 : undefined} aria-label={onSelectWorkstream ? `Open ${ws.title}` : undefined} onClick={() => onSelectWorkstream?.(ws.id)} onKeyDown={(event) => { if (onSelectWorkstream && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectWorkstream(ws.id); } }} className="grid grid-cols-12 items-center px-4 py-3.5 hover:bg-slate-50/80 transition-colors text-sm">
                   <div className="col-span-4 pr-4">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs text-slate-400 font-bold">{ws.code}</span>
@@ -179,7 +179,7 @@ export function WorkstreamGraphGantt() {
       )}
 
       {/* Tab 2: Delay Taxonomy Attribution Chart */}
-      {activeTab === "delays" && (
+      {!customerSafe && activeTab === "delays" && (
         <Card className="border-slate-200 bg-white">
           <CardHeader>
             <CardTitle className="text-lg font-bold text-slate-900">
@@ -248,7 +248,7 @@ export function WorkstreamGraphGantt() {
       )}
 
       {/* Tab 3: Parallel Acceleration Opportunities */}
-      {activeTab === "acceleration" && (
+      {!customerSafe && activeTab === "acceleration" && (
         <Card className="border-emerald-200 bg-emerald-50/30">
           <CardHeader>
             <div className="flex items-center gap-2">

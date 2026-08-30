@@ -202,6 +202,10 @@ export const permitCatalog: PermitTypeRecord[] = [
     relatedPermitTypeIds: ["cat-ldeq-401", "cat-cpra-cup"],
     lastVerifiedAt: "2026-08-25",
     verificationStatus: "verified",
+    filingMode: "EXTERNAL_PORTAL",
+    agencyContactName: "Martin Breaux, Regulatory Project Manager",
+    agencyContactEmail: "martin.breaux@usace.army.mil",
+    agencyContactPhone: "(504) 862-2201",
     resources: [
       {
         id: "res-usace-1",
@@ -236,6 +240,10 @@ export const permitCatalog: PermitTypeRecord[] = [
     relatedPermitTypeIds: ["cat-usace-404"],
     lastVerifiedAt: "2026-08-20",
     verificationStatus: "verified",
+    filingMode: "EXTERNAL_PORTAL",
+    agencyContactName: "Jean-Paul Guidry, Coastal Use Permitting",
+    agencyContactEmail: "jp.guidry@cpra.la.gov",
+    agencyContactPhone: "(225) 342-7308",
     resources: [
       {
         id: "res-cpra-1",
@@ -266,6 +274,10 @@ export const permitCatalog: PermitTypeRecord[] = [
     publicNoticeDays: 0,
     prerequisites: ["Axle Weight Distribution Matrix", "Bridge Structural Load Analysis", "Turn Radius Simulation"],
     relatedPermitTypeIds: ["cat-cpra-cup"],
+    filingMode: "EXTERNAL_PORTAL",
+    agencyContactName: "Sam Rivera, District 03 Permit Desk",
+    agencyContactEmail: "sam.rivera@la.gov",
+    agencyContactPhone: "(337) 262-6100",
     lastVerifiedAt: "2026-08-15",
     verificationStatus: "verified",
   },

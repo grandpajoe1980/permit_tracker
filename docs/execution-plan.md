@@ -1,8 +1,8 @@
-# PATH Operational UX Execution Plan
+# PATH Customer Portal and End-to-End Execution Plan
 
 ## Objective
 
-Turn PATH from a cockpit selector into a role-aware operational work system. An authenticated reviewer should land on **My Work**, understand why each item is assigned, complete or block it in plain language, see the next handoff, and leave an auditable persisted result.
+Turn PATH into a usable customer and government project-delivery workspace while preserving the role-aware operational system. SpaceX must be able to understand and act on the project without seeing restricted government controls; government users must be able to triage, assign, review, coordinate, escalate, and close work through the same audited records.
 
 ## Current State
 
@@ -10,7 +10,11 @@ Turn PATH from a cockpit selector into a role-aware operational work system. An 
 - `lib/domain-models.ts`, `lib/spacex-megaproject-fixture.ts`, and `lib/repository.ts` already model workstreams, tasks, workflow gates, RFIs, coordination requests, documents, escalations, audit events, and notifications.
 - `app/page.tsx` routes workflow, blocker, intake, RFI, escalation, transfer, note, and document actions through the audited repository boundary, with existing Supabase request intake preserved.
 - Supabase Auth/request loading exists in `lib/supabase-browser.ts`; local demo personas remain the reliable offline demo boundary.
-- Final direct validation: `npx vinext build` passes; direct `node --test tests/*.test.mjs` passes 127 tests; direct ESLint exits with 0 errors and 192 warnings. The npm wrappers cannot run in this Windows shell because Bash is unavailable.
+- Verified starting validation for this phase: `npx vinext build` passes; direct `node --test tests/*.test.mjs` passes 127 tests; `npx eslint .` currently exits with 120 errors because generated `dist/` assets are included by the direct command (the npm lint wrapper ignores `dist`) and emits existing source warnings. The npm wrappers cannot run in this Windows shell because Bash is unavailable.
+
+## Current Delivery Validation
+
+The customer portal implementation now includes a customer-safe command center, first-class Schedule/Gantt, structured request center, permit resource and external filing tracking, escalation triage, profiles/participants, immutable document lifecycle, exclusive work queues, deterministic browser persistence/reset, and Playwright handoff artifacts. The current direct lint command is `npx eslint . --quiet`, which reports zero errors after generated build/runtime directories were added to the global ignore list. Focused customer portal tests are in `tests/customer-portal.test.mjs`; the final full-suite count is recorded in `docs/progress.md` after checkpoint integration.
 
 ## MVP Definition of Done
 
@@ -24,6 +28,9 @@ Turn PATH from a cockpit selector into a role-aware operational work system. An 
 - Mutations are server-authorized when Supabase is configured and otherwise use the existing audited repository demo boundary; resulting state is rendered from authoritative mutation results.
 - Focused tests cover role routing, queue prioritization, action availability, workflow gates, mutation routing, sanitization, and keyboard semantics.
 - Build, lint, tests, and documentation are current.
+- SpaceX can navigate directly to a customer-safe schedule/Gantt, request center, document center, contact directory, and help/escalation center.
+- External filing records, profile edits, participant assignments, and exact document versions persist through refresh/relogin in the supported runtime boundary.
+- A deterministic E2E reset and manual/Playwright handoff artifacts exist.
 
 ## Requirements Matrix
 
@@ -41,6 +48,18 @@ Turn PATH from a cockpit selector into a role-aware operational work system. An 
 | UX-10 | Supervisor, State PM, and SpaceX workspaces | P1 | root UI | role routing tests |
 | UX-11 | Accessibility, responsive action bar, announcements | P0 | root UI, `app/globals.css` | source tests/manual review |
 | UX-12 | Operational journeys documentation | P1 | `docs/operational-ux.md`, progress | doc review |
+| CP-01 | Customer project command center | P0 | `app/page.tsx`, customer portal projection | source/component tests |
+| CP-02 | Customer-accessible schedule/Gantt | P0 | shell navigation, `WorkstreamGraphGantt` | route/source tests |
+| CP-03 | Request center and guided intake | P0 | customer UI, repository, intake model | workflow tests |
+| CP-04 | External filing tracking | P0 | domain models, repository, schema/migration | persistence tests |
+| CP-05 | Customer escalation lifecycle | P0 | repository, customer/government views | mutation tests |
+| CP-06/07 | Profiles, contacts, participants | P0 | domain models, admin/customer UI | model/source tests |
+| CP-08/11 | Assignment visibility and exclusive queues | P0 | `lib/operational-ux.ts` | unit tests |
+| CP-09 | Complete document lifecycle | P0 | repository, document center | version tests |
+| CP-10 | Permit resource library | P0 | catalog projection and UI | catalog tests |
+| CP-12 | Workflow-driven completion | P0 | workflow/repository | gate tests |
+| CP-13 | Deterministic E2E readiness | P0 | scripts/docs/tests | reset/schema/source tests |
+| CP-14/15 | Realistic identities and Joe admin | P1 | fixtures/demo data/admin UI | fixture tests |
 
 ## Architecture
 
@@ -69,6 +88,35 @@ DOC-01 current-state plan
   +--> DOC-02 journey documentation
 ```
 
+```text
+CP-14/15 identities + CP-06/07 participant/profile foundation
+                 |
+                 +--> CP-01 customer command center + CP-02 customer Gantt
+                 |          |
+                 |          +--> CP-03 request center + CP-04 external filings
+                 |          |          |
+                 |          |          +--> CP-05 escalation + CP-10 resource library
+                 |          |
+                 |          +--> CP-09 document lifecycle
+                 |
+                 +--> CP-08/11 assignment and exclusive queues
+                              |
+                              +--> CP-12 workflow completion
+                                         |
+                                         +--> CP-13 deterministic E2E handoff
+```
+
+## Agent Ownership
+
+| Owner | Scope | Requirements |
+|---|---|---|
+| Orchestrator | Cross-cutting integration, customer shell, validation, checkpoint commits | CP-01–CP-15 |
+| Domain/persistence specialist | Participant/profile/external filing/document records, repository methods, schema migration | CP-04, CP-06–CP-09 |
+| Operational UX specialist | Assignment semantics, exclusive queues, customer-safe projection, workflow gates | CP-08, CP-11, CP-12 |
+| QA/documentation specialist | Manual guide, reset, Playwright handoff/scenarios, acceptance coverage | CP-13 |
+
+Lower agents must read `docs/PRD.MD`, this file, `docs/progress.md`, and relevant specialist instructions. A UI render alone never marks a requirement complete.
+
 ## Work Waves
 
 ### Wave 1 — Translation and persistence boundary — complete
@@ -95,6 +143,39 @@ DOC-01 current-state plan
 - Add keyboard/focus/announcement protections and responsive action treatment.
 - Add tests/docs, repair lint errors in touched code, run final validation.
 
+### Wave 5 — Customer portal and identity foundation
+
+- Add CP-14/15 realistic identities, Joe administrator, structured participant/profile records, and customer navigation.
+- Make Schedule first-class for SpaceX and expand the customer-safe project command center.
+
+**Checkpoint 1:** build, tests, lint wrapper, source-contract checks; commit customer workspace/participant foundation.
+
+### Wave 6 — Requests, filings, resources, escalation
+
+- Add guided request center and permit wizard, catalog/resource projection, external filing tracking, and customer escalation lifecycle.
+
+**Checkpoint 2:** build, tests, lint wrapper, request/filing/escalation acceptance tests; commit request center.
+
+### Wave 7 — Documents, assignments, workflow completion
+
+- Complete upload/download/version/review lifecycle; correct ownership projection and mutually exclusive queues; remove hardcoded routing; make all fixture workflows operable from configuration.
+
+**Checkpoints 3–4:** validate and commit document lifecycle, then workflow/assignment corrections separately.
+
+### Wave 8 — Deterministic E2E handoff
+
+- Add namespace-safe reset, manual E2E guide, Playwright handoff/scenarios, selector contract, README updates, regression repairs, and final audit/security notes.
+
+**Checkpoint 5:** full direct validation, commit and publish.
+
+## Checkpoint Boundaries and Acceptance Tests
+
+1. **Customer workspace:** SpaceX persona sees Home, My Actions, Requests & Permits, Schedule, Documents, Contacts, Help & Escalation, Notifications; Schedule opens the Gantt; overview shows dates, variance, health, workstreams, blockers, events, and sanitized contacts.
+2. **Request center:** all six customer intents are discoverable; permit wizard exposes filing mode/resources; external filing stores manual reference/status/receipt; escalation returns a confirmation and appears to government staff.
+3. **Documents:** upload creates immutable vN+1, download targets exact version, review applies only to that version, and new versions reset review state.
+4. **Ownership/workflows:** personally assigned work only enters My Work; agency-only work enters agency queue; waiting/FYI do not duplicate primary buckets; configured stage requirements and next owner drive completion.
+5. **E2E handoff:** reset is idempotent and namespace-safe; the manual guide includes persona, navigation, expected UI/data/audit/notification/persistence results for each lifecycle step; scenario JSON is machine-readable.
+
 ## Risks and Assumptions
 
 - The current production schema has request/assignment/notification/audit tables but not every relational table used by the in-memory command-system fixture. The implementation will not invent a second domain; demo mutations use the audited repository and Supabase request writes use existing RLS-scoped tables.
@@ -120,4 +201,4 @@ DOC-01 current-state plan
 - [x] Build passes via direct Vinext command
 - [x] Lint passes with no errors (pre-existing warnings remain)
 - [x] Tests pass
-- [x] Changes committed and site published
+- [ ] Changes committed and site published

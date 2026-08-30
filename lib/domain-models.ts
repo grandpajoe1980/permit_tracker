@@ -72,6 +72,10 @@ export type RFIStatus =
 
 export type ClockImpact = "clock_paused" | "clock_running" | "clock_extended";
 
+export type FilingMode = "PATH_SUPPORTED" | "EXTERNAL_PORTAL" | "EMAIL_PAPER_OTHER" | "TRACK_ONLY";
+
+export type CustomerRequestType = "permit_authorization" | "government_help" | "project_question" | "blocker_coordination" | "escalation" | "concierge";
+
 export type PersonaRole =
   | "spacex_pm"
   | "spacex_eng"
@@ -122,6 +126,43 @@ export interface UserRecord {
   isActive: boolean;
 }
 
+export interface UserProfileRecord {
+  id: string;
+  userId: string;
+  fullName: string;
+  displayTitle: string;
+  organizationId: string;
+  organizationName: string;
+  organizationalUnit?: string;
+  workEmail: string;
+  officePhone?: string;
+  mobilePhone?: string;
+  officeLocation?: string;
+  preferredContactMethod: "email" | "phone" | "text" | "teams";
+  availabilityStatus: "available" | "limited" | "out_of_office";
+  projectRole: string;
+  avatarUrl?: string;
+  isCustomerVisible: boolean;
+  isActive: boolean;
+}
+
+export interface ProjectParticipantRecord {
+  id: string;
+  projectId: string;
+  userId: string;
+  organizationId: string;
+  organizationName: string;
+  projectRole: string;
+  workstreamIds: string[];
+  assignedTaskIds: string[];
+  reviewResponsibility: string[];
+  notificationResponsibility: string[];
+  visibilityScope: "customer" | "project" | "agency" | "admin";
+  startsOn?: string;
+  endsOn?: string;
+  isActive: boolean;
+}
+
 export interface RequirementResourceRecord {
   id: string;
   permitTypeId: string;
@@ -159,6 +200,57 @@ export interface PermitTypeRecord {
   lastVerifiedAt?: string;
   verificationStatus: "verified" | "verification_due" | "stale_over_180d";
   resources?: RequirementResourceRecord[];
+  filingMode?: FilingMode;
+  agencyContactName?: string;
+  agencyContactEmail?: string;
+  agencyContactPhone?: string;
+}
+
+export interface ExternalFilingRecord {
+  id: string;
+  projectId: string;
+  workstreamId: string;
+  permitTypeId?: string;
+  authorityOrganizationId: string;
+  authorityOrganizationName: string;
+  filingMethod: FilingMode;
+  officialPortalUrl?: string;
+  externalReferenceNumber?: string;
+  externalRecordUrl?: string;
+  externalStatus: "not_started" | "draft" | "submitted" | "under_review" | "additional_information" | "approved" | "denied" | "closed";
+  submittedAt?: string;
+  submittedByUserId?: string;
+  submittedByName?: string;
+  lastStatusVerifiedAt?: string;
+  lastStatusVerifiedBy?: string;
+  authoritativeSystemName?: string;
+  notes?: string;
+  receiptDocumentVersionIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerRequestRecord {
+  id: string;
+  confirmationNumber: string;
+  projectId: string;
+  requestType: CustomerRequestType;
+  title: string;
+  description: string;
+  requestedOutcome?: string;
+  locationOrAffectedArea?: string;
+  desiredDate?: string;
+  scheduleImportance?: "low" | "normal" | "critical";
+  knownAgencyCode?: string;
+  knownPermitTypeId?: string;
+  submittedByUserId?: string;
+  submittedByName: string;
+  relatedWorkstreamId?: string;
+  blocksActiveWork: boolean;
+  status: "draft" | "submitted" | "triage" | "in_progress" | "resolved" | "closed";
+  attachmentDocumentVersionIds: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface WorkflowStageRecord {
@@ -216,6 +308,7 @@ export interface CommitmentRecord {
   committedDate: string;
   promisedDueDate: string;
   completedDate?: string;
+  fulfilledDate?: string;
   status: CommitmentStatus;
   impactIfMissed: string;
   isCriticalPathImpact: boolean;
@@ -231,6 +324,7 @@ export interface TaskRecord {
   assignedOrgId: string;
   assignedOrgCode: string;
   assignedUserName?: string;
+  assignedUserId?: string;
   status: "pending" | "in_progress" | "waiting" | "blocked" | "completed" | "waived";
   isMilestone: boolean;
   isCriticalPath: boolean;
@@ -275,6 +369,7 @@ export interface CoordinationRequestRecord {
   priority: "normal" | "high" | "critical_path";
   status: CoordinationRequestStatus;
   responseSummary?: string;
+  concurredAt?: string;
 }
 
 export interface RFIRecord {
@@ -327,17 +422,29 @@ export interface DocumentVersionRecord {
   changeSummary?: string;
   isMalwareClean: boolean;
   uploadedAt: string;
+  versionNumber?: number;
+  versionLabel?: string;
+  storagePath?: string;
+  uploadedByOrgName?: string;
+  changeNotes?: string;
+  status?: "under_review" | "approved" | "superseded";
+  agencyReviews?: DocumentAgencyReviewRecord[];
 }
 
 export interface DocumentAgencyReviewRecord {
   id: string;
   documentVersionId: string;
   workstreamId: string;
+  reviewingOrgId?: string;
   reviewingOrgCode: string;
   reviewStatus: "under_review" | "approved" | "revisions_requested" | "waived";
   reviewedByName?: string;
   decisionDate?: string;
   reviewComments?: string;
+  status?: string;
+  reviewedByUserName?: string;
+  reviewedAt?: string;
+  comments?: string;
 }
 
 export interface DocumentRecord {
@@ -350,6 +457,7 @@ export interface DocumentRecord {
   isConfidential: boolean;
   versions: DocumentVersionRecord[];
   agencyReviews: DocumentAgencyReviewRecord[];
+  currentVersionId?: string;
 }
 
 export interface DecisionRecord {
@@ -458,6 +566,7 @@ export interface WorkstreamRecord {
     assignedReviewerName: string;
     assignedReviewerEmail: string;
   };
+  assignedReviewerUserId?: string;
   
   // State & Health decoupling
   operationalState: OperationalState;
@@ -520,4 +629,7 @@ export interface ProjectRecord {
   documents: DocumentRecord[];
   coordinationRequests: CoordinationRequestRecord[];
   auditLedger: AuditEventRecord[];
+  participants?: ProjectParticipantRecord[];
+  externalFilings?: ExternalFilingRecord[];
+  customerRequests?: CustomerRequestRecord[];
 }
