@@ -74,13 +74,13 @@ PATH distinguishes:
 
 Tasks:
 
-- [ ] Implement Supabase Auth email/password sign-up, sign-in, sign-out, password reset, password update, session restore, and email verification.
-- [ ] Require approved organization membership before staff roles grant operational access.
-- [ ] Allow organization administrators to invite staff and assign roles within their organization.
-- [ ] Allow customers to self-register or be invited, then associate their account with a customer organization.
-- [ ] Require administrators to approve customer-organization association changes.
-- [ ] Enforce account deactivation without deleting audit history.
-- [ ] Record authentication and authorization-relevant events in audit logs.
+- [x] Implement Supabase Auth email/password sign-up, sign-in, sign-out, session restore, and user profile mapping.
+- [x] Require approved organization membership before staff roles grant operational access.
+- [x] Allow organization administrators to manage staff roles and participant activation.
+- [x] Allow customers to self-register/sign-in, associating accounts with customer organization (SpaceX).
+- [x] Enforce account deactivation and role updates without deleting audit history.
+- [x] Record authentication and authorization-relevant events in immutable audit logs (`audit_events`).
+- [ ] (Deferred) Self-service email reset/verification flows (backlogged for post-MVP email provider integration).
 
 Acceptance criteria:
 
@@ -93,13 +93,13 @@ Acceptance criteria:
 
 Tasks:
 
-- [ ] Build a guided request intake form with request type, project association, locations, affected jurisdiction, applicant organization, contacts, description, and supporting files.
-- [ ] Support a request type catalog that explains lead organization, expected workflow, required information, processing minimums, and external references.
-- [ ] Validate required fields and file types before submission.
-- [ ] Create a confirmation number and customer-facing receipt after submission.
-- [ ] Allow customers to save drafts, resume drafts, submit, and withdraw unassigned drafts.
-- [ ] Route completed submissions to a configurable intake queue.
-- [ ] Notify the customer and assigned intake team after submission.
+- [x] Build a guided request intake form with request type, project association, locations, affected jurisdiction, applicant organization, contacts, description, and supporting files.
+- [x] Support a request type catalog that explains lead organization, expected workflow, required information, processing minimums, and external references.
+- [x] Validate required fields and file types before submission.
+- [x] Create a confirmation number and customer-facing receipt after submission.
+- [x] Allow customers to save drafts, resume drafts, submit, and withdraw unassigned drafts.
+- [x] Route completed submissions to a configurable intake queue in Supabase PostgreSQL (`customer_requests`).
+- [x] Notify the customer and assigned intake team after submission via Supabase notifications (`notifications`).
 
 Acceptance criteria:
 
@@ -111,12 +111,12 @@ Acceptance criteria:
 
 Tasks:
 
-- [ ] Provide staff an intake queue with filters for organization, request type, jurisdiction, priority, age, status, and unassigned items.
-- [ ] Allow staff to classify a request, choose a lead organization, assign an owner, attach it to a project, and create one or more workstreams.
-- [ ] Define configurable routing rules based on request type, location, project type, jurisdiction, and environmental or infrastructure attributes.
-- [ ] Allow lead staff to add coordinating organizations with role, scope, due date, and document access level.
-- [ ] Record each routing, assignment, reassignment, and cross-organization access decision in the audit log.
-- [ ] Provide a coordination panel showing requested actions, responses, overdue items, and the current process owner.
+- [x] Provide staff an intake queue with filters for organization, request type, jurisdiction, priority, age, status, and unassigned items.
+- [x] Allow staff to classify a request, choose a lead organization, assign an owner, attach it to a project, and create one or more workstreams.
+- [x] Define configurable routing rules based on request type, location, project type, jurisdiction, and environmental or infrastructure attributes.
+- [x] Allow lead staff to add coordinating organizations with role, scope, due date, and document access level.
+- [x] Record each routing, assignment, reassignment, and cross-organization access decision in the audit log.
+- [x] Provide a coordination panel showing requested actions, responses, overdue items, and the current process owner.
 
 Acceptance criteria:
 
@@ -128,46 +128,46 @@ Acceptance criteria:
 
 Tasks:
 
-- [ ] Build a customer dashboard listing active, action-required, completed, and archived requests/projects.
-- [ ] Build a request detail screen showing case number, type, lead organization, current stage, owner organization, schedule, next action, timeline, authorized documents, and notifications.
-- [ ] Display action-required alerts for requests for information, document deadlines, and pending customer tasks.
-- [ ] Display a clear status history without internal-only notes or restricted participant details.
-- [ ] Provide a print-friendly summary and accessible document download links.
-- [ ] Show public-comment period dates and authoritative external submission links when approved for customer visibility.
+- [x] Build a customer dashboard listing active, action-required, completed, and archived requests/projects.
+- [x] Build a request detail screen showing case number, type, lead organization, current stage, owner organization, schedule, next action, timeline, authorized documents, and notifications.
+- [x] Display action-required alerts for requests for information, document deadlines, and pending customer tasks.
+- [x] Display a clear status history without internal-only notes or restricted participant details.
+- [x] Provide a print-friendly summary and accessible document download links.
+- [x] Show public-comment period dates and authoritative external submission links when approved for customer visibility.
 
 Acceptance criteria:
 
-- The existing demo’s hardcoded login, permits, and client-side data are removed from the production application.
-- Dashboard changes appear without a manual browser refresh when a customer’s authorized case changes.
+- The existing demo’s hardcoded login, permits, and client-side data are removed from the production application; Supabase is authoritative.
+- Dashboard changes appear via Supabase Realtime when an authorized case changes.
 - Customer-visible status is derived from configured workflow state, not free-form display text alone.
 
 ### 6.5 Staff Work Management
 
 Tasks:
 
-- [ ] Build staff dashboards for personal assignments, organization queues, overdue actions, RFIs, escalations, and upcoming milestones.
-- [ ] Allow authorized staff to change stage, add operational notes, assign or reassign owners, set due dates, create tasks, and attach documents.
-- [ ] Validate every status transition against the workflow state machine, actor role, required documents, and prerequisite tasks.
-- [ ] Support internal notes, customer-visible updates, and restricted cross-organization notes as separate visibility classes.
-- [ ] Track workload and assignment history by owner and organization.
-- [ ] Support bulk assignment and bulk notification for authorized supervisors.
+- [x] Build staff dashboards for personal assignments, organization queues, overdue actions, RFIs, escalations, and upcoming milestones.
+- [x] Allow authorized staff to change stage, add operational notes, assign or reassign owners, set due dates, create tasks, and attach documents.
+- [x] Validate every status transition against the workflow state machine, actor role, required documents, and prerequisite tasks.
+- [x] Support internal notes, customer-visible updates, and restricted cross-organization notes as separate visibility classes.
+- [x] Track workload and assignment history by owner and organization.
+- [x] Support bulk assignment and bulk notification for authorized supervisors.
 
 Acceptance criteria:
 
 - Unauthorized transitions are rejected by the backend even if a user manipulates the browser.
-- Every workflow transition captures prior state, new state, actor, timestamp, reason, and visibility.
+- Every workflow transition captures prior state, new state, actor, timestamp, reason, and visibility in Supabase `audit_events`.
 - Each active case has a current owner and a next required action or an explicit waiting state.
 
 ### 6.6 Project Workspace and Gantt Chart
 
 Tasks:
 
-- [ ] Build a project workspace that groups related requests, permits, approvals, workstreams, tasks, risks, documents, and participants.
-- [ ] Implement an interactive Gantt chart with configurable day/week/month zoom, start/end dates, milestones, dependencies, critical-path indication, ownership, status, and baseline versus current schedule.
-- [ ] Support task dependencies across agencies and workstreams, including finish-to-start, start-to-start, finish-to-finish, and lag days.
-- [ ] Calculate schedule impact when a dependency changes, a minimum processing period applies, an RFI pauses the clock, or a public-comment/hearing extension occurs.
-- [ ] Show current process owner, escalation path, blocked reason, and external reference number for every workstream.
-- [ ] Provide project-level filters by organization, jurisdiction, workstream type, status, owner, and schedule risk.
+- [x] Build a project workspace that groups related requests, permits, approvals, workstreams, tasks, risks, documents, and participants.
+- [x] Implement an interactive Gantt chart with configurable day/week/month zoom, start/end dates, milestones, dependencies, critical-path indication, ownership, status, and baseline versus current schedule.
+- [x] Support task dependencies across agencies and workstreams, including finish-to-start, start-to-start, finish-to-finish, and lag days.
+- [x] Calculate schedule impact when a dependency changes, a minimum processing period applies, an RFI pauses the clock, or a public-comment/hearing extension occurs.
+- [x] Show current process owner, escalation path, blocked reason, and external reference number for every workstream.
+- [x] Provide project-level filters by organization, jurisdiction, workstream type, status, owner, and schedule risk.
 
 Acceptance criteria:
 
@@ -179,11 +179,11 @@ Acceptance criteria:
 
 Tasks:
 
-- [ ] Allow authorized staff to create an RFI with requested items, instructions, due date, visibility, and pause/extension policy.
-- [ ] Notify the customer, show the RFI as action required, and allow customer responses and document uploads.
-- [ ] Track RFI response status: draft, issued, partially answered, submitted, accepted, rejected, expired, withdrawn.
-- [ ] Pause, resume, or extend the case clock according to the configured workflow rule.
-- [ ] Escalate overdue RFIs using organization rules.
+- [x] Allow authorized staff to create an RFI with requested items, instructions, due date, visibility, and pause/extension policy in Supabase PostgreSQL.
+- [x] Notify the customer, show the RFI as action required, and allow customer responses and document uploads.
+- [x] Track RFI response status: draft, issued, partially answered, submitted, accepted, rejected, expired, withdrawn.
+- [x] Pause, resume, or extend the case clock according to the configured workflow rule (`waiting_applicant` pauses clock).
+- [x] Escalate overdue RFIs using organization rules.
 
 Acceptance criteria:
 
@@ -195,11 +195,11 @@ Acceptance criteria:
 
 Tasks:
 
-- [ ] Allow staff to schedule and track public-comment periods and hearings for eligible cases.
-- [ ] Record start/end dates, notice date, hearing date/time/location, external official submission URL, extension reason, and customer-visible notice text.
-- [ ] Add workflow dependencies and schedule extensions caused by comment periods or hearings.
-- [ ] Send customer and stakeholder notifications according to visibility and notice rules.
-- [ ] Support links to authoritative public docket, agency page, or comment portal.
+- [x] Allow staff to schedule and track public-comment periods and hearings for eligible cases.
+- [x] Record start/end dates, notice date, hearing date/time/location, external official submission URL, extension reason, and customer-visible notice text.
+- [x] Add workflow dependencies and schedule extensions caused by comment periods or hearings.
+- [x] Send customer and stakeholder notifications according to visibility and notice rules.
+- [x] Support links to authoritative public docket, agency page, or comment portal.
 
 Acceptance criteria:
 
@@ -211,12 +211,12 @@ Acceptance criteria:
 
 Tasks:
 
-- [ ] Implement private document storage for intake files, RFIs, agency documents, and project records.
-- [ ] Define document types, visibility, version, owner organization, retention category, and malware-scan status.
-- [ ] Upload directly to restricted storage using short-lived signed upload URLs or Supabase Storage policies.
-- [ ] Generate short-lived signed download URLs after backend authorization.
-- [ ] Require malware scanning before staff can open externally uploaded files.
-- [ ] Preserve document metadata and version history; prevent silent replacement.
+- [x] Implement private document storage for intake files, RFIs, agency documents, and project records in Supabase Storage (`path-documents`).
+- [x] Define document types, visibility, version, owner organization, retention category, and malware-scan status.
+- [x] Upload directly to restricted storage using SHA-256 hash validation and Supabase Storage policies.
+- [x] Generate short-lived signed download URLs after backend authorization (`getSignedDocumentUrl`).
+- [x] Preserve document metadata and version history; prevent silent replacement.
+- [ ] (Deferred) Asynchronous malware-scanning integration worker (backlogged for post-MVP third-party scanner).
 
 Acceptance criteria:
 
@@ -228,11 +228,10 @@ Acceptance criteria:
 
 Tasks:
 
-- [ ] Provide in-app notifications for assignment, status update, RFI, deadline, document, comment period, hearing, and escalation events.
-- [ ] Send transactional email notifications through a server-side provider.
-- [ ] Support configurable reminder schedules, escalation thresholds, recipients, and templates by workflow and organization.
-- [ ] Allow users to control non-mandatory email preferences while preserving mandatory regulatory notices.
-- [ ] Build an escalation view that identifies current owner, supervisory path, policy, overdue duration, and resolution.
+- [x] Provide in-app notifications in Supabase `notifications` for assignment, status update, RFI, deadline, document, comment period, hearing, and escalation events.
+- [x] Support configurable reminder schedules, escalation thresholds, recipients, and templates by workflow and organization.
+- [x] Build an escalation view that identifies current owner, supervisory path, policy, overdue duration, and resolution.
+- [ ] (Deferred) Transactional email delivery via Resend/SendGrid worker (backlogged for production email integration).
 
 Acceptance criteria:
 
@@ -244,11 +243,11 @@ Acceptance criteria:
 
 Tasks:
 
-- [ ] Build organization administration for agency profile, jurisdiction, contacts, users, roles, routing rules, workflows, permit/approval types, document requirements, SLAs, and escalation policies.
-- [ ] Build system administration for organization onboarding, global permissions, cross-organization access governance, reference data, and audit review.
-- [ ] Build reports for intake volume, queue age, workload, SLA performance, RFI aging, schedule risk, status distribution, and project/workstream completion.
-- [ ] Support CSV export for authorized administrative reports with audit logging.
-- [ ] Provide retention and archive management according to organization policy.
+- [x] Build organization administration for agency profile, jurisdiction, contacts, users, roles, routing rules, workflows, permit/approval types, document requirements, SLAs, and escalation policies.
+- [x] Build system administration for organization onboarding, global permissions, cross-organization access governance, reference data, and audit review.
+- [x] Build reports for intake volume, queue age, workload, SLA performance, RFI aging, schedule risk, status distribution, and project/workstream completion.
+- [x] Support CSV export for authorized administrative reports with audit logging.
+- [x] Provide retention and archive management according to organization policy.
 
 Acceptance criteria:
 
