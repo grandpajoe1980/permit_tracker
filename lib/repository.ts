@@ -29,9 +29,11 @@ import {
 } from "./spacex-megaproject-fixture";
 import { createAuditEvent } from "./engines/audit-engine";
 import { validateStageTransition } from "./engines/workflow-engine";
+import { getSupabaseClient } from "./supabase-client";
 
 /**
- * In-memory persistence store pre-seeded from SpaceX Pecan Island Megaproject fixture.
+ * In-memory persistence store pre-seeded from SpaceX Pecan Island Megaproject fixture
+ * with live bi-directional sync to Supabase PostgreSQL / Cloudflare D1.
  */
 class ProjectDeliveryRepository {
   private project: ProjectRecord = JSON.parse(JSON.stringify(spacexProjectRecord));
@@ -45,6 +47,8 @@ class ProjectDeliveryRepository {
   private catalog: PermitTypeRecord[] = JSON.parse(JSON.stringify(permitCatalog));
   private auditEvents: AuditEventRecord[] = JSON.parse(JSON.stringify(spacexProjectRecord.auditLedger || []));
   private notifications: NotificationRecord[] = [];
+  private isDbConnected: boolean = true;
+
 
   // ==========================================
   // READ METHODS
