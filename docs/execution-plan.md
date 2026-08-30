@@ -10,11 +10,11 @@ Turn PATH into a usable customer and government project-delivery workspace while
 - `lib/domain-models.ts`, `lib/spacex-megaproject-fixture.ts`, and `lib/repository.ts` already model workstreams, tasks, workflow gates, RFIs, coordination requests, documents, escalations, audit events, and notifications.
 - `app/page.tsx` routes workflow, blocker, intake, RFI, escalation, transfer, note, and document actions through the audited repository boundary, with existing Supabase request intake preserved.
 - Supabase Auth/request loading exists in `lib/supabase-browser.ts`; local demo personas remain the reliable offline demo boundary.
-- Verified starting validation for this phase: `npx vinext build` passes; direct `node --test tests/*.test.mjs` passes 127 tests; `npx eslint .` currently exits with 120 errors because generated `dist/` assets are included by the direct command (the npm lint wrapper ignores `dist`) and emits existing source warnings. The npm wrappers cannot run in this Windows shell because Bash is unavailable.
+- Historical starting validation for this phase was recorded before the customer-portal implementation; direct commands are used because the npm wrappers require Bash in this Windows environment.
 
 ## Current Delivery Validation
 
-The customer portal implementation now includes a customer-safe command center, first-class Schedule/Gantt, structured request center, permit resource and external filing tracking, escalation triage, profiles/participants, immutable document lifecycle, exclusive work queues, deterministic browser persistence/reset, and Playwright handoff artifacts. The current direct lint command is `npx eslint . --quiet`, which reports zero errors after generated build/runtime directories were added to the global ignore list. Focused customer portal tests are in `tests/customer-portal.test.mjs`; the final full-suite count is recorded in `docs/progress.md` after checkpoint integration.
+The customer portal implementation now includes a customer-safe command center, first-class Schedule/Gantt, structured request center, permit resource and external filing tracking, escalation triage, profiles/participants, immutable document lifecycle, exclusive work queues, deterministic browser persistence/reset, and Playwright handoff artifacts. The current direct lint command is `npx eslint . --quiet`, which reports zero errors after generated build/runtime directories were added to the global ignore list. The full direct suite passes 139 tests. Five logical checkpoints are committed and pushed, and the configured private production site is published at https://permit-tracker.grandpajoe.chatgpt.site.
 
 ## MVP Definition of Done
 
@@ -201,4 +201,4 @@ Lower agents must read `docs/PRD.MD`, this file, `docs/progress.md`, and relevan
 - [x] Build passes via direct Vinext command
 - [x] Lint passes with no errors (pre-existing warnings remain)
 - [x] Tests pass
-- [ ] Changes committed and site published
+- [x] Changes committed and site published

@@ -26,8 +26,17 @@ The customer portal phase is implemented on top of the existing role-aware opera
 
 ## Pending Tasks
 
-- Commit and push the five logical checkpoints after validation.
+- The five logical checkpoints are committed and pushed to `origin/main`; the configured private production site is published.
 - Connected Supabase persistence for the new relational customer tables remains a production integration follow-up; the demo/runtime boundary is deterministic and refresh-persistent.
+
+## Delivery Evidence
+
+- Production site: https://permit-tracker.grandpajoe.chatgpt.site
+- Checkpoint 1: `1263881`
+- Checkpoint 2: `f8c6427`
+- Checkpoint 3: `2247dc1`
+- Checkpoint 4: `e98d139`
+- Checkpoint 5: `adb485f`
 
 ## Test Status
 
