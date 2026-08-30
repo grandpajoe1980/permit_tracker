@@ -162,6 +162,7 @@ export async function fetchDocuments(projectId: string): Promise<DocumentRecord[
 
   return docRes.data.map((row) => {
     const docVersions = versions.filter((v) => v.documentId === row.id || v.documentId === row.document_ref_id);
+    docVersions.sort((left, right) => (right.versionNumber ?? 0) - (left.versionNumber ?? 0));
     const docReviews = reviews.filter((r) => docVersions.some((v) => v.id === r.documentVersionId));
     return documentRowToDomain(row, docVersions, docReviews);
   });

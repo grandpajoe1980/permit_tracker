@@ -1,164 +1,123 @@
 import type { DocumentRecord, DocumentVersionRecord } from "./domain-models";
 
+export type DocumentBlobResult = {
+  blob: Blob | null;
+  error: Error | null;
+};
+
+export type DocumentDownloadResult = {
+  success: boolean;
+  error: Error | null;
+};
+
+export type DownloadDocumentBlob = (path: string) => Promise<DocumentBlobResult>;
+
 /**
- * Universal browser-level file download dispatcher.
- * Uses a hidden <a> tag and a guaranteed Blob stream to force the browser
- * to initiate a real native file download.
+ * Dispatches a browser download from bytes that have already been retrieved.
+ * The object URL remains alive long enough for browsers to hand it to their
+ * background download manager.
  */
-export function triggerFileDownload(
-  blob: Blob,
-  fileName: string
-): void {
+export function triggerFileDownload(blob: Blob, fileName: string): void {
   if (typeof window === "undefined" || typeof document === "undefined") return;
 
   const url = window.URL.createObjectURL(blob);
   const anchor = document.createElement("a");
-  anchor.style.display = "none";
-  anchor.style.position = "absolute";
-  anchor.style.left = "-9999px";
+  anchor.hidden = true;
   anchor.href = url;
   anchor.download = fileName;
-  anchor.setAttribute("download", fileName);
-
   document.body.appendChild(anchor);
+  anchor.click();
 
-  try {
-    // Dispatch native click event
-    const clickEvent = new MouseEvent("click", {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-    });
-    anchor.dispatchEvent(clickEvent);
-  } catch {
-    anchor.click();
-  }
+  window.setTimeout(() => {
+    anchor.remove();
+    window.URL.revokeObjectURL(url);
+  }, 60_000);
+}
 
-  // Preserve ObjectURL for 60 seconds to ensure the browser download manager
-  // completely streams the payload to the filesystem before cleanup
-  setTimeout(() => {
-    try {
-      if (anchor.parentNode) {
-        anchor.parentNode.removeChild(anchor);
-      }
-      window.URL.revokeObjectURL(url);
-    } catch {
-      // Ignore cleanup error
-    }
-  }, 60000);
+function normalizedStoragePath(storagePath: string): string {
+  return storagePath
+    .replace(/^supabase:\/\/storage\/(documents|path-documents)\//, "")
+    .replace(/^(path-documents|documents)\//, "");
+}
+
+function safeFileName(version: DocumentVersionRecord): string {
+  const pathName = normalizedStoragePath(version.storagePath ?? version.storageUri ?? "")
+    .split("/")
+    .pop();
+  return (version.fileName || pathName || "document-download").replace(/[\\/:*?"<>|]/g, "_");
+}
+
+async function sha256(blob: Blob): Promise<string | null> {
+  if (!globalThis.crypto?.subtle) return null;
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 /**
- * Generates an authentic binary PDF blob with proper PDF headers, font catalogs,
- * metadata dictionaries, SHA-256 checksums, and interagency review matrices.
- */
-export function createDocumentPdfBlob(
-  document: DocumentRecord,
-  version: DocumentVersionRecord
-): Blob {
-  const reviewsText = (document.agencyReviews || [])
-    .map(
-      (r) =>
-        `Agency: ${r.reviewingOrgCode} | Status: ${r.reviewStatus.toUpperCase()} | Signoff: ${r.signedByUserName ?? "Pending"}`
-    )
-    .join("\n");
-
-  const cleanTitle = (document.title || "Regulatory Document").replace(/[()]/g, "");
-  const cleanFileName = (version.fileName || "document.pdf").replace(/[()]/g, "");
-  const cleanSha = version.sha256Hash || "0".repeat(64);
-  const cleanUploader = (version.uploadedByName || "State Project Office").replace(/[()]/g, "");
-  const cleanTimestamp = version.uploadedAt || new Date().toISOString();
-
-  const pdfPayload =
-    `%PDF-1.7\n` +
-    `1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n` +
-    `2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n` +
-    `3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >> endobj\n` +
-    `4 0 obj << /Length 850 >> stream\n` +
-    `BT\n` +
-    `/F1 16 Tf\n` +
-    `50 740 Td (STATE OF LOUISIANA - PATH PROJECT DELIVERY) Tj\n` +
-    `/F1 12 Tf\n` +
-    `0 -24 Td (SpaceX Pecan Island Launch Complex - Official Document Vault) Tj\n` +
-    `0 -24 Td (Title: ${cleanTitle}) Tj\n` +
-    `0 -18 Td (Document ID: ${document.id} | Revision: ${version.versionTag}) Tj\n` +
-    `0 -18 Td (File Name: ${cleanFileName} | Size: ${version.fileSizeBytes || 1024} bytes) Tj\n` +
-    `0 -18 Td (SHA-256 Checksum: ${cleanSha}) Tj\n` +
-    `0 -18 Td (Uploaded By: ${cleanUploader} on ${cleanTimestamp}) Tj\n` +
-    `0 -18 Td (Malware Status: Clean - Cryptographically Verified) Tj\n` +
-    `0 -24 Td (Interagency Review Matrix:) Tj\n` +
-    `0 -18 Td (${reviewsText.slice(0, 200).replace(/[()]/g, "")}) Tj\n` +
-    `ET\n` +
-    `endstream\n` +
-    `endobj\n` +
-    `xref\n` +
-    `0 5\n` +
-    `0000000000 65535 f \n` +
-    `0000000009 00000 n \n` +
-    `0000000058 00000 n \n` +
-    `0000000115 00000 n \n` +
-    `0000000210 00000 n \n` +
-    `trailer << /Size 5 /Root 1 0 R >>\n` +
-    `startxref\n` +
-    `1100\n` +
-    `%%EOF`;
-
-  // application/octet-stream forces browser to trigger native file save download
-  return new Blob([pdfPayload], { type: "application/pdf" });
-}
-
-/**
- * Universal document downloader.
- * If a remote Supabase Storage signed URL exists and responds with HTTP 200, downloads
- * the real remote blob. Otherwise, immediately generates a compliant binary PDF blob
- * and triggers a guaranteed native browser file download.
+ * Downloads the exact object represented by a document version.
+ *
+ * There is deliberately no generated-file fallback: a missing Storage object
+ * must be reported as unavailable instead of being disguised as a successful
+ * official-document download.
  */
 export async function downloadDocumentVersion(
-  document: DocumentRecord,
+  _document: DocumentRecord,
   version: DocumentVersionRecord,
-  getSignedUrlFn?: (path: string) => Promise<{ signedUrl: string | null; error: Error | null }>
-): Promise<void> {
-  const fileName = version.fileName.endsWith(".pdf")
-    ? version.fileName
-    : `${version.fileName}.pdf`;
-
+  downloadBlob?: DownloadDocumentBlob,
+): Promise<DocumentDownloadResult> {
   const storagePath = version.storagePath ?? version.storageUri;
-
-  // 1. Try remote signed URL if configured
-  if (storagePath && getSignedUrlFn && !storagePath.startsWith("data:") && !storagePath.startsWith("blob:")) {
-    const cleanPath = storagePath
-      .replace(/^supabase:\/\/storage\/(documents|path-documents)\//, "")
-      .replace(/^(path-documents|documents|vault)\//, "");
-
-    try {
-      const { signedUrl, error } = await getSignedUrlFn(cleanPath);
-      if (signedUrl && !error) {
-        // Fetch remote blob to test availability & bypass cross-origin download restrictions
-        const response = await fetch(signedUrl);
-        if (response.ok) {
-          const remoteBlob = await response.blob();
-          triggerFileDownload(remoteBlob, fileName);
-          return;
-        }
-      }
-    } catch {
-      // Fall through to authentic local PDF generation
-    }
+  if (!storagePath) {
+    return { success: false, error: new Error("This version has no Storage object path.") };
   }
 
-  // 2. Direct data URI or blob URI
-  if (storagePath && storagePath.startsWith("data:")) {
+  let blob: Blob | null = null;
+
+  if (storagePath.startsWith("data:") || storagePath.startsWith("blob:")) {
     try {
       const response = await fetch(storagePath);
-      const dataBlob = await response.blob();
-      triggerFileDownload(dataBlob, fileName);
-      return;
-    } catch {
-      // Fall through to authentic local PDF generation
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      blob = await response.blob();
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error : new Error("The local document could not be read."),
+      };
+    }
+  } else {
+    if (!downloadBlob) {
+      return { success: false, error: new Error("Supabase Storage download is unavailable.") };
+    }
+
+    const result = await downloadBlob(normalizedStoragePath(storagePath));
+    if (result.error || !result.blob) {
+      return {
+        success: false,
+        error: result.error ?? new Error("Supabase Storage returned no file data."),
+      };
+    }
+    blob = result.blob;
+  }
+
+  if (version.fileSizeBytes > 0 && blob.size !== version.fileSizeBytes) {
+    return {
+      success: false,
+      error: new Error(
+        `Integrity check failed: expected ${version.fileSizeBytes} bytes but received ${blob.size}.`,
+      ),
+    };
+  }
+
+  const expectedHash = version.sha256Hash?.toLowerCase();
+  if (/^[a-f0-9]{64}$/.test(expectedHash) && !/^0{64}$/.test(expectedHash)) {
+    const actualHash = await sha256(blob);
+    if (actualHash && actualHash !== expectedHash) {
+      return {
+        success: false,
+        error: new Error("Integrity check failed: the downloaded file does not match its SHA-256 record."),
+      };
     }
   }
 
-  // 3. Guaranteed authentic verified PDF generation and download
-  const blob = createDocumentPdfBlob(document, version);
-  triggerFileDownload(blob, fileName);
+  triggerFileDownload(blob, safeFileName(version));
+  return { success: true, error: null };
 }

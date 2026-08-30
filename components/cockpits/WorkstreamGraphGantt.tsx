@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getFullProjectRecord } from "@/lib/permit-utils";
 import { evaluateProjectSchedule } from "@/lib/engines/schedule-engine";
-import type { OperationalState, WorkstreamRecord } from "@/lib/domain-models";
+import type { OperationalState, ProjectRecord, WorkstreamRecord } from "@/lib/domain-models";
 
 import { InteractiveScheduleSimulator } from "./InteractiveScheduleSimulator";
 
@@ -162,11 +162,13 @@ export const STATE_COLOR_MAP: Record<OperationalState, StateStyleConfig> = {
 export function WorkstreamGraphGantt({
   customerSafe = false,
   onSelectWorkstream,
+  project: projectOverride,
 }: {
   customerSafe?: boolean;
   onSelectWorkstream?: (workstreamId: string) => void;
+  project?: ProjectRecord;
 }) {
-  const project = getFullProjectRecord();
+  const project = projectOverride ?? getFullProjectRecord();
   const schedule = evaluateProjectSchedule(project.workstreams);
   const [activeTab, setActiveTab] = useState<"graph" | "simulator" | "delays" | "acceleration">("graph");
   const [scheduleViewMode, setScheduleViewMode] = useState<"bars" | "table">("bars");
@@ -174,8 +176,8 @@ export function WorkstreamGraphGantt({
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [hoveredWorkstreamId, setHoveredWorkstreamId] = useState<string | null>(null);
 
-  // Timeline boundaries (May 1, 2026 to Dec 31, 2026 = 245 days)
-  const timelineStart = useMemo(() => new Date("2026-05-01T00:00:00Z"), []);
+  // Timeline boundaries include the earliest baseline work and the current forecast.
+  const timelineStart = useMemo(() => new Date("2026-03-01T00:00:00Z"), []);
   const timelineEnd = useMemo(() => new Date("2026-12-31T23:59:59Z"), []);
   const totalTimelineDays = useMemo(() => {
     return Math.max(1, Math.round((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24)));
@@ -190,14 +192,16 @@ export function WorkstreamGraphGantt({
 
   // Months header configuration
   const months = useMemo(() => [
-    { label: "May 2026", startDay: 0, days: 31 },
-    { label: "Jun 2026", startDay: 31, days: 30 },
-    { label: "Jul 2026", startDay: 61, days: 31 },
-    { label: "Aug 2026", startDay: 92, days: 31, isCurrent: true },
-    { label: "Sep 2026", startDay: 123, days: 30 },
-    { label: "Oct 2026", startDay: 153, days: 31 },
-    { label: "Nov 2026", startDay: 184, days: 30 },
-    { label: "Dec 2026", startDay: 214, days: 31 },
+    { label: "Mar 2026", startDay: 0, days: 31 },
+    { label: "Apr 2026", startDay: 31, days: 30 },
+    { label: "May 2026", startDay: 61, days: 31 },
+    { label: "Jun 2026", startDay: 92, days: 30 },
+    { label: "Jul 2026", startDay: 122, days: 31 },
+    { label: "Aug 2026", startDay: 153, days: 31, isCurrent: true },
+    { label: "Sep 2026", startDay: 184, days: 30 },
+    { label: "Oct 2026", startDay: 214, days: 31 },
+    { label: "Nov 2026", startDay: 245, days: 30 },
+    { label: "Dec 2026", startDay: 275, days: 31 },
   ], []);
 
   // Helper to compute percentage position on timeline
@@ -396,7 +400,7 @@ export function WorkstreamGraphGantt({
           {/* OPERATIONAL STATE COLOR CODE LEGEND                              */}
           {/* ================================================================ */}
           <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-2.5 mb-3">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-2.5 mb-3">
               <div className="flex items-center gap-2">
                 <span className="flex size-5 items-center justify-center rounded-full bg-[#00284d] text-white text-[10px] font-black">i</span>
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
@@ -406,7 +410,13 @@ export function WorkstreamGraphGantt({
               <span className="text-[11px] font-semibold text-slate-500">
                 Click any bar or workstream row to open permit details
               </span>
-            </div>
+              </div>
+
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-600" aria-label="Timeline horizons">
+                <span className="rounded border border-dashed border-slate-400 bg-slate-100 px-2 py-1">Past / baseline history</span>
+                <span className="rounded border border-emerald-600 bg-emerald-500 px-2 py-1 text-white">Current state as of today</span>
+                <span className="rounded border border-dashed border-indigo-500 bg-indigo-100 px-2 py-1 text-indigo-900">Future forecast</span>
+              </div>
 
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-5">
               {legendStates.map((state) => {
@@ -468,7 +478,7 @@ export function WorkstreamGraphGantt({
                 </div>
 
                 {/* Right Column: Timeline Months Grid */}
-                <div className="hidden md:col-span-8 md:grid grid-cols-8 relative py-2.5">
+                <div className="hidden md:col-span-8 md:grid grid-cols-10 relative py-2.5">
                   {months.map((month) => (
                     <div
                       key={month.label}
@@ -500,22 +510,36 @@ export function WorkstreamGraphGantt({
 
                   // Baseline coordinates
                   const baselineLeft = getTimelinePosition(ws.baselineStartDate);
-                  const baselineRight = getTimelinePosition(ws.baselineTargetDate);
-                  const baselineWidth = Math.max(1.5, baselineRight - baselineLeft);
 
                   // Forecast coordinates
                   const forecastLeft = getTimelinePosition(ws.forecastStartDate);
                   const forecastRight = getTimelinePosition(ws.forecastTargetDate);
-                  const forecastWidth = Math.max(2, forecastRight - forecastLeft);
 
                   const hasSlip = ws.scheduleVarianceDays > 0;
+                  const currentStart = getTimelinePosition(ws.actualStartDate ?? ws.forecastStartDate ?? ws.baselineStartDate);
+                  const currentEnd = ws.operationalState === "complete"
+                    ? getTimelinePosition(ws.actualCompletionDate ?? ws.forecastTargetDate)
+                    : todayPositionPercent;
+                  const pastEnd = Math.min(todayPositionPercent, currentStart);
+                  const futureStart = ws.operationalState === "complete" ? forecastRight : Math.max(todayPositionPercent, forecastLeft);
+                  const pastWidth = Math.max(1.5, pastEnd - baselineLeft);
+                  const currentWidth = Math.max(1.5, currentEnd - currentStart);
+                  const futureWidth = ws.operationalState === "complete" ? 0 : Math.max(1.5, forecastRight - futureStart);
 
                   return (
                     <div
                       key={ws.id}
                       onMouseEnter={() => setHoveredWorkstreamId(ws.id)}
                       onMouseLeave={() => setHoveredWorkstreamId(null)}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => onSelectWorkstream?.(ws.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          onSelectWorkstream?.(ws.id);
+                        }
+                      }}
                       className={`grid grid-cols-12 items-center transition-colors cursor-pointer ${
                         isHovered ? "bg-slate-50/90" : "hover:bg-slate-50/60"
                       }`}
@@ -561,9 +585,9 @@ export function WorkstreamGraphGantt({
                       </div>
 
                       {/* Right Timeline Column with Traditional Bars */}
-                      <div className="col-span-12 md:col-span-8 p-3 relative h-[78px] flex flex-col justify-center overflow-hidden">
+                      <div className="col-span-12 md:col-span-8 p-3 relative h-[112px] flex flex-col justify-center overflow-hidden">
                         {/* Background monthly grid lines */}
-                        <div className="absolute inset-0 grid grid-cols-8 pointer-events-none opacity-20">
+                        <div className="absolute inset-0 grid grid-cols-10 pointer-events-none opacity-20">
                           {months.map((m) => (
                             <div key={m.label} className="border-r border-slate-300 h-full last:border-0" />
                           ))}
@@ -575,33 +599,31 @@ export function WorkstreamGraphGantt({
                           style={{ left: `${todayPositionPercent}%` }}
                         />
 
-                        {/* 1. Baseline Schedule Bar (Upper Sub-Bar) */}
-                        <div className="relative w-full h-4 mb-1.5">
+                        {/* Past / baseline history */}
+                        <div className="relative w-full h-5 mb-1">
                           <div
                             className="absolute h-3.5 rounded border border-dashed border-slate-400 bg-slate-100/90 flex items-center px-1.5 text-[9px] font-mono text-slate-600 truncate transition-all"
                             style={{
                               left: `${baselineLeft}%`,
-                              width: `${baselineWidth}%`,
+                              width: `${pastWidth}%`,
                             }}
                             title={`Baseline Schedule: ${ws.baselineStartDate} → ${ws.baselineTargetDate}`}
                           >
-                            <span className="truncate opacity-80">Baseline: {ws.baselineTargetDate}</span>
+                            <span className="truncate opacity-80">Past / Baseline: {ws.baselineStartDate}</span>
                           </div>
                         </div>
 
-                        {/* 2. Forecast Schedule Bar (Main Color-Coded Traditional Gantt Bar) */}
-                        <div className="relative w-full h-7">
+                        {/* Current state / actual execution */}
+                        <div className="relative w-full h-6 mb-1">
                           <div
                             className={`absolute h-6 rounded-md shadow-sm border ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} flex items-center justify-between px-2.5 text-xs font-bold transition-all transform hover:scale-[1.01] hover:shadow-md cursor-pointer`}
                             style={{
-                              left: `${forecastLeft}%`,
-                              width: `${forecastWidth}%`,
+                              left: `${currentStart}%`,
+                              width: `${currentWidth}%`,
                             }}
                             title={`${ws.title} (${ws.code})\nState: ${stateConfig.label}\nForecast: ${ws.forecastStartDate} → ${ws.forecastTargetDate} (${hasSlip ? `+${ws.scheduleVarianceDays}d variance` : "On Track"})\nReviewer: ${ws.regulatoryLead.assignedReviewerName} (${ws.regulatoryLead.orgCode})`}
                           >
-                            <span className="truncate text-[11px] font-black drop-shadow-sm flex items-center gap-1">
-                              {ws.currentStageName || ws.title}
-                            </span>
+                            <span className="truncate text-[10px] font-black drop-shadow-sm">Current: {stateConfig.shortLabel}</span>
 
                             {hasSlip && (
                               <span className="shrink-0 rounded bg-black/25 px-1.5 py-0.5 text-[10px] font-mono font-black text-white ml-1">
@@ -610,9 +632,21 @@ export function WorkstreamGraphGantt({
                             )}
                           </div>
 
+                        </div>
+
+                        {/* Future state / forecast */}
+                        <div className="relative w-full h-5">
+                          <div
+                            className={`absolute h-4 rounded-md border border-dashed ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} opacity-60 flex items-center px-2 text-[9px] font-bold ${futureWidth === 0 ? "hidden" : ""}`}
+                            style={{ left: `${futureStart}%`, width: `${futureWidth}%` }}
+                            title={`Future forecast: ${ws.forecastStartDate} -> ${ws.forecastTargetDate}${hasSlip ? ` (+${ws.scheduleVarianceDays}d variance)` : ""}`}
+                          >
+                            <span className="truncate">Future: {ws.forecastTargetDate}</span>
+                          </div>
+
                           {/* Forecast Target Marker / Flag */}
                           <div
-                            className="absolute top-0 -translate-y-1 text-[10px] font-mono font-black text-slate-800"
+                            className="absolute top-0 text-[9px] font-mono font-black text-slate-800"
                             style={{ left: `calc(${forecastRight}% + 6px)` }}
                           >
                             {ws.forecastTargetDate}

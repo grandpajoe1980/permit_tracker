@@ -340,7 +340,7 @@ export function documentAgencyReviewRowToDomain(row: Row): DocumentAgencyReviewR
 export function documentVersionRowToDomain(row: Row, reviews: DocumentAgencyReviewRecord[] = []): DocumentVersionRecord {
   return {
     id: str(row.id),
-    documentId: str(row.document_ref_id || row.document_id),
+    documentId: str(row.document_id || row.document_ref_id),
     versionTag: str(row.version_label || row.version_tag || `v${row.version_number || 1}.0`),
     versionNumber: num(row.version_number, 1),
     versionLabel: str(row.version_label || `v${row.version_number || 1}.0`),
@@ -366,14 +366,27 @@ export function documentRowToDomain(
   versions: DocumentVersionRecord[] = [],
   allReviews: DocumentAgencyReviewRecord[] = []
 ): DocumentRecord {
+  const highestVersionNumber = versions.reduce(
+    (highest, version) => Math.max(highest, version.versionNumber ?? 0),
+    0,
+  );
+  const declaredVersionNumber = Math.max(
+    num(row.current_version_number, 0),
+    num(row.version, 0),
+  );
+  const currentVersionNumber = Math.max(highestVersionNumber, declaredVersionNumber, 1);
+  const currentVersion = versions.find(
+    (version) => (version.versionNumber ?? 0) === currentVersionNumber,
+  ) ?? versions[0];
+
   return {
     id: str(row.id),
     projectId: str(row.project_id),
     title: str(row.title || row.document_type || "Project Document"),
     category: str(row.category || row.document_type || "Technical Spec"),
     ownerOrgCode: str(row.owner_org_code || "SPACEX"),
-    currentVersionNumber: num(row.current_version_number || row.version, versions.length || 1),
-    currentVersionId: versions[0]?.id,
+    currentVersionNumber,
+    currentVersionId: currentVersion?.id,
     isConfidential: bool(row.is_confidential || (row.visibility === "restricted")),
     versions,
     agencyReviews: allReviews,

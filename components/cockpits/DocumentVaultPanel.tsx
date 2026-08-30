@@ -25,20 +25,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getFullProjectRecord } from "@/lib/permit-utils";
-import type { DocumentRecord, DocumentVersionRecord } from "@/lib/domain-models";
+import type { DocumentRecord, DocumentVersionRecord, ProjectRecord } from "@/lib/domain-models";
 import { DocumentViewerModal } from "@/components/documents/DocumentViewerModal";
 import { downloadDocumentVersion } from "@/lib/document-download-utils";
 
 export function DocumentVaultPanel({
+  project: projectOverride,
   onUploadRevision,
   onDownloadDocument,
   onSelectWorkstream,
 }: {
-  onUploadRevision?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  project?: ProjectRecord;
+  onUploadRevision?: (documentId: string, event: React.ChangeEvent<HTMLInputElement>) => void;
   onDownloadDocument?: (documentId: string, versionId: string) => void;
   onSelectWorkstream?: (workstreamId: string) => void;
 }) {
-  const project = getFullProjectRecord();
+  const project = projectOverride ?? getFullProjectRecord();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedWorkstreamFilter, setSelectedWorkstreamFilter] = useState<string>("all");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("all");
@@ -132,11 +134,19 @@ export function DocumentVaultPanel({
                   type="button"
                   size="sm"
                   onClick={() => uploadInputRef.current?.click()}
+                  disabled={!selectedDoc}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow"
                 >
                   <UploadCloud className="size-3.5" /> Upload New Revision
                 </Button>
-                <input ref={uploadInputRef} type="file" className="sr-only" onChange={onUploadRevision} />
+                <input
+                  ref={uploadInputRef}
+                  type="file"
+                  className="sr-only"
+                  onChange={(event) => {
+                    if (selectedDoc) onUploadRevision(selectedDoc.id, event);
+                  }}
+                />
               </>
             ) : (
               <Button

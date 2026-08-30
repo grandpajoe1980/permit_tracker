@@ -83,7 +83,7 @@ import {
   supabaseConfigured,
 } from "@/lib/supabase-browser";
 import { repository } from "@/lib/repository";
-import { getSignedDocumentUrl, mutateUploadDocumentVersion } from "@/lib/supabase/storage";
+import { downloadDocumentFile, mutateUploadDocumentVersion } from "@/lib/supabase/storage";
 import { downloadDocumentVersion } from "@/lib/document-download-utils";
 import {
   getAvailableActions,
@@ -112,6 +112,7 @@ import {
 import { WorkstreamGraphGantt } from "@/components/cockpits/WorkstreamGraphGantt";
 import { DocumentVaultPanel } from "@/components/cockpits/DocumentVaultPanel";
 import { WorkflowDesignerPanel } from "@/components/cockpits/WorkflowDesignerPanel";
+import { ProjectOverviewPage } from "@/components/cockpits/ProjectOverviewPage";
 
 type Route = "my-work" | "agency-queue" | "rfis" | "coordination" | "documents" | "project" | "notifications" | "secondary" | "admin" | "detail" | "requests" | "schedule" | "contacts" | "help" | "profile";
 type SecondaryTool = "schedule" | "vault" | "catalog";
@@ -233,6 +234,7 @@ export default function Home() {
     }
   });
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [selectedProjectWorkstreamId, setSelectedProjectWorkstreamId] = useState<string | null>(null);
   const [showDemoPeople, setShowDemoPeople] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [username, setUsername] = useState("");
@@ -389,6 +391,14 @@ export default function Home() {
   function navigate(nextRoute: Route) {
     setRoute(nextRoute);
     setSelectedItemId(null);
+    if (nextRoute !== "project") setSelectedProjectWorkstreamId(null);
+    setMobileNavOpen(false);
+  }
+
+  function openProject(workstreamId?: string) {
+    setSelectedItemId(null);
+    setSelectedProjectWorkstreamId(workstreamId ?? null);
+    setRoute("project");
     setMobileNavOpen(false);
   }
 
@@ -434,6 +444,7 @@ export default function Home() {
       usernameRef.current?.focus();
       return;
     }
+    await repository.hydrateFromSupabase();
     const loaded = await loadRequestsForUser();
     const persona = makeAuthenticatedPersona(user.email ?? username, String(user.user_metadata?.full_name ?? user.email ?? "Authenticated User"));
     const permits = loaded.permits.length > 0 ? loaded.permits : pecanIslandRequests;
@@ -455,6 +466,7 @@ export default function Home() {
     if (supabaseConfigured() && persona.password) {
       const { user } = await signInWithPassword(persona.email, persona.password);
       if (user) {
+        await repository.hydrateFromSupabase();
         const loaded = await loadRequestsForUser();
         loadedPermits = loaded.permits.length > 0 ? loaded.permits : pecanIslandRequests;
       }
@@ -601,12 +613,20 @@ export default function Home() {
     const document = repository.getDocuments().find((entry) => entry.id === documentId);
     const version = (versionId ? document?.versions.find((entry) => entry.id === versionId) : null) ?? document?.versions[0];
     if (!document || !version) return;
-    await downloadDocumentVersion(document, version, getSignedDocumentUrl);
+    setSaveStatus("saving");
+    const result = await downloadDocumentVersion(document, version, downloadDocumentFile);
+    if (!result.success) {
+      setSaveStatus("error");
+      setToast(`Download unavailable for ${version.fileName}: ${result.error?.message ?? "Unknown error"}`);
+      return;
+    }
+    setSaveStatus("saved");
+    setToast(`Verified ${version.fileName} and started the download.`);
   }
 
-  async function uploadProjectRevision(event: ChangeEvent<HTMLInputElement>, uploadedByOrgName = CUSTOMER_ORGANIZATION_NAME) {
+  async function uploadProjectRevision(documentId: string, event: ChangeEvent<HTMLInputElement>, uploadedByOrgName = CUSTOMER_ORGANIZATION_NAME) {
     const file = event.target.files?.[0];
-    const document = repository.getDocuments()[0];
+    const document = repository.getDocuments().find((entry) => entry.id === documentId);
     if (!file || !document) return;
 
     setSaveStatus("saving");
@@ -622,14 +642,14 @@ export default function Home() {
         uploadedByOrgName,
         changeNotes: "Revision uploaded through the PATH document center.",
         reviewingAgencyCodes: ["DOTD", "CPRA"],
-        projectId: projectRecord.id,
+        projectId: document.projectId,
         actorId: actorUserId(),
       });
 
       if (res.data) {
         repository.createDocumentVersion(document.id, {
-          versionNumber,
-          versionLabel: `v${versionNumber}.0`,
+          versionNumber: res.data.versionNumber ?? versionNumber,
+          versionLabel: res.data.versionLabel ?? `v${versionNumber}.0`,
           storagePath: res.data.storagePath || "",
           fileName: file.name,
           mimeType: file.type || "application/octet-stream",
@@ -656,7 +676,9 @@ export default function Home() {
   }
 
   async function uploadCustomerRevision(event: ChangeEvent<HTMLInputElement>) {
-    await uploadProjectRevision(event, CUSTOMER_ORGANIZATION_NAME);
+    const documentId = repository.getDocuments()[0]?.id;
+    if (!documentId) return;
+    await uploadProjectRevision(documentId, event, CUSTOMER_ORGANIZATION_NAME);
   }
 
   async function handleConfirmAction(event: FormEvent<HTMLFormElement>) {
@@ -1035,7 +1057,7 @@ export default function Home() {
                     <div className="flex items-center gap-2">
                       <CardTitle className="text-lg font-black text-[#00284d]">{document.title}</CardTitle>
                       <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-black uppercase text-teal-800 border border-teal-200">
-                        v{document.currentVersionNumber}.0
+                        {latestVer?.versionTag ?? `v${document.currentVersionNumber}.0`}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-slate-600">
@@ -1136,14 +1158,18 @@ export default function Home() {
     return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Action center</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Notifications</h1><p className="mt-2 text-sm text-slate-600">Only material events that change what someone needs to do appear here; routine audit history stays on the work item.</p></div><div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Bell className="size-5 text-teal-700" /> Action required</CardTitle></CardHeader><CardContent className="space-y-3">{notifications.length > 0 ? notifications.slice(0, 8).map((notification) => <div key={notification.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3"><p className="text-sm font-black text-amber-950">{notification.title}</p><p className="mt-1 text-sm text-amber-900">{notification.message}</p><p className="mt-2 text-[11px] font-bold uppercase text-amber-800">{notification.type.replaceAll("_", " ")}</p></div>) : <p className="text-sm text-slate-500">No new action notifications.</p>}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Clock3 className="size-5 text-teal-700" /> Status updates</CardTitle></CardHeader><CardContent className="space-y-3">{events.map((event) => <div key={event.id} className="border-b border-slate-100 pb-3 last:border-0"><p className="text-sm font-bold text-[#00284d]">{event.actionType.replaceAll("_", " ")}</p><p className="mt-1 text-xs text-slate-600">{event.reason ?? event.newValue ?? "Recorded activity"}</p><p className="mt-1 text-[11px] text-slate-400">{event.actorName} · {formatDate(event.occurredAt)}</p></div>)}</CardContent></Card></div></div>;
   }
 
-  function renderProject() {
+  function renderLegacyProject() {
     if (activePersona.isCustomer) return renderCustomerOverview();
     const workload = getAgencyWorkload(userPermits);
     return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">SpaceX Pecan Island</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Project context</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Vermilion Parish, Louisiana · shared operational context for the project team.</p></div><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-red-200 bg-red-50 p-4"><p className="text-xs font-black uppercase text-red-800">Blocked / at risk</p><p className="mt-2 text-3xl font-black text-red-950">{ragSummary.red}</p></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-black uppercase text-amber-800">Attention</p><p className="mt-2 text-3xl font-black text-amber-950">{ragSummary.yellow}</p></div><div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-black uppercase text-emerald-800">On track</p><p className="mt-2 text-3xl font-black text-emerald-950">{ragSummary.green}</p></div></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Building2 className="size-5 text-teal-700" /> Agency Workload</CardTitle></CardHeader><CardContent className="space-y-3">{workload.slice(0, 8).map((agency) => <div key={agency.agencyCode} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{agency.agencyCode}</p><p className="text-xs text-slate-500">{agency.agencyLevel} · {agency.agencyName}</p></div><div className="text-right text-xs font-bold text-slate-700">{agency.count} workstreams · {agency.blockedCount} blocked</div></div>)}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Route className="size-5 text-teal-700" /> Gantt and dependencies</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">Open the schedule to review the critical path, baseline, forecast, and agency dependencies.</p><Button type="button" onClick={() => { setSecondaryTool("schedule"); navigate("secondary"); }} className="mt-4 bg-[#00284d] font-bold">Open Gantt <ArrowRight className="size-4" aria-hidden="true" /></Button></CardContent></Card></div>;
   }
 
+  function renderProject() {
+    return <ProjectOverviewPage project={projectRecord} customerSafe={activePersona.isCustomer} focusedWorkstreamId={selectedProjectWorkstreamId} onFocusWorkstream={setSelectedProjectWorkstreamId} onOpenSchedule={() => { setSecondaryTool("schedule"); navigate("secondary"); }} />;
+  }
+
   function renderSecondary() {
-    return <div className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Government tools</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">{secondaryTool === "schedule" ? "Schedule" : secondaryTool === "vault" ? "Document Vault" : "Permit Catalog"}</h1></div><div className="flex flex-wrap gap-2">{([["schedule", "Schedule"], ["vault", "Document Vault"], ["catalog", "Permit Catalog"]] as Array<[SecondaryTool, string]>).map(([tool, label]) => <Button key={tool} type="button" variant={secondaryTool === tool ? "default" : "outline"} onClick={() => setSecondaryTool(tool)} className="text-xs font-bold">{label}</Button>)}</div></div>{secondaryTool === "schedule" && <WorkstreamGraphGantt onSelectWorkstream={(workstreamId) => { const item = workItems.find((entry) => entry.workstreamId === workstreamId || entry.sourceId === workstreamId); if (item) openItem(item); }} />}{secondaryTool === "vault" && <DocumentVaultPanel onUploadRevision={(event) => void uploadProjectRevision(event, activePersona.organization)} onDownloadDocument={(docId, verId) => void downloadVersion(docId, verId)} onSelectWorkstream={(workstreamId) => { const item = workItems.find((entry) => entry.workstreamId === workstreamId || entry.sourceId === workstreamId); if (item) openItem(item); }} />}{secondaryTool === "catalog" && <WorkflowDesignerPanel />}</div>;
+    return <div className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Government tools</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">{secondaryTool === "schedule" ? "Schedule" : secondaryTool === "vault" ? "Document Vault" : "Permit Catalog"}</h1></div><div className="flex flex-wrap gap-2">{([["schedule", "Schedule"], ["vault", "Document Vault"], ["catalog", "Permit Catalog"]] as Array<[SecondaryTool, string]>).map(([tool, label]) => <Button key={tool} type="button" variant={secondaryTool === tool ? "default" : "outline"} onClick={() => setSecondaryTool(tool)} className="text-xs font-bold">{label}</Button>)}</div></div>{secondaryTool === "schedule" && <WorkstreamGraphGantt project={projectRecord} onSelectWorkstream={(workstreamId) => openProject(workstreamId)} />}{secondaryTool === "vault" && <DocumentVaultPanel project={projectRecord} onUploadRevision={(documentId, event) => void uploadProjectRevision(documentId, event, activePersona.organization)} onDownloadDocument={(docId, verId) => void downloadVersion(docId, verId)} onSelectWorkstream={(workstreamId) => { const item = workItems.find((entry) => entry.workstreamId === workstreamId || entry.sourceId === workstreamId); if (item) openItem(item); }} />}{secondaryTool === "catalog" && <WorkflowDesignerPanel />}</div>;
   }
 
   function renderAdmin() {
@@ -1225,7 +1251,7 @@ export default function Home() {
     if (route === "agency-queue" || route === "rfis" || route === "coordination" || route === "documents") return activePersona.isCustomer && route === "documents" ? renderCustomerDocuments() : renderQueue(route);
     if (route === "project") return renderProject();
     if (route === "requests") return renderCustomerRequestCenter();
-    if (route === "schedule") return <div className="space-y-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Read-only project delivery schedule for SpaceX. Internal government notes and control actions are not shown.</p></div><WorkstreamGraphGantt customerSafe onSelectWorkstream={(workstreamId) => { const item = workItems.find((entry) => entry.workstreamId === workstreamId); if (item) openItem(item); }} /></div>;
+    if (route === "schedule") return <div className="space-y-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Read-only project delivery schedule for SpaceX. Internal government notes and control actions are not shown.</p></div><WorkstreamGraphGantt project={projectRecord} customerSafe onSelectWorkstream={(workstreamId) => openProject(workstreamId)} /></div>;
     if (route === "contacts" || route === "profile") return renderContacts();
     if (route === "help") return renderHelp();
     if (route === "notifications") return renderNotifications();

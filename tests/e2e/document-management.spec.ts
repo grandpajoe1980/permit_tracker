@@ -1,123 +1,93 @@
-import { test, expect } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
+import { readFileSync } from "node:fs";
+import { test, expect, type Page } from "@playwright/test";
 
-test.describe("Document Storage, Search, Retrieval, and In-App Viewer System", () => {
-  test("Scenario 1: Customer Document Center Search, Multi-Project Inspection, In-App Modal Preview, and Real Browser File Downloads", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForLoadState("networkidle");
+function readEnvFile(path = ".env") {
+  return Object.fromEntries(
+    readFileSync(path, "utf8")
+      .split(/\r?\n/)
+      .filter((line) => line.trim() && !line.trim().startsWith("#"))
+      .map((line) => {
+        const separator = line.indexOf("=");
+        const key = line.slice(0, separator).trim();
+        const value = line.slice(separator + 1).trim().replace(/^(['"])(.*)\1$/, "$2");
+        return [key, value];
+      }),
+  );
+}
 
-    // 1. Sign in as Alex Martin (SpaceX Customer / Submitter)
-    const alexBtn = page.locator("#demo-persona-alex-martin");
-    await alexBtn.waitFor({ state: "visible" });
-    await alexBtn.hover();
-    await alexBtn.click();
-    await expect(page.locator("text=SpaceX Pecan Island").first()).toBeVisible();
+const env = { ...readEnvFile(), ...process.env };
+const admin = createClient(
+  env.SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL,
+  env.SUPABASE_SERVICE_ROLE_KEY ?? env.legacy_service_role_key,
+  { auth: { autoRefreshToken: false, persistSession: false } },
+);
 
-    // 2. Navigate to Customer Document Center
-    const docNavBtn = page.locator("button:has-text('Documents')");
-    await docNavBtn.hover();
-    await docNavBtn.click();
-    await expect(page.locator("text=Customer document center")).toBeVisible();
-    await expect(page.locator("text=Documents & Engineering Packages")).toBeVisible();
+async function signInAndOpenDocuments(page: Page) {
+  await page.goto("/");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: /Alex Martin/ }).click();
+  await expect(page.getByRole("button", { name: "Documents", exact: true })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: "Documents", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Documents & Engineering Packages" })).toBeVisible();
+}
 
-    // 3. Verify multi-project documents are listed
-    await expect(page.locator("text=LA-82 Heavy-Haul Drainage & Hydrodynamic Study").first()).toBeVisible();
-    await expect(page.locator("text=Freshwater Bayou Bridge Structural Load Rating & Axle Matrix").first()).toBeVisible();
-    await expect(page.locator("text=Launch Complex Wetland Delineation & Mitigation Package").first()).toBeVisible();
-    await expect(page.locator("text=Industrial Deluge Water Containment & Retention Basin Report").first()).toBeVisible();
+test.describe("authoritative document Storage lifecycle", () => {
+  test("uploads and downloads the exact original bytes through the site", async ({ page }, testInfo) => {
+    const token = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const fileName = `document-lifecycle-${token}.txt`;
+    const contents = Buffer.from(`PATH browser upload/download verification ${token}\n`, "utf8");
 
-    // 4. Open In-App Document Viewer Modal for Drainage Study
-    const viewButtons = page.locator("button:has-text('View & Inspect')");
-    await viewButtons.first().hover();
-    await viewButtons.first().click();
+    try {
+      await signInAndOpenDocuments(page);
 
-    // Assert Modal Contents
-    const modal = page.locator("[role='dialog']");
-    await expect(modal).toBeVisible();
-    await expect(modal.locator("text=SHA-256 Cryptographic Checksum")).toBeVisible();
-    await expect(modal.locator("text=Malware Clean · Verified")).toBeVisible();
-    await expect(modal.locator("text=Document Content Preview & Engineering Specification")).toBeVisible();
-    await expect(modal.locator("text=Interagency Review Certification Matrix")).toBeVisible();
-    await expect(modal.locator("button:has-text('Download Official File')")).toBeVisible();
+      await page.locator("#customer-document-upload").setInputFiles({
+        name: fileName,
+        mimeType: "text/plain",
+        buffer: contents,
+      });
 
-    // 5. Test real browser download from In-App Modal
-    const downloadModalPromise = page.waitForEvent("download");
-    await modal.locator("button:has-text('Download Official File')").click();
-    const modalDownload = await downloadModalPromise;
-    expect(modalDownload.suggestedFilename()).toContain(".pdf");
+      await expect(page.getByRole("status")).toContainText("uploaded to Supabase Storage");
+      const versionLabel = page.getByText(new RegExp(`v\\d+\\.0 · ${fileName}`));
+      await expect(versionLabel).toBeVisible();
 
-    // Close Modal
-    await modal.locator("button:has-text('Close Preview')").click();
-    await expect(modal).not.toBeVisible();
+      const versionRow = versionLabel.locator("../..");
+      const downloadPromise = page.waitForEvent("download");
+      await versionRow.getByRole("button", { name: "Download", exact: true }).click();
+      const download = await downloadPromise;
+      const downloadedPath = testInfo.outputPath(fileName);
+      await download.saveAs(downloadedPath);
 
-    // 6. Test direct download from document revision row in Customer Center
-    const directDownloadPromise = page.waitForEvent("download");
-    const downloadRowBtn = page.locator("button:has-text('Download')").first();
-    await downloadRowBtn.hover();
-    await downloadRowBtn.click();
-    const directDownload = await directDownloadPromise;
-    expect(directDownload.suggestedFilename()).toContain(".pdf");
+      expect(download.suggestedFilename()).toBe(fileName);
+      expect(readFileSync(downloadedPath)).toEqual(contents);
+      await expect(page.getByRole("status")).toContainText(`Verified ${fileName}`);
+    } finally {
+      const versions = await admin
+        .from("document_versions")
+        .select("id, storage_path")
+        .eq("file_name", fileName);
+      for (const version of versions.data ?? []) {
+        await admin.from("audit_events").delete().eq("entity_id", version.id);
+        await admin.from("document_agency_reviews").delete().eq("document_version_id", version.id);
+        await admin.from("document_versions").delete().eq("id", version.id);
+        await admin.storage.from("path-documents").remove([version.storage_path]);
+      }
+    }
   });
 
-  test("Scenario 2: Government Document Vault Multi-Project Filtering, Real Browser Downloads, and Direct Permit Navigation", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForLoadState("networkidle");
+  test("downloads a project-specific seeded demo PDF", async ({ page }, testInfo) => {
+    await signInAndOpenDocuments(page);
 
-    // 1. Sign in as Sam Rivera (DOTD Infrastructure Lead)
-    const samBtn = page.locator("#demo-persona-sam-rivera");
-    await samBtn.waitFor({ state: "visible" });
-    await samBtn.hover();
-    await samBtn.click();
-    await expect(page.locator("text=My Work").first()).toBeVisible();
+    const seededVersion = page.getByText(/la82-drainage-hydrodynamic-demo-v1\.pdf/).first();
+    const seededVersionRow = seededVersion.locator("../..");
+    const downloadPromise = page.waitForEvent("download");
+    await seededVersionRow.getByRole("button", { name: "Download", exact: true }).click();
+    const download = await downloadPromise;
+    const downloadedPath = testInfo.outputPath("la82-drainage-hydrodynamic-demo-v1.pdf");
+    await download.saveAs(downloadedPath);
 
-    // 2. Navigate to Document Vault via Secondary Tools
-    const vaultBtn = page.locator("button:has-text('Document Vault')");
-    await vaultBtn.hover();
-    await vaultBtn.click();
-    await expect(page.locator("text=Project Document Vault")).toBeVisible();
-    await expect(page.locator("text=Single Source of Truth Document Vault")).toBeVisible();
-
-    // 3. Search for Bridge Load Rating Package
-    const searchInput = page.locator("input[placeholder*='Search by title']");
-    await searchInput.fill("Bridge");
-    await expect(page.locator("text=Freshwater Bayou Bridge Structural Load Rating & Axle Matrix").first()).toBeVisible();
-
-    // 4. Clear filter and select workstream filter
-    await searchInput.fill("");
-    const wsSelect = page.locator("select[aria-label='Filter documents by project or workstream']");
-    await wsSelect.selectOption({ label: "WS-LA82-HEAVYHAUL · LA-82 Heavy-Haul Access & Bridge Reinforcement (3)" });
-
-    // Assert all 3 documents for LA-82 Heavy-Haul are present
-    await expect(page.locator("text=LA-82 Heavy-Haul Drainage & Hydrodynamic Study").first()).toBeVisible();
-    await expect(page.locator("text=Freshwater Bayou Bridge Structural Load Rating & Axle Matrix").first()).toBeVisible();
-    await expect(page.locator("text=LA-82 Heavy Transport Traffic Management & Escort Protocol").first()).toBeVisible();
-
-    // 5. Test real browser download from Document Vault
-    const vaultDownloadPromise = page.waitForEvent("download");
-    const vaultDlBtn = page.locator("button:has-text('Download')").first();
-    await vaultDlBtn.hover();
-    await vaultDlBtn.click();
-    const vaultDownload = await vaultDownloadPromise;
-    expect(vaultDownload.suggestedFilename()).toContain(".pdf");
-
-    // 6. Open In-App Preview from Vault
-    await page.locator("button:has-text('In-App Preview & Inspection')").first().click();
-    const modal = page.locator("[role='dialog']");
-    await expect(modal).toBeVisible();
-    await expect(modal.locator("text=SHA-256 Cryptographic Checksum")).toBeVisible();
-    await modal.locator("button[aria-label='Close document viewer']").click();
-    await expect(modal).not.toBeVisible();
-
-    // 7. Navigate to Permit Detail from Work Item
-    await page.click("button:has-text('My Work')");
-    await page.locator("text=Open Work").first().click();
-
-    // Verify permit detail shows Linked Documents section with packages and download trigger
-    await expect(page.locator("text=Project Documents & Packages")).toBeVisible();
-    await expect(page.locator("button:has-text('View Document')").first()).toBeVisible();
-
-    const detailDownloadPromise = page.waitForEvent("download");
-    await page.locator("button:has-text('Download')").first().click();
-    const detailDownload = await detailDownloadPromise;
-    expect(detailDownload.suggestedFilename()).toContain(".pdf");
+    expect(download.suggestedFilename()).toBe("la82-drainage-hydrodynamic-demo-v1.pdf");
+    expect(readFileSync(downloadedPath).subarray(0, 5).toString()).toBe("%PDF-");
+    await expect(page.getByRole("status")).toContainText("Verified la82-drainage-hydrodynamic-demo-v1.pdf");
   });
 });

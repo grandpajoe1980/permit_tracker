@@ -15,18 +15,19 @@ export async function calculateSHA256(buffer: ArrayBuffer): Promise<string> {
 export async function uploadDocumentFile(
   file: File,
   documentId: string,
-  versionNumber: number
+  versionNumber: number,
+  uploadId = crypto.randomUUID(),
 ): Promise<{ storagePath: string; error: Error | null }> {
   const client = getSupabaseBrowser();
   if (!client) return { storagePath: "", error: new Error("Supabase client unavailable") };
 
   const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `${documentId}/v${versionNumber}/${sanitizedName}`;
+  const path = `${documentId}/v${versionNumber}/${uploadId}/${sanitizedName}`;
 
   const { error } = await client.storage
     .from("path-documents")
     .upload(path, file, {
-      upsert: true,
+      upsert: false,
       contentType: file.type || "application/octet-stream",
     });
 
@@ -35,6 +36,31 @@ export async function uploadDocumentFile(
   }
 
   return { storagePath: path, error: null };
+}
+
+export async function downloadDocumentFile(
+  storagePath: string,
+): Promise<{ blob: Blob | null; error: Error | null }> {
+  const client = getSupabaseBrowser();
+  if (!client) return { blob: null, error: new Error("Supabase client unavailable") };
+
+  const cleanPath = storagePath
+    .replace(/^supabase:\/\/storage\/(documents|path-documents)\//, "")
+    .replace(/^(path-documents|documents)\//, "");
+
+  const { data, error } = await client.storage.from("path-documents").download(cleanPath);
+  if (error || !data) {
+    return {
+      blob: null,
+      error: new Error(`Storage download failed: ${error?.message ?? "No file data returned"}`),
+    };
+  }
+
+  return { blob: data, error: null };
+}
+
+function isUuid(value: string | undefined): value is string {
+  return Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
 }
 
 export async function getSignedDocumentUrl(
@@ -77,19 +103,21 @@ export async function mutateUploadDocumentVersion(params: {
 
   const fileBuffer = await params.file.arrayBuffer();
   const sha256Hash = await calculateSHA256(fileBuffer);
+  const uploadId = crypto.randomUUID();
 
   // 1. Upload to Supabase Storage
   const { storagePath, error: uploadError } = await uploadDocumentFile(
     params.file,
     params.documentId,
-    params.versionNumber
+    params.versionNumber,
+    uploadId,
   );
 
   if (uploadError) {
     return { data: null, error: uploadError };
   }
 
-  const versionId = `doc-v-${params.documentId.toLowerCase()}-v${params.versionNumber}`;
+  const versionId = `doc-v-${uploadId}`;
   const now = new Date().toISOString();
 
   // 2. Try RPC function
@@ -107,8 +135,8 @@ export async function mutateUploadDocumentVersion(params: {
     p_uploaded_by_org_name: params.uploadedByOrgName,
     p_change_notes: params.changeNotes,
     p_reviewing_agency_codes: params.reviewingAgencyCodes,
-    p_project_id: params.projectId ?? null,
-    p_actor_id: params.actorId ?? null,
+    p_project_id: isUuid(params.projectId) ? params.projectId : null,
+    p_actor_id: isUuid(params.actorId) ? params.actorId : null,
   };
 
   const { data: rpcData, error: rpcError } = await client.rpc("rpc_create_document_version", rpcPayload);
@@ -158,7 +186,10 @@ export async function mutateUploadDocumentVersion(params: {
     created_at: now,
   });
 
-  if (verError) return { data: null, error: new Error(verError.message) };
+  if (verError) {
+    await client.storage.from("path-documents").remove([storagePath]);
+    return { data: null, error: new Error(verError.message) };
+  }
 
   const reviews: DocumentAgencyReviewRecord[] = [];
   for (const agencyCode of params.reviewingAgencyCodes) {
