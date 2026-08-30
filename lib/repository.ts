@@ -831,6 +831,46 @@ class ProjectDeliveryRepository {
     return ws;
   }
 
+  clearWorkstreamBlocker(params: {
+    workstreamId: string;
+    resolutionNotes?: string;
+    actorName: string;
+    actorOrgName: string;
+  }): WorkstreamRecord | null {
+    const ws = this.getWorkstreamById(params.workstreamId);
+    if (!ws) return null;
+
+    const oldState = ws.operationalState;
+    ws.operationalState = "running";
+    ws.operationalStateLabel = ws.currentStageName ? `Running (${ws.currentStageName})` : "Running";
+    const oldReason = ws.waitingReason;
+    ws.waitingReason = undefined;
+    ws.waitingOnEntity = undefined;
+
+    this.auditEvents.unshift(createAuditEvent({
+      entityType: "workstream",
+      entityId: ws.code,
+      actorName: params.actorName,
+      actorOrgName: params.actorOrgName,
+      actionType: "resumed",
+      oldValue: oldState,
+      newValue: "running",
+      reason: params.resolutionNotes || `Blocker cleared (${oldReason || "concurrence received"}). Review clock resumed.`,
+    }));
+
+    this.dispatchNotification({
+      userId: "user-sarah-johnson",
+      title: `${ws.title} resumed`,
+      message: `Blocker cleared by ${params.actorName}. Work is running.`,
+      type: "update",
+      linkUrl: `/workstreams/${ws.code}`,
+      urgency: "info",
+      metadata: { workstreamCode: ws.code },
+    });
+
+    return ws;
+  }
+
   completeWorkstreamStage(params: {
     workstreamId: string;
     completedChecklists: string[];
@@ -846,7 +886,11 @@ class ProjectDeliveryRepository {
     const currentStage = stages.find((stage) => ws.currentStageName?.toLowerCase().includes(stage.name.toLowerCase().split(" ")[0])) ?? stages[0];
 
     if (currentStage) {
-      const validation = validateStageTransition(currentStage, params.completedChecklists, params.providedDocs);
+      const validation = validateStageTransition(
+        currentStage,
+        params.completedChecklists,
+        params.providedDocs
+      );
       if (!validation.allowed) {
         return {
           success: false,
@@ -863,11 +907,42 @@ class ProjectDeliveryRepository {
     const nextStage = currentIndex >= 0 ? stages[currentIndex + 1] : undefined;
 
     ws.currentStageName = nextStage?.name ?? "Complete & Ready for Final Determination";
+    ws.currentStageId = nextStage?.id ?? ws.currentStageId;
     ws.operationalState = nextStage ? "running" : "complete";
     ws.operationalStateLabel = nextStage ? `Running (${nextStage.name})` : "Complete";
     ws.waitingReason = undefined;
     ws.waitingOnEntity = undefined;
     ws.actualCompletionDate = nextStage ? undefined : new Date().toISOString().split("T")[0];
+
+    // Transition lead agency if the next stage belongs to a different agency
+    if (nextStage && nextStage.responsibleOrgCode && nextStage.responsibleOrgCode !== ws.regulatoryLead.orgCode) {
+      ws.regulatoryLead.orgCode = nextStage.responsibleOrgCode;
+      ws.regulatoryLead.orgName =
+        nextStage.responsibleOrgCode === "CPRA"
+          ? "Coastal Protection and Restoration Authority"
+          : nextStage.responsibleOrgCode === "DOTD"
+          ? "Louisiana Department of Transportation and Development"
+          : nextStage.responsibleOrgCode === "LDEQ"
+          ? "Louisiana Department of Environmental Quality"
+          : nextStage.responsibleOrgCode === "USACE"
+          ? "US Army Corps of Engineers (New Orleans District)"
+          : nextStage.responsibleOrgCode === "LDWF"
+          ? "Louisiana Department of Wildlife and Fisheries"
+          : `${nextStage.responsibleOrgCode} Regulatory Division`;
+
+      ws.regulatoryLead.assignedReviewerName =
+        nextStage.responsibleOrgCode === "CPRA"
+          ? "Jean-Paul Guidry"
+          : nextStage.responsibleOrgCode === "DOTD"
+          ? "Mark Fontenot, PE"
+          : nextStage.responsibleOrgCode === "LDEQ"
+          ? "Jordan Lee"
+          : nextStage.responsibleOrgCode === "USACE"
+          ? "Martin Breaux"
+          : nextStage.responsibleOrgCode === "LDWF"
+          ? "Dr. Camille LeBlanc"
+          : "Assigned Agency Reviewer";
+    }
 
     this.auditEvents.unshift(createAuditEvent({
       entityType: "workstream",
@@ -883,7 +958,7 @@ class ProjectDeliveryRepository {
     this.dispatchNotification({
       userId: "user-sarah-johnson",
       title: `${ws.title} moved forward`,
-      message: nextStage ? `The next action is ${nextStage.name}.` : "The workstream is complete.",
+      message: nextStage ? `The next action is ${nextStage.name} (${ws.regulatoryLead.orgCode}).` : "The workstream is complete.",
       type: "completion",
       linkUrl: `/workstreams/${ws.code}`,
       urgency: "info",
@@ -1077,6 +1152,14 @@ class ProjectDeliveryRepository {
 
     rfi.responses = [...(rfi.responses ?? []), response];
     rfi.status = "submitted_by_applicant";
+
+    const ws = this.getWorkstreamById(rfi.workstreamId);
+    if (ws) {
+      ws.operationalState = "waiting_government";
+      ws.operationalStateLabel = `Waiting on ${rfi.requestingOrgCode} Review`;
+      ws.waitingReason = "SpaceX response submitted; awaiting reviewer acceptance";
+      ws.waitingOnEntity = rfi.requestingOrgCode;
+    }
 
     this.auditEvents.unshift(createAuditEvent({
       entityType: "rfi_response",

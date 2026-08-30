@@ -148,7 +148,7 @@ export function generateGovernorWeeklyBriefing(
     .slice(0, 5)
     .map((c) => ({
       milestoneName: c.committedAction,
-      workstreamTitle: c.workstreamTitle,
+      workstreamTitle: c.workstreamTitle ?? "Interagency Workstream",
       targetDate: c.promisedDueDate,
       responsibleParty: `${c.committingOrgCode} (${c.madeByPersonName})`,
       isCriticalPath: c.isCriticalPathImpact,

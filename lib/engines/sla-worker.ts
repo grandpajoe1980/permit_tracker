@@ -51,11 +51,11 @@ export function runDailySlaEscalationScan(referenceDate?: string): SlaScanResult
 
     const evaluation = evaluateWorkstreamEscalation(ws);
 
-    if (evaluation.isTriggered && evaluation.level > (ws.escalationLevel || 0)) {
+    if (evaluation.isEscalated && evaluation.currentLevel > (ws.escalationLevel || 0)) {
       const oldLevel = ws.escalationLevel || 0;
-      ws.escalationLevel = evaluation.level;
+      ws.escalationLevel = evaluation.currentLevel;
       ws.escalationTriggeredAt = scanTimestamp;
-      ws.escalationSummary = `Level ${evaluation.level}: ${evaluation.levelName}. ${evaluation.recommendedAction}`;
+      ws.escalationSummary = `${evaluation.levelLabel}. ${evaluation.recommendedAction}`;
       newlyEscalatedCount++;
 
       if (evaluation.isExecutiveActionRequired) {
@@ -70,7 +70,7 @@ export function runDailySlaEscalationScan(referenceDate?: string): SlaScanResult
         actorOrgName: "Louisiana State Project Office",
         actionType: "sla_escalation",
         oldValue: `Level ${oldLevel}`,
-        newValue: `Level ${evaluation.level} (${evaluation.levelName})`,
+        newValue: `Level ${evaluation.currentLevel} (${evaluation.levelLabel})`,
         reason: evaluation.recommendedAction,
       });
       repository.getAuditEvents().unshift(audit);
@@ -78,15 +78,15 @@ export function runDailySlaEscalationScan(referenceDate?: string): SlaScanResult
       // Dispatch notification
       repository.dispatchNotification({
         userId: "user-sarah-johnson",
-        title: `🚨 SLA Escalation Level ${evaluation.level}: ${ws.code}`,
-        message: `${ws.title} (${ws.regulatoryLead.orgCode}) escalated to Level ${evaluation.level} (${evaluation.levelName}). Recommended Action: ${evaluation.recommendedAction}`,
+        title: `🚨 SLA Escalation Level ${evaluation.currentLevel}: ${ws.code}`,
+        message: `${ws.title} (${ws.regulatoryLead.orgCode}) escalated to ${evaluation.levelLabel}. Recommended Action: ${evaluation.recommendedAction}`,
         type: evaluation.isExecutiveActionRequired ? "escalation" : "deadline_warning",
         linkUrl: `/workstreams/${ws.code}`,
         urgency: evaluation.isExecutiveActionRequired ? "critical" : "high",
         metadata: {
           workstreamCode: ws.code,
-          escalationLevel: evaluation.level,
-          targetRoles: evaluation.targetRoles,
+          escalationLevel: evaluation.currentLevel,
+          targetRoles: evaluation.notifiedParties,
         },
       });
 
@@ -94,10 +94,10 @@ export function runDailySlaEscalationScan(referenceDate?: string): SlaScanResult
         workstreamCode: ws.code,
         workstreamTitle: ws.title,
         leadAgencyCode: ws.regulatoryLead.orgCode,
-        escalationLevel: evaluation.level,
-        escalationName: evaluation.levelName,
+        escalationLevel: evaluation.currentLevel,
+        escalationName: evaluation.levelLabel,
         isExecutiveActionRequired: evaluation.isExecutiveActionRequired,
-        notifiedRoles: evaluation.targetRoles,
+        notifiedRoles: evaluation.notifiedParties,
         recommendedAction: evaluation.recommendedAction,
       });
     }

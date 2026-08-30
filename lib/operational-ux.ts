@@ -1,6 +1,7 @@
 import type {
   CommitmentRecord,
   CoordinationRequestRecord,
+  CustomerRequestRecord,
   DocumentRecord,
   RFIRecord,
   WorkflowTemplateRecord,
@@ -27,12 +28,13 @@ import { participantForTask, participantForWorkstream, projectProfiles } from ".
 
 export type WorkspaceMode = "reviewer" | "agency" | "supervisor" | "state_office" | "customer" | "admin";
 
-export type WorkItemKind = "workflow" | "task" | "rfi" | "coordination" | "document" | "commitment" | "determination";
+export type WorkItemKind = "workflow" | "task" | "rfi" | "coordination" | "document" | "commitment" | "determination" | "customer_request";
 
 export type WorkActionId =
   | "complete_step"
   | "request_information"
   | "mark_blocked"
+  | "clear_blocker"
   | "transfer"
   | "escalate"
   | "add_note"
@@ -179,8 +181,8 @@ function dateRelation(value: string | undefined) {
 
 function roleForPersona(persona: DemoPersona | null): WorkspaceMode {
   if (!persona) return "agency";
-  const role = persona?.role.toLowerCase() ?? "";
-  if (includesAny(role, ["applicant", "customer", "submitter"])) return "customer";
+  const role = persona?.role?.toLowerCase() ?? "";
+  if (persona.organization?.toUpperCase().includes("SPACEX") || (persona as { agency?: string }).agency?.toUpperCase() === "SPACEX" || persona.badge?.toLowerCase() === "applicant" || persona.badge?.toLowerCase() === "customer" || includesAny(role, ["applicant", "customer", "submitter", "spacex"])) return "customer";
   if (includesAny(role, ["path administrator", "program administrator"])) return "admin";
   if (includesAny(role, ["supervisor", "administrator"])) return "supervisor";
   if (includesAny(role, ["state project", "executive"])) return "state_office";
@@ -434,6 +436,69 @@ function commitmentToWorkItem(commitment: CommitmentRecord, persona: Operational
   };
 }
 
+function customerRequestToWorkItem(
+  request: CustomerRequestRecord,
+  persona: OperationalPersona,
+  workstream?: WorkstreamRecord
+): OperationalWorkItem {
+  const isSubmitter = persona.isCustomer;
+  const isSupervisorOrAdmin = persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin";
+  const isTargetAgency = request.knownAgencyCode ? sameAgency(request.knownAgencyCode, persona.agencyCode) : true;
+  const isTriage = request.status === "triage" || request.status === "submitted";
+  const isActionRequired = isSubmitter
+    ? request.status === "draft"
+    : isTriage || request.status === "in_progress";
+
+  const tone = request.status === "resolved" || request.status === "closed"
+    ? "green"
+    : request.blocksActiveWork || request.scheduleImportance === "critical"
+    ? "red"
+    : request.status === "in_progress"
+    ? "blue"
+    : "yellow";
+
+  const assignedAgency = request.knownAgencyCode || workstream?.regulatoryLead.orgCode || "State Project Office";
+
+  return {
+    id: request.id,
+    sourceId: request.id,
+    kind: "customer_request",
+    title: request.title,
+    projectName: "SpaceX Pecan Island Launch Complex",
+    workstreamId: request.relatedWorkstreamId ?? workstream?.id ?? "WS-CUSTOMER-INTAKE",
+    workstreamTitle: workstream?.title ?? (request.knownAgencyCode ? `${request.knownAgencyCode} Request · ${request.title}` : `Customer Request · ${request.confirmationNumber}`),
+    statusTone: tone,
+    statusLabel: request.status.replaceAll("_", " ").toUpperCase(),
+    stageName: isTriage ? "Intake & Triage" : request.status === "in_progress" ? "Under Review" : "Completed",
+    whyHere: isSubmitter
+      ? "You submitted this request to the Louisiana Project Delivery team."
+      : isSupervisorOrAdmin
+      ? `Customer intake request submitted by ${request.submittedByName || "SpaceX"} awaiting project office action.`
+      : `Customer intake request routed to ${assignedAgency} for technical action.`,
+    whatToDo: isSubmitter
+      ? request.status === "triage_waiting_applicant"
+        ? "Provide the additional information requested by the project concierge."
+        : "Awaiting government triage and assignment."
+      : isTriage
+      ? "Review the customer's request, accept into workflow, or request clarification."
+      : "Complete the technical action and notify the customer.",
+    removesFromQueue: isSubmitter ? "Providing the requested information" : "Accepting into workflow or completing the request",
+    dueDate: request.desiredDate ?? new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0],
+    scheduleImpact: request.blocksActiveWork ? "Blocks active SpaceX project work" : "Routine customer coordination",
+    nextHandoff: isSubmitter ? "State Project Office Review" : `${assignedAgency} Technical Reviewer`,
+    requiredInputs: request.attachmentDocumentVersionIds?.length ? ["Attached document versions verified"] : ["Customer description and requested outcome"],
+    documents: [],
+    customerVisibleSummary: request.description,
+    requiresCurrentUserAction: isActionRequired && (isSubmitter || isSupervisorOrAdmin || isTargetAgency),
+    requiresOrganizationAction: isTargetAgency || isSupervisorOrAdmin,
+    visibilityOnly: false,
+    priorityScore: request.blocksActiveWork ? 95 : request.scheduleImportance === "critical" ? 85 : 60,
+    isCriticalPath: request.blocksActiveWork || Boolean(workstream?.isCriticalPath),
+    ownerOrganization: assignedAgency,
+    ownerPersonName: request.assignedToUserName ?? "State Project Concierge",
+  };
+}
+
 export function getOperationalWorkItems(options: {
   persona: DemoPersona | null;
   requests?: ServiceRequest[];
@@ -442,6 +507,7 @@ export function getOperationalWorkItems(options: {
   rfis?: RFIRecord[];
   documents?: DocumentRecord[];
   commitments?: CommitmentRecord[];
+  customerRequests?: CustomerRequestRecord[];
 }): { persona: OperationalPersona; items: OperationalWorkItem[] } {
   const persona = getOperationalPersona(options.persona);
   const requests = options.requests ?? Object.values(pecanIslandRequests);
@@ -479,6 +545,15 @@ export function getOperationalWorkItems(options: {
     const item = commitmentToWorkItem(commitment, persona);
     if (item && (persona.workspace !== "reviewer" || sameAgency(commitment.committingOrgCode, persona.agencyCode))) items.push(item);
   }
+  for (const customerRequest of options.customerRequests ?? []) {
+    const ws = customerRequest.relatedWorkstreamId ? workstreamById.get(customerRequest.relatedWorkstreamId) : undefined;
+    const isTarget = persona.workspace === "customer"
+      ? customerRequest.submittedByUserId === persona.id || persona.isCustomer
+      : persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin" || (customerRequest.knownAgencyCode && sameAgency(customerRequest.knownAgencyCode, persona.agencyCode)) || !customerRequest.knownAgencyCode;
+    if (isTarget) {
+      items.push(customerRequestToWorkItem(customerRequest, persona, ws));
+    }
+  }
 
   const deduped = new Map<string, OperationalWorkItem>();
   for (const item of items) {
@@ -512,21 +587,45 @@ export function groupMyWork(items: OperationalWorkItem[]): QueueGroup[] {
 
 export function getAvailableActions(item: OperationalWorkItem, persona: OperationalPersona): WorkActionId[] {
   if (persona.isCustomer) {
-    if (item.kind === "rfi" && item.statusTone === "red") return ["respond", "upload_documents"];
+    if (item.kind === "rfi" && (item.statusTone === "red" || item.statusLabel.toLowerCase().includes("waiting") || !item.hasRfiResponse)) {
+      return ["respond", "upload_documents"];
+    }
     return [];
   }
+
   const actions: WorkActionId[] = [];
   if (item.kind === "document") {
-    if (persona.permissions.includes("edit_workflow")) actions.push("approve_document", "approve_with_comments", "request_revision");
-  } else if (item.kind === "rfi" && item.hasRfiResponse) {
-    actions.push("accept_rfi_response", "request_clarification");
-  } else if (item.kind === "workflow" && item.statusTone !== "green") {
-    if (persona.permissions.includes("edit_workflow") || persona.workspace === "reviewer") actions.push("complete_step");
-    if (persona.permissions.includes("add_blockers")) actions.push("request_information", "mark_blocked");
+    if (persona.permissions.includes("edit_workflow") || persona.workspace === "reviewer" || persona.workspace === "agency" || persona.workspace === "supervisor") {
+      actions.push("approve_document", "approve_with_comments", "request_revision", "add_note");
+    }
+  } else if (item.kind === "rfi") {
+    if (item.hasRfiResponse || item.statusLabel.toLowerCase().includes("submitted")) {
+      actions.push("accept_rfi_response", "request_clarification", "add_note");
+    } else {
+      actions.push("request_information", "add_note");
+    }
+  } else if (item.kind === "customer_request") {
+    actions.push("complete_step", "request_information", "mark_blocked", "escalate", "transfer", "add_note");
+  } else if (item.kind === "workflow" || item.kind === "task") {
+    if (item.statusTone !== "green") {
+      actions.push("complete_step", "request_information", "mark_blocked");
+      if (item.statusTone === "red" || item.statusLabel.toLowerCase().includes("block") || item.statusLabel.toLowerCase().includes("wait")) {
+        actions.push("clear_blocker");
+      }
+    }
+    actions.push("escalate", "transfer", "add_note");
   }
-  if (persona.permissions.includes("reassign_agency") || persona.workspace === "supervisor" || persona.workspace === "state_office") actions.push("transfer");
-  if (persona.permissions.includes("escalate_liaison") && item.statusTone !== "green") actions.push("escalate");
-  if (!persona.isCustomer) actions.push("add_note");
+
+  if (persona.permissions.includes("reassign_agency") || persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin") {
+    actions.push("transfer");
+  }
+  if (persona.permissions.includes("escalate_liaison") && item.statusTone !== "green") {
+    actions.push("escalate");
+  }
+  if (!persona.isCustomer) {
+    actions.push("add_note");
+  }
+
   return Array.from(new Set(actions));
 }
 

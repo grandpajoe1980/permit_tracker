@@ -286,7 +286,7 @@ export function DocumentVaultPanel({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onSelectWorkstream?.(doc.workstreamId);
+                        if (doc.workstreamId) onSelectWorkstream?.(doc.workstreamId);
                       }}
                       className="text-[11px] font-semibold text-teal-800 hover:underline mt-0.5 truncate text-left cursor-pointer transition-colors"
                       title="Open workstream in project page"

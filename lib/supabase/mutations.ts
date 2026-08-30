@@ -177,6 +177,28 @@ export async function mutateCreateCustomerRequest(params: {
   const { data: rpcData, error: rpcError } = await client.rpc("rpc_create_customer_request", rpcPayload);
   if (!rpcError && rpcData) {
     const row = rpcData as Record<string, unknown>;
+    await Promise.all([
+      insertAuditEvent({
+        entityType: "customer_request",
+        entityId: params.confirmationNumber,
+        actorName: params.submittedByName,
+        actorOrgName: "Space Exploration Technologies Corp. (SpaceX)",
+        actionType: "customer_request_submitted",
+        newValue: `${params.requestType} · ${params.title}`,
+        reason: params.description,
+        projectId: params.projectId,
+      }),
+      insertNotification({
+        userId: "user-sarah-johnson",
+        title: `New customer request: ${params.title}`,
+        message: `${params.submittedByName} submitted request ${params.confirmationNumber}`,
+        type: "action_required",
+        linkUrl: `/requests/${params.confirmationNumber}`,
+        urgency: params.blocksActiveWork ? "critical" : "normal",
+        metadata: { confirmationNumber: params.confirmationNumber, requestType: params.requestType },
+      }),
+    ]);
+
     return {
       data: {
         id: String(row.id),
