@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { getFullProjectRecord } from "@/lib/permit-utils";
 import type { DocumentRecord, DocumentVersionRecord } from "@/lib/domain-models";
 import { DocumentViewerModal } from "@/components/documents/DocumentViewerModal";
+import { downloadDocumentVersion } from "@/lib/document-download-utils";
 
 export function DocumentVaultPanel({
   onUploadRevision,
@@ -90,20 +91,15 @@ export function DocumentVaultPanel({
     }
   }
 
-  function handleDownload(documentId: string, versionId: string) {
+  async function handleDownload(documentId: string, versionId: string) {
     if (onDownloadDocument) {
       onDownloadDocument(documentId, versionId);
     } else {
       const doc = project.documents.find((d) => d.id === documentId);
       const ver = doc?.versions.find((v) => v.id === versionId) || doc?.versions[0];
-      const payload = `PATH SECURE VAULT DOWNLOAD\n==============================\nTitle: ${doc?.title}\nVersion: ${ver?.versionTag}\nFile: ${ver?.fileName}\nSHA-256: ${ver?.sha256Hash}\nTimestamp: ${ver?.uploadedAt}\n`;
-      const blob = new Blob([payload], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = window.document.createElement("a");
-      a.href = url;
-      a.download = ver?.fileName || `${doc?.title || "document"}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      if (doc && ver) {
+        await downloadDocumentVersion(doc, ver);
+      }
     }
   }
 

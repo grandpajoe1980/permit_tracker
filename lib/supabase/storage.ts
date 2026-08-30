@@ -44,9 +44,13 @@ export async function getSignedDocumentUrl(
   const client = getSupabaseBrowser();
   if (!client) return { signedUrl: null, error: new Error("Supabase client unavailable") };
 
+  const cleanPath = storagePath
+    .replace(/^supabase:\/\/storage\/(documents|path-documents)\//, "")
+    .replace(/^(path-documents|documents|vault)\//, "");
+
   const { data, error } = await client.storage
     .from("path-documents")
-    .createSignedUrl(storagePath, expiresInSeconds);
+    .createSignedUrl(cleanPath, expiresInSeconds);
 
   if (error) {
     return { signedUrl: null, error: new Error(`Failed to generate download URL: ${error.message}`) };

@@ -23,6 +23,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { DocumentRecord, DocumentVersionRecord } from "@/lib/domain-models";
+import { downloadDocumentVersion } from "@/lib/document-download-utils";
 
 interface DocumentViewerModalProps {
   document: DocumentRecord;
@@ -97,19 +98,11 @@ export function DocumentViewerModal({
     }
   }
 
-  function handleDownloadClick() {
+  async function handleDownloadClick() {
     if (onDownload) {
       onDownload(document.id, currentVersion.id);
     } else {
-      // Standalone browser fallback download
-      const payload = `PATH SECURE VAULT DOCUMENT\n================================\nDocument: ${document.title}\nID: ${document.id}\nVersion: ${currentVersion.versionTag}\nFile: ${currentVersion.fileName}\nSHA-256: ${currentVersion.sha256Hash}\nUploaded By: ${currentVersion.uploadedByName}\nTimestamp: ${currentVersion.uploadedAt}\n\n[Verified Immutable Binary Payload]`;
-      const blob = new Blob([payload], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const anchor = window.document.createElement("a");
-      anchor.href = url;
-      anchor.download = currentVersion.fileName || `${document.title}-${currentVersion.versionTag}.pdf`;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      await downloadDocumentVersion(document, currentVersion);
     }
   }
 
