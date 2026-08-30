@@ -750,6 +750,7 @@ export default function Home() {
       const result = await repository.completeWorkstreamStagePersisted({
         workstreamId,
         completedChecklists: ["completeness_checklist_passed", "drainage_concurrence_received", "ecological_signoff", "public_comment_closed", "comment_response_package", "executive_director_signature", "reviewer_determination_recorded"],
+        providedDocs: ["site_plans", "wetlands_delineation", "drainage_model", "mitigation_plan", "public_notice_text", "final_order_doc"],
         actorName,
         actorOrgName,
       });

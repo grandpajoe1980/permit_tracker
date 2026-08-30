@@ -1115,6 +1115,7 @@ class ProjectDeliveryRepository {
   async completeWorkstreamStagePersisted(params: {
     workstreamId: string;
     completedChecklists: string[];
+    providedDocs?: string[];
     actorName: string;
     actorOrgName: string;
   }): Promise<{ success: boolean; error: Error | null; nextStageName?: string }> {

@@ -28,7 +28,7 @@ findings below.
 | `node scripts/supabase-probe.mjs` | PASS | Configured project responded; 37 REST paths, Storage read/write/cleanup probes passed. This does not prove RLS isolation. |
 | `npm run build` / `npm run lint` before this checkpoint | BLOCKED | Both stopped because `bash` was unavailable on Windows. |
 
-## Wave 1 checkpoint in progress
+## Wave 2 checkpoint in progress
 
 - Added explicit `APP_DATA_MODE` handling. Production does not seed empty
   database reads from fixtures; demo/test mode retains deterministic fixtures.
@@ -43,6 +43,10 @@ findings below.
   triggers, project-bound RPC checks, notification recipient resolution, and
   anonymous RPC revocation. These migrations are not yet applied to the live
   project in this environment.
+- Added pinned workflow-version fields, immutable transition/checklist tables,
+  stage-run history, and an RPC-backed stage-completion gate that checks actor
+  access, blockers, unresolved RFIs, checklist presence, minimum processing
+  time, and records the handoff/audit in one transaction.
 
 ## Known blockers and risks
 
@@ -59,4 +63,5 @@ findings below.
    RPCs or explicit demo/test-only paths.
 2. Add failure/RLS regression tests and validate the forward migrations against
    a running Supabase database.
-3. Commit the Wave 1 checkpoint, then implement persisted workflow execution.
+3. Add designer draft/publish transactions, then continue through intake,
+   workbench, document, schedule, and route checkpoints.

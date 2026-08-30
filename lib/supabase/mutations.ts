@@ -832,6 +832,7 @@ export async function mutateCompleteWorkstreamStage(params: {
   workstreamCode: string;
   nextStageName?: string;
   completedChecklists: string[];
+  providedDocs?: string[];
   actorName: string;
   actorOrgName: string;
 }): Promise<MutationResult<{ nextStageName: string }>> {
@@ -841,6 +842,21 @@ export async function mutateCompleteWorkstreamStage(params: {
   const now = new Date().toISOString();
   const nextStage = params.nextStageName ?? "Complete & Ready for Final Determination";
   const isComplete = !params.nextStageName || params.nextStageName.toLowerCase().includes("complete");
+
+  const { data: rpcData, error: rpcError } = await client.rpc("rpc_complete_workstream_stage", {
+    p_workstream_id: params.workstreamId,
+    p_completed_checklists: params.completedChecklists,
+    p_provided_document_categories: params.providedDocs ?? [],
+    p_actor_name: params.actorName,
+    p_completion_notes: `Completed configured stage requirements: ${params.completedChecklists.join(", ")}`,
+  });
+  if (!rpcError && rpcData) {
+    const result = rpcData as Record<string, unknown>;
+    return { data: { nextStageName: String(result.nextStageName ?? nextStage) }, error: null };
+  }
+  if (!allowsFixtureData()) {
+    return { data: null, error: new Error(`Workflow transition transaction failed: ${rpcError?.message ?? "no row returned"}`) };
+  }
 
   const { error } = await client
     .from("workstreams")
