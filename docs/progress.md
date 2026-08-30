@@ -22,8 +22,7 @@ Operational UX implementation is complete and ready for checkpoint commit/public
 
 ## Active Tasks
 
-- Checkpoint-commit the completed implementation.
-- Publish the validated build through Sites if the configured hosting connector is available.
+- Implementation checkpoint committed as `c78dceb` and published through Sites.
 
 ## Pending Tasks
 

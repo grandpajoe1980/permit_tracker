@@ -120,4 +120,4 @@ DOC-01 current-state plan
 - [x] Build passes via direct Vinext command
 - [x] Lint passes with no errors (pre-existing warnings remain)
 - [x] Tests pass
-- [ ] Changes committed and site published
+- [x] Changes committed and site published
