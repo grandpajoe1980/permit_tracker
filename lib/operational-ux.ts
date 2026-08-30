@@ -23,7 +23,7 @@ import {
   workstreamsData,
   workflowTemplatesData,
 } from "./spacex-megaproject-fixture";
-import { participantForWorkstream, projectProfiles } from "./customer-portal";
+import { participantForTask, participantForWorkstream, projectProfiles } from "./customer-portal";
 
 export type WorkspaceMode = "reviewer" | "agency" | "supervisor" | "state_office" | "customer" | "admin";
 
@@ -234,7 +234,7 @@ function requestToWorkItem(request: ServiceRequest, persona: OperationalPersona,
   const isComplete = status === "complete" || request.status === "approved";
   const isBlocked = status === "blocked" || Boolean(request.blocker);
   const currentAction = workstream?.currentActionSummary ?? request.blocker?.unblockingAction ?? request.nextSteps[0]?.body ?? "Review the assigned materials and record your determination.";
-  const participant = workstream ? participantForWorkstream(workstream.id) : undefined;
+  const participant = workstream ? participantForTask(request.id, workstream.id) : undefined;
   const assignedUserId = workstream?.assignedReviewerUserId ?? participant?.userId;
   const currentUserId = persona.id.startsWith("user-") ? persona.id : `user-${persona.id}`;
   const personallyAssigned = Boolean(assignedUserId && assignedUserId === currentUserId);

@@ -272,3 +272,8 @@ export function customerVisibleProfiles(profiles = projectProfiles) {
 export function participantForWorkstream(workstreamId: string) {
   return projectParticipants.find((participant) => participant.isActive && participant.workstreamIds.includes(workstreamId) && participant.reviewResponsibility.length > 0);
 }
+
+export function participantForTask(taskId: string, workstreamId?: string) {
+  return projectParticipants.find((participant) => participant.isActive && participant.assignedTaskIds.includes(taskId))
+    ?? (workstreamId ? participantForWorkstream(workstreamId) : undefined);
+}
