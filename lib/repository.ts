@@ -862,7 +862,7 @@ class ProjectDeliveryRepository {
       userId: "user-sarah-johnson",
       title: `${ws.title} resumed`,
       message: `Blocker cleared by ${params.actorName}. Work is running.`,
-      type: "update",
+      type: "status_update",
       linkUrl: `/workstreams/${ws.code}`,
       urgency: "info",
       metadata: { workstreamCode: ws.code },
@@ -1235,7 +1235,7 @@ class ProjectDeliveryRepository {
     this.auditEvents.unshift(audit);
 
     if (isSupabaseConfigured()) {
-      void mutateCreateCommitment(newCommitment);
+      void mutateCreateCommitment({ ...newCommitment, workstreamTitle: newCommitment.workstreamTitle ?? "" });
     }
 
     return newCommitment;

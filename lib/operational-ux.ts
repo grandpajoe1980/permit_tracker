@@ -182,9 +182,12 @@ function dateRelation(value: string | undefined) {
 function roleForPersona(persona: DemoPersona | null): WorkspaceMode {
   if (!persona) return "agency";
   const role = persona?.role?.toLowerCase() ?? "";
-  if (persona.organization?.toUpperCase().includes("SPACEX") || (persona as { agency?: string }).agency?.toUpperCase() === "SPACEX" || persona.badge?.toLowerCase() === "applicant" || persona.badge?.toLowerCase() === "customer" || includesAny(role, ["applicant", "customer", "submitter", "spacex"])) return "customer";
-  if (includesAny(role, ["path administrator", "program administrator"])) return "admin";
-  if (includesAny(role, ["supervisor", "administrator"])) return "supervisor";
+  const badge = persona?.badge?.toLowerCase() ?? "";
+  // Check supervisor/admin roles first — a SpaceX supervisor is still a supervisor
+  if (badge === "administrator" || includesAny(role, ["path administrator", "program administrator"])) return "admin";
+  if (badge === "supervisor" || includesAny(role, ["supervisor"])) return "supervisor";
+  // Now check for customer/applicant/SpaceX submitter
+  if (persona.organization?.toUpperCase().includes("SPACEX") || (persona as { agency?: string }).agency?.toUpperCase() === "SPACEX" || badge === "applicant" || badge === "customer" || includesAny(role, ["applicant", "customer", "submitter", "spacex"])) return "customer";
   if (includesAny(role, ["state project", "executive"])) return "state_office";
   if (includesAny(role, ["reviewer", "environmental"])) return "reviewer";
   if (includesAny(role, ["infrastructure", "community", "agency"])) return "agency";
@@ -450,12 +453,12 @@ function customerRequestToWorkItem(
     : isTriage || request.status === "in_progress";
 
   const tone = request.status === "resolved" || request.status === "closed"
-    ? "green"
+    ? "green" as const
     : request.blocksActiveWork || request.scheduleImportance === "critical"
-    ? "red"
+    ? "red" as const
     : request.status === "in_progress"
-    ? "blue"
-    : "yellow";
+    ? "blue" as const
+    : "amber" as const;
 
   const assignedAgency = request.knownAgencyCode || workstream?.regulatoryLead.orgCode || "State Project Office";
 
@@ -469,14 +472,13 @@ function customerRequestToWorkItem(
     workstreamTitle: workstream?.title ?? (request.knownAgencyCode ? `${request.knownAgencyCode} Request · ${request.title}` : `Customer Request · ${request.confirmationNumber}`),
     statusTone: tone,
     statusLabel: request.status.replaceAll("_", " ").toUpperCase(),
-    stageName: isTriage ? "Intake & Triage" : request.status === "in_progress" ? "Under Review" : "Completed",
     whyHere: isSubmitter
       ? "You submitted this request to the Louisiana Project Delivery team."
       : isSupervisorOrAdmin
       ? `Customer intake request submitted by ${request.submittedByName || "SpaceX"} awaiting project office action.`
       : `Customer intake request routed to ${assignedAgency} for technical action.`,
     whatToDo: isSubmitter
-      ? request.status === "triage_waiting_applicant"
+      ? request.status === "draft"
         ? "Provide the additional information requested by the project concierge."
         : "Awaiting government triage and assignment."
       : isTriage
@@ -484,6 +486,7 @@ function customerRequestToWorkItem(
       : "Complete the technical action and notify the customer.",
     removesFromQueue: isSubmitter ? "Providing the requested information" : "Accepting into workflow or completing the request",
     dueDate: request.desiredDate ?? new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0],
+    ageLabel: `Submitted ${request.createdAt ? new Date(request.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "recently"}`,
     scheduleImpact: request.blocksActiveWork ? "Blocks active SpaceX project work" : "Routine customer coordination",
     nextHandoff: isSubmitter ? "State Project Office Review" : `${assignedAgency} Technical Reviewer`,
     requiredInputs: request.attachmentDocumentVersionIds?.length ? ["Attached document versions verified"] : ["Customer description and requested outcome"],
@@ -495,7 +498,7 @@ function customerRequestToWorkItem(
     priorityScore: request.blocksActiveWork ? 95 : request.scheduleImportance === "critical" ? 85 : 60,
     isCriticalPath: request.blocksActiveWork || Boolean(workstream?.isCriticalPath),
     ownerOrganization: assignedAgency,
-    ownerPersonName: request.assignedToUserName ?? "State Project Concierge",
+    ownerName: request.submittedByName ?? "State Project Concierge",
   };
 }
 

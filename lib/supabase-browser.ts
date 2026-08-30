@@ -1,6 +1,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 
 import type {
+  JurisdictionLevel,
   PermitRecord,
   PermitStatus,
   PermitStep,
@@ -112,6 +113,7 @@ export function requestRowToPermit(row: RequestRow): ServiceRequest {
     organization: "Space Exploration Technologies Corp.",
     leadAgency: ownerAgency,
     leadAgencyCode: text(row, "lead_agency_code", "org_code") || "STATE",
+    agencyLevel: (text(row, "agency_level") as JurisdictionLevel) || "State",
     submitted: dateLabel(submitted),
     targetDate: dateLabel(text(row, "due_date", "target_date")),
     currentDay,

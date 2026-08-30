@@ -194,7 +194,7 @@ export async function mutateCreateCustomerRequest(params: {
         message: `${params.submittedByName} submitted request ${params.confirmationNumber}`,
         type: "action_required",
         linkUrl: `/requests/${params.confirmationNumber}`,
-        urgency: params.blocksActiveWork ? "critical" : "normal",
+        urgency: params.blocksActiveWork ? "critical" : "info",
         metadata: { confirmationNumber: params.confirmationNumber, requestType: params.requestType },
       }),
     ]);
