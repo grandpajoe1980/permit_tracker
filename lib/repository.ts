@@ -817,6 +817,7 @@ class ProjectDeliveryRepository {
     };
 
     doc.versions.unshift(newVersion);
+    doc.agencyReviews.push(...(newVersion.agencyReviews ?? []));
     doc.currentVersionNumber = params.versionNumber;
     doc.currentVersionId = versionId;
 

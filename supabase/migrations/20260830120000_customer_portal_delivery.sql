@@ -21,22 +21,19 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS public.project_participants (
-  id text PRIMARY KEY,
-  project_id text NOT NULL,
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
-  organization_id text NOT NULL,
-  organization_name text NOT NULL,
-  project_role text NOT NULL,
-  workstream_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
-  assigned_task_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
-  review_responsibility jsonb NOT NULL DEFAULT '[]'::jsonb,
-  notification_responsibility jsonb NOT NULL DEFAULT '[]'::jsonb,
-  visibility_scope text NOT NULL DEFAULT 'project',
-  starts_on date,
-  ends_on date,
-  is_active boolean NOT NULL DEFAULT true
-);
+-- The initial PATH schema already owns this table with UUID project/org keys.
+-- Extend it in place so this migration is safe on an existing installation.
+ALTER TABLE public.project_participants ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE RESTRICT;
+ALTER TABLE public.project_participants ADD COLUMN IF NOT EXISTS organization_name text;
+ALTER TABLE public.project_participants ADD COLUMN IF NOT EXISTS project_role text;
+ALTER TABLE public.project_participants ADD COLUMN IF NOT EXISTS workstream_ids jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE public.project_participants ADD COLUMN IF NOT EXISTS assigned_task_ids jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE public.project_participants ADD COLUMN IF NOT EXISTS review_responsibility jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE public.project_participants ADD COLUMN IF NOT EXISTS notification_responsibility jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE public.project_participants ADD COLUMN IF NOT EXISTS visibility_scope text NOT NULL DEFAULT 'project';
+ALTER TABLE public.project_participants ADD COLUMN IF NOT EXISTS starts_on date;
+ALTER TABLE public.project_participants ADD COLUMN IF NOT EXISTS ends_on date;
+ALTER TABLE public.project_participants ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
 
 CREATE TABLE IF NOT EXISTS public.external_filings (
   id text PRIMARY KEY,

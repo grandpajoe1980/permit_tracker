@@ -47,6 +47,20 @@ for (const spec of users) {
   if (spec.role !== "customer") await one(supabase.from("organization_memberships").upsert({ user_id: user.id, organization_id: spec.role === "admin" ? orgByCode.LED ?? orgByCode.SPACEPORT : orgByCode[spec.role.toUpperCase()] ?? orgByCode.SPACEPORT, role: spec.role === "program" ? "supervisor" : spec.role === "admin" ? "admin" : "contributor", status: "active" }, { onConflict: "user_id,organization_id" }), `membership ${spec.email}`);
 }
 
+const profileByEmail = {
+  "alex.martin@spacex.com": { title: "SpaceX Project Manager", unit: "Louisiana Launch Site Delivery", organizationId: "SPACEX", organizationName: "Space Exploration Technologies Corp. (SpaceX)", projectRole: "Customer project lead", visible: true },
+  "maya.chen@spacex.com": { title: "SpaceX Regulatory Affairs Manager", unit: "Regulatory Affairs & Permitting", organizationId: "SPACEX", organizationName: "Space Exploration Technologies Corp. (SpaceX)", projectRole: "Customer regulatory lead", visible: true },
+  "jordan.lee@la.gov": { title: "Environmental Scientist 1", unit: "Office of Environmental Services / Water Quality Permits", organizationId: "LDEQ", organizationName: "Louisiana Department of Environmental Quality", projectRole: "Environmental review lead", visible: true },
+  "sam.rivera@la.gov": { title: "Civil Engineer 4", unit: "District 03 / Aviation and Bridge Design", organizationId: "DOTD", organizationName: "Louisiana Department of Transportation and Development", projectRole: "Transportation and infrastructure lead", visible: true },
+  "riley.brooks@vermilionparish.org": { title: "Intergovernmental Affairs Coordinator", unit: "Parish Administration / Community Relations", organizationId: "VERMILION", organizationName: "Vermilion Parish Police Jury", projectRole: "Parish and community liaison", visible: true },
+  "joe.skaggs@la.gov": { title: "Space Czar", unit: "PATH / Louisiana Project Delivery Administration", organizationId: "LED", organizationName: "Louisiana Economic Development (LED)", projectRole: "PATH administrator", visible: false },
+};
+for (const user of authUsers) {
+  const profile = profileByEmail[user.email];
+  if (!profile) continue;
+  await one(supabase.from("user_profiles").upsert({ id: `profile-${user.email.split("@")[0].replaceAll(".", "-")}`, user_id: user.id, full_name: user.name, organization_id: profile.organizationId, organization_name: profile.organizationName, display_title: profile.title, organizational_unit: profile.unit, work_email: user.email, project_role: profile.projectRole, is_customer_visible: profile.visible, is_active: true }, { onConflict: "user_id" }), `portal profile ${user.email}`);
+}
+
 const submitter = authUsers.find((u) => u.role === "customer");
 for (const [title, category, priority, status, stage, currentDay, totalDays] of requests) {
   const existing = await one(supabase.from("requests").select("id").eq("title", title).maybeSingle(), `find ${title}`);
