@@ -76,6 +76,10 @@ findings below.
   production mutations refusing to fall back to browser-side multi-request
   writes when those RPCs are unavailable. Added source-contract checks for
   route authentication, production mode behavior, and action RPC coverage.
+- Extended customer triage to create one or multiple linked workstreams from
+  a request in a single administrator flow. Heavy-haul/coastal/wetlands
+  intake creates the DOTD, CPRA, and USACE workstreams with distinct owners;
+  the database retains all created workstream IDs on the request.
 
 ## Known blockers and risks
 

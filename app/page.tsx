@@ -529,17 +529,32 @@ export default function Home() {
   }
 
   async function triageCustomerRequest(request: CustomerRequestRecord) {
-    const result = await repository.createWorkstreamFromRequestPersisted({
-      requestId: request.id,
-      code: `WS-${request.confirmationNumber.replace(/[^A-Z0-9]+/gi, "-").slice(-18)}`,
-      title: request.title,
-      category: request.requestType,
-      permitTypeId: request.knownPermitTypeId,
-      leadOrgCode: request.knownAgencyCode ?? "STATEPO",
-      leadOrgName: request.knownAgencyCode ?? "Louisiana Governor's Office of Major Projects & Delivery",
-    });
-    setToast(result.error ? `Triage failed: ${result.error.message}` : `Workstream ${result.data?.workstreamCode ?? "created"} created from ${request.confirmationNumber}.`);
-    if (!result.error) setMutationVersion((value) => value + 1);
+    const requestText = `${request.title} ${request.description}`.toLowerCase();
+    const workstreamPlan = requestText.includes("heavy-haul") || requestText.includes("wetland") || requestText.includes("coastal")
+      ? [
+          ["DOTD", "Louisiana Department of Transportation and Development", "DOTD Road Access"],
+          ["CPRA", "Coastal Protection and Restoration Authority", "CPRA Coastal Review"],
+          ["USACE", "US Army Corps of Engineers (New Orleans District)", "USACE Wetlands Coordination"],
+        ]
+      : [[request.knownAgencyCode ?? "STATEPO", request.knownAgencyCode ?? "Louisiana Governor's Office of Major Projects & Delivery", request.title]];
+    const baseCode = request.confirmationNumber.replace(/[^A-Z0-9]+/gi, "-").slice(-14);
+    for (const [orgCode, orgName, title] of workstreamPlan) {
+      const result = await repository.createWorkstreamFromRequestPersisted({
+        requestId: request.id,
+        code: `WS-${orgCode}-${baseCode}`,
+        title,
+        category: request.requestType,
+        permitTypeId: request.knownPermitTypeId,
+        leadOrgCode: orgCode,
+        leadOrgName: orgName,
+      });
+      if (result.error || !result.data) {
+        setToast(`Triage failed after ${orgCode}: ${result.error?.message ?? "the database did not confirm the workstream"}`);
+        return;
+      }
+    }
+    setToast(`${workstreamPlan.length} workstream${workstreamPlan.length === 1 ? "" : "s"} created from ${request.confirmationNumber}.`);
+    setMutationVersion((value) => value + 1);
   }
 
   function actorUserId() {

@@ -96,9 +96,9 @@ begin
   ) returning * into v_workstream;
 
   update public.customer_requests set
-    status = 'in_progress', related_workstream_id = v_workstream.id,
+    status = 'in_progress', related_workstream_id = coalesce(v_request.related_workstream_id, v_workstream.id),
     triaged_at = v_now, triaged_by_user_id = auth.uid(),
-    triaged_workstream_ids = jsonb_build_array(v_workstream.id), updated_at = v_now
+    triaged_workstream_ids = coalesce(v_request.triaged_workstream_ids, '[]'::jsonb) || jsonb_build_array(v_workstream.id), updated_at = v_now
   where id = v_request.id;
 
   insert into public.audit_events (
