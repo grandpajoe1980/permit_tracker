@@ -62,6 +62,11 @@ findings below.
   persistence paths. New forward migration
   `20260830213000_workstream_coordination_transactions.sql` owns those
   transactions.
+- Added physical, request-bound App Router pages for project summaries,
+  workstream detail, customer request receipts, and administrator workflow
+  versions. Each route authenticates with the RLS-bound server client and
+  returns a non-disclosing access/not-found response when the record is not
+  visible.
 
 ## Known blockers and risks
 
@@ -78,5 +83,6 @@ findings below.
    RPCs or explicit demo/test-only paths.
 2. Add failure/RLS regression tests and validate the forward migrations against
    a running Supabase database.
-3. Continue through government workbench, document lifecycle, schedule
-   persistence, and physical route extraction checkpoints.
+3. Continue through government workbench, document lifecycle, and schedule
+   persistence checkpoints; the first route extraction checkpoint is now in
+   source and build-verified.
