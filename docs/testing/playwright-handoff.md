@@ -15,7 +15,7 @@ The sign-in screen exposes demo persona buttons. Prefer selecting the persona by
 
 ## State and isolation
 
-The browser demo repository persists customer actions, document versions, notifications, audit events, and admin-directory changes in `localStorage` under `path-e2e-demo-state-v1` and `path-admin-team-users-v1`. The reset script restores the in-memory fixture for a new process; a browser test should also clear both keys before a fresh browser context when testing persistence. Supabase migrations and the seeded baseline are applied, but portal mutations are not yet hydrated from Supabase on browser login; treat cross-browser persistence as a production follow-up rather than an E2E assertion.
+The canonical runtime is Supabase Auth + Supabase PostgreSQL + Supabase Storage. Cross-browser Supabase durability is a required E2E assertion. Browser tests must assert that mutations persist directly to Supabase and propagate across independent browser contexts without relying on localStorage or in-memory fixtures. LocalStorage is never an authoritative store.
 
 ## Assertions that matter
 

@@ -21,3 +21,6 @@ Role: Frontend & UX Design Specialist for the Command Center.
    - Clear banner and inline notices: *"Notice: PATH is a state-level operational tracking and escalation system. Statutory filings and formal permit applications continue through each agency's designated portal."*
 5. **Clean, Modern, Accessible UX**:
    - Tailwind styling, accessible ARIA attributes, keyboard support, responsive layout, print formatting.
+
+## Supabase Durability Gate (Non-Negotiable)
+All UI actions that mutate state must show loading/saving states ("Saving...", "Saved", "Save failed"), await confirmation from Supabase before displaying success, and never use localStorage as an authoritative store.

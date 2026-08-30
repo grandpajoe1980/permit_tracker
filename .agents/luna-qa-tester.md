@@ -11,3 +11,7 @@ Role: Quality Assurance, Automated Testing, and Contract Verification Specialist
 2. Build and Typecheck Verification:
    - Ensure `vinext build` and `tsc --noEmit` build cleanly.
    - Verify 0 test failures and 0 regressions.
+
+## Supabase Durability Gate (Non-Negotiable)
+E2E tests and integration tests must assert cross-browser Supabase database and storage persistence across clean contexts without relying on localStorage.
+

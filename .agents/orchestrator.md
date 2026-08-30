@@ -17,3 +17,6 @@ You are the LEAD ENGINEER AND ORCHESTRATOR for the Government Service Request an
    - Plain-English intake form routing to liaison triage queue.
    - Executive dashboard (RAG status, critical path, upcoming deadlines, agency workload).
    - "Official filings happen elsewhere" disclaimers on every view.
+
+## Supabase Durability Gate (Non-Negotiable)
+All state changes must commit to Supabase PostgreSQL or Supabase Storage before success is displayed. LocalStorage and in-memory stores must never act as authoritative production stores. Cross-browser and clean-context persistence must be verified.

@@ -21,3 +21,6 @@ Role: Core Data Layer, Types, Fixtures, and State Utilities Specialist.
    - RAG status calculation (Red = blocked / overdue, Amber = action needed / hearing / warning, Green = on track / complete).
    - Critical path filtering and milestone calculations.
    - Plain-English intake parser & triage router simulating triage routing to agency liaisons.
+
+## Supabase Durability Gate (Non-Negotiable)
+State-changing operations must commit to authoritative Supabase PostgreSQL tables and/or Supabase Storage buckets with server-side authorization/RLS, audit events in `audit_events`, and notifications in `notifications`. No feature may be marked complete using only local state or fixtures.

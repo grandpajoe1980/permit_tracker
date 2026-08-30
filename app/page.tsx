@@ -79,6 +79,7 @@ import {
   supabaseConfigured,
 } from "@/lib/supabase-browser";
 import { repository } from "@/lib/repository";
+import { getSignedDocumentUrl, mutateUploadDocumentVersion } from "@/lib/supabase/storage";
 import {
   getAvailableActions,
   getCompletionPreview,
@@ -264,6 +265,8 @@ export default function Home() {
   const [externalStatus, setExternalStatus] = useState("submitted");
   const [profileStatus, setProfileStatus] = useState("");
   const [profileDraft, setProfileDraft] = useState({ displayTitle: "", organizationalUnit: "", workEmail: "", officePhone: "", mobilePhone: "", officeLocation: "", preferredContactMethod: "email" as "email" | "phone" | "text" | "teams", availabilityStatus: "available" as "available" | "limited" | "out_of_office" });
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("saved");
+  const [lastSavedTime, setLastSavedTime] = useState<string>("");
   const headingRef = useRef<HTMLHeadingElement>(null);
   const usernameRef = useRef<HTMLInputElement>(null);
 
@@ -305,9 +308,20 @@ export default function Home() {
   useEffect(() => {
     let active = true;
     const client = getSupabaseBrowserClient();
+
+    // Hydrate project state authoritatively from Supabase PostgreSQL
+    void repository.hydrateFromSupabase().then((hydrated) => {
+      if (active && hydrated) {
+        setMutationVersion((v) => v + 1);
+        setSaveStatus("saved");
+        setLastSavedTime(new Date().toLocaleTimeString());
+      }
+    });
+
     if (!client) return;
     void getBrowserUser().then(async (user) => {
       if (!active || !user) return;
+      await repository.hydrateFromSupabase();
       const loaded = await loadRequestsForUser();
       const persona = makeAuthenticatedPersona(user.email ?? "authenticated@path.local", String(user.user_metadata?.full_name ?? user.email ?? "Authenticated User"));
       const permits = loaded.permits.length > 0 ? loaded.permits : pecanIslandRequests;
@@ -330,13 +344,29 @@ export default function Home() {
     };
   }, []);
 
+  // Supabase Realtime multi-browser synchronization
   useEffect(() => {
-    try {
-      window.localStorage.setItem("path-admin-team-users-v1", JSON.stringify(teamUsers));
-    } catch {
-      // Admin directory durability is best-effort in the local demo boundary.
-    }
-  }, [teamUsers]);
+    if (!loggedIn) return;
+    const client = getSupabaseBrowserClient();
+    if (!client) return;
+
+    const channel = client
+      .channel("public-db-realtime-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public" },
+        async () => {
+          await repository.hydrateFromSupabase();
+          setMutationVersion((v) => v + 1);
+          setLastSavedTime(new Date().toLocaleTimeString());
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [loggedIn]);
 
   useEffect(() => {
     if (!loggedIn) return;
@@ -562,12 +592,25 @@ export default function Home() {
     setMutationVersion((value) => value + 1);
   }
 
-  function downloadVersion(documentId: string, versionId: string) {
+  async function downloadVersion(documentId: string, versionId: string) {
     const document = repository.getDocuments().find((entry) => entry.id === documentId);
     const version = document?.versions.find((entry) => entry.id === versionId);
     if (!document || !version) return;
     const storagePath = version.storagePath ?? version.storageUri;
-    if (storagePath.startsWith("data:") || storagePath.startsWith("blob:")) {
+
+    if (storagePath && !storagePath.startsWith("data:") && !storagePath.startsWith("blob:")) {
+      const { signedUrl, error } = await getSignedDocumentUrl(storagePath);
+      if (signedUrl && !error) {
+        const anchor = window.document.createElement("a");
+        anchor.href = signedUrl;
+        anchor.download = version.fileName;
+        anchor.target = "_blank";
+        anchor.click();
+        return;
+      }
+    }
+
+    if (storagePath && (storagePath.startsWith("data:") || storagePath.startsWith("blob:"))) {
       const anchor = window.document.createElement("a");
       anchor.href = storagePath;
       anchor.download = version.fileName;
@@ -588,20 +631,49 @@ export default function Home() {
     const file = event.target.files?.[0];
     const document = repository.getDocuments()[0];
     if (!file || !document) return;
-    const buffer = await file.arrayBuffer();
-    const digest = await crypto.subtle.digest("SHA-256", buffer);
-    const hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error ?? new Error("Unable to read the selected file."));
-      reader.readAsDataURL(file);
-    });
-    const versionNumber = document.currentVersionNumber + 1;
-    const version = repository.createDocumentVersion(document.id, { versionNumber, versionLabel: `v${versionNumber}.0`, storagePath: dataUrl, fileName: file.name, mimeType: file.type || "application/octet-stream", fileSizeBytes: file.size, sha256Hash: hash, uploadedByName: activePersona.name, uploadedByOrgName, changeNotes: "Revision uploaded through the PATH document center.", reviewingAgencyCodes: ["DOTD", "CPRA"] });
-    if (version) {
-      setToast(`${version.versionTag} uploaded. Agency review assignments were reset for the new immutable version.`);
-      setMutationVersion((value) => value + 1);
+
+    setSaveStatus("saving");
+    try {
+      const versionNumber = document.currentVersionNumber + 1;
+      const res = await mutateUploadDocumentVersion({
+        documentId: document.id,
+        documentTitle: document.title,
+        versionNumber,
+        versionLabel: `v${versionNumber}.0`,
+        file,
+        uploadedByName: activePersona.name,
+        uploadedByOrgName,
+        changeNotes: "Revision uploaded through the PATH document center.",
+        reviewingAgencyCodes: ["DOTD", "CPRA"],
+        projectId: projectRecord.id,
+        actorId: actorUserId(),
+      });
+
+      if (res.data) {
+        repository.createDocumentVersion(document.id, {
+          versionNumber,
+          versionLabel: `v${versionNumber}.0`,
+          storagePath: res.data.storagePath || "",
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          fileSizeBytes: file.size,
+          sha256Hash: res.data.sha256Hash,
+          uploadedByName: activePersona.name,
+          uploadedByOrgName,
+          changeNotes: "Revision uploaded through the PATH document center.",
+          reviewingAgencyCodes: ["DOTD", "CPRA"],
+        });
+        setToast(`${res.data.versionLabel} uploaded to Supabase Storage. Agency review assignments were reset.`);
+        setSaveStatus("saved");
+        setLastSavedTime(new Date().toLocaleTimeString());
+        setMutationVersion((value) => value + 1);
+      } else {
+        throw res.error ?? new Error("Upload failed");
+      }
+    } catch (err) {
+      console.error("Upload error:", err);
+      setSaveStatus("error");
+      setToast("Failed to upload document to Supabase Storage.");
     }
     event.target.value = "";
   }
@@ -1048,5 +1120,5 @@ export default function Home() {
     return renderAdmin();
   }
 
-  return <div className="min-h-screen bg-[#f3f6f7] text-[#172033]"><a className="skip-link" href="#main-content">Skip to main content</a><div className="road-stripe" /><header className="site-header sticky top-0 z-30"><div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-3 sm:px-6"><Button type="button" variant="ghost" size="icon" onClick={() => setMobileNavOpen((value) => !value)} className="text-white hover:bg-white/10 lg:hidden" aria-label="Toggle navigation"><Menu className="size-5" /></Button><span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d]"><Zap className="size-5 fill-current" aria-hidden="true" /></span><div className="min-w-0"><p className="text-sm font-black text-white">PATH</p><p className="truncate text-[11px] font-semibold text-slate-300">{workspaceTitle(activePersona.workspace)} · SpaceX Pecan Island</p></div><div className="ml-auto hidden items-center gap-2 text-xs text-slate-200 md:flex"><span className="rounded-full border border-white/20 px-3 py-1.5">{activePersona.name}</span><span className="rounded-full border border-teal-300/40 bg-teal-900/40 px-3 py-1.5 font-bold text-teal-100">{activePersona.roleLabel}</span></div><Button type="button" variant="ghost" size="icon" onClick={() => navigate("notifications")} className="relative text-white hover:bg-white/10" aria-label="Open notifications"><Bell className="size-5" /><span className="absolute right-1 top-1 size-2 rounded-full bg-[#f4a100]" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => void signOut()} className="text-white hover:bg-white/10"><LogOut className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Sign out</span></Button></div></header><div className="mx-auto flex max-w-[1600px] items-start"><aside className={`${mobileNavOpen ? "block" : "hidden"} fixed inset-x-0 top-[69px] z-20 max-h-[calc(100vh-69px)] overflow-y-auto border-b border-slate-200 bg-white p-3 shadow-xl lg:sticky lg:top-[69px] lg:block lg:min-h-[calc(100vh-69px)] lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}><div className="mb-4 rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Current context</p><p className="mt-1 text-sm font-black text-[#00284d]">SpaceX Pecan Island</p><p className="mt-1 text-xs text-slate-500">Vermilion Parish · Louisiana</p></div><nav aria-label="Primary navigation" className="space-y-1"><p className="px-3 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Work</p>{primaryNav.map((item) => <button key={item.id} type="button" onClick={() => navigate(item.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${route === item.id ? "bg-[#00284d] text-white shadow-sm" : "text-slate-700 hover:bg-teal-50 hover:text-teal-950"}`}>{item.icon}<span className="flex-1">{item.label}</span>{typeof item.count === "number" && <span className={`rounded-full px-2 py-0.5 text-[10px] ${route === item.id ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700"}`}>{item.count}</span>}</button>)}<p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Secondary tools</p>{!activePersona.isCustomer && <><button type="button" onClick={() => { setSecondaryTool("schedule"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "schedule" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><CalendarClock className="size-4" />Schedule</button><button type="button" onClick={() => { setSecondaryTool("vault"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "vault" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><BookOpen className="size-4" />Document Vault</button><button type="button" onClick={() => { setSecondaryTool("catalog"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "catalog" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><Landmark className="size-4" />Permit Catalog</button></>}{canAdmin && <><p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Administration</p><button type="button" onClick={() => navigate("admin")} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "admin" ? "bg-[#00284d] text-white" : "text-slate-700 hover:bg-teal-50"}`}><Settings2 className="size-4" />Administration</button></>}</nav><div className="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-xs font-black text-amber-950">Official filing notice</p><p className="mt-1 text-xs leading-5 text-amber-900">PATH coordinates work. Formal statutory filings remain in agency systems.</p></div></aside><main id="main-content" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">{toast && <div role="status" aria-live="polite" className="mb-5 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-950"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" aria-hidden="true" />{toast}</div>}{renderMain()}</main></div>{renderDialog()}</div>;
+  return <div className="min-h-screen bg-[#f3f6f7] text-[#172033]"><a className="skip-link" href="#main-content">Skip to main content</a><div className="road-stripe" /><header className="site-header sticky top-0 z-30"><div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-3 sm:px-6"><Button type="button" variant="ghost" size="icon" onClick={() => setMobileNavOpen((value) => !value)} className="text-white hover:bg-white/10 lg:hidden" aria-label="Toggle navigation"><Menu className="size-5" /></Button><span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d]"><Zap className="size-5 fill-current" aria-hidden="true" /></span><div className="min-w-0"><p className="text-sm font-black text-white">PATH</p><p className="truncate text-[11px] font-semibold text-slate-300">{workspaceTitle(activePersona.workspace)} · SpaceX Pecan Island</p></div><div className="ml-auto hidden items-center gap-2 text-xs text-slate-200 md:flex"><span className="flex items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-950/60 px-3 py-1 font-bold text-emerald-200" title="State committed directly to Supabase PostgreSQL & Storage"><span className="size-2 rounded-full bg-emerald-400" />Supabase DB {lastSavedTime ? `· ${lastSavedTime}` : "· Connected"}</span><span className="rounded-full border border-white/20 px-3 py-1.5">{activePersona.name}</span><span className="rounded-full border border-teal-300/40 bg-teal-900/40 px-3 py-1.5 font-bold text-teal-100">{activePersona.roleLabel}</span></div><Button type="button" variant="ghost" size="icon" onClick={() => navigate("notifications")} className="relative text-white hover:bg-white/10" aria-label="Open notifications"><Bell className="size-5" /><span className="absolute right-1 top-1 size-2 rounded-full bg-[#f4a100]" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => void signOut()} className="text-white hover:bg-white/10"><LogOut className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Sign out</span></Button></div></header><div className="mx-auto flex max-w-[1600px] items-start"><aside className={`${mobileNavOpen ? "block" : "hidden"} fixed inset-x-0 top-[69px] z-20 max-h-[calc(100vh-69px)] overflow-y-auto border-b border-slate-200 bg-white p-3 shadow-xl lg:sticky lg:top-[69px] lg:block lg:min-h-[calc(100vh-69px)] lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}><div className="mb-4 rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Current context</p><p className="mt-1 text-sm font-black text-[#00284d]">SpaceX Pecan Island</p><p className="mt-1 text-xs text-slate-500">Vermilion Parish · Louisiana</p></div><nav aria-label="Primary navigation" className="space-y-1"><p className="px-3 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Work</p>{primaryNav.map((item) => <button key={item.id} type="button" onClick={() => navigate(item.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${route === item.id ? "bg-[#00284d] text-white shadow-sm" : "text-slate-700 hover:bg-teal-50 hover:text-teal-950"}`}>{item.icon}<span className="flex-1">{item.label}</span>{typeof item.count === "number" && <span className={`rounded-full px-2 py-0.5 text-[10px] ${route === item.id ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700"}`}>{item.count}</span>}</button>)}<p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Secondary tools</p>{!activePersona.isCustomer && <><button type="button" onClick={() => { setSecondaryTool("schedule"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "schedule" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><CalendarClock className="size-4" />Schedule</button><button type="button" onClick={() => { setSecondaryTool("vault"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "vault" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><BookOpen className="size-4" />Document Vault</button><button type="button" onClick={() => { setSecondaryTool("catalog"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "catalog" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><Landmark className="size-4" />Permit Catalog</button></>}{canAdmin && <><p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Administration</p><button type="button" onClick={() => navigate("admin")} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "admin" ? "bg-[#00284d] text-white" : "text-slate-700 hover:bg-teal-50"}`}><Settings2 className="size-4" />Administration</button></>}</nav><div className="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-xs font-black text-amber-950">Official filing notice</p><p className="mt-1 text-xs leading-5 text-amber-900">PATH coordinates work. Formal statutory filings remain in agency systems.</p></div></aside><main id="main-content" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">{toast && <div role="status" aria-live="polite" className="mb-5 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-950"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" aria-hidden="true" />{toast}</div>}{renderMain()}</main></div>{renderDialog()}</div>;
 }

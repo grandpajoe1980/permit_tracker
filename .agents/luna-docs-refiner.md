@@ -10,3 +10,7 @@ Role: Documentation, Positioning, and User Guide Specialist.
    - Reiterate the core demo principle: PATH coordinates and escalates across government entities while statutory filings remain with the authoritative agency systems.
 2. `docs/execution-plan.md` & `docs/progress.md`:
    - Update execution plan and progress trackers to reflect the Command Center evolution.
+
+## Supabase Durability Gate (Non-Negotiable)
+All documentation and handoff guides must clearly document Supabase PostgreSQL and Supabase Storage as the sole authoritative production stores, removing any references to localStorage persistence for production operations.
+
