@@ -864,6 +864,17 @@ export async function mutateMarkWorkstreamBlocked(params: {
   const operationalState = params.pauseClock ? "waiting_government" : "blocked";
   const operationalStateLabel = params.pauseClock ? "Waiting on Government (Clock Paused)" : "Blocked (Action Required)";
 
+  const { data: rpcData, error: rpcError } = await client.rpc("rpc_mark_workstream_blocked", {
+    p_workstream_id: params.workstreamId,
+    p_reason: params.reason,
+    p_waiting_on: params.waitingOn,
+    p_pause_clock: params.pauseClock ?? false,
+    p_actor_name: params.actorName,
+    p_actor_org_name: params.actorOrgName,
+  });
+  if (!rpcError && rpcData) return { data: rpcData as unknown as WorkstreamRecord, error: null };
+  if (!allowsFixtureData()) return { data: null, error: new Error(`Blocker transaction failed: ${rpcError?.message ?? "no row returned"}`) };
+
   const { data, error } = await client
     .from("workstreams")
     .update({
@@ -975,6 +986,18 @@ export async function mutateEscalateWorkstream(params: {
   const now = new Date().toISOString();
   const nextLevel = Math.min(5, Math.max(1, params.currentLevel + 1));
 
+  const { data: rpcData, error: rpcError } = await client.rpc("rpc_escalate_workstream", {
+    p_workstream_id: params.workstreamId,
+    p_problem_type: params.problemType,
+    p_actor_name: params.actorName,
+    p_actor_org_name: params.actorOrgName,
+  });
+  if (!rpcError && rpcData) {
+    const row = rpcData as Record<string, unknown>;
+    return { data: { newLevel: Number(row.newLevel ?? row.new_level ?? nextLevel) }, error: null };
+  }
+  if (!allowsFixtureData()) return { data: null, error: new Error(`Escalation transaction failed: ${rpcError?.message ?? "no row returned"}`) };
+
   const { error } = await client
     .from("workstreams")
     .update({
@@ -1025,6 +1048,16 @@ export async function mutateTransferWorkstream(params: {
 }): Promise<MutationResult<{ success: boolean }>> {
   const client = getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data: rpcData, error: rpcError } = await client.rpc("rpc_transfer_workstream", {
+    p_workstream_id: params.workstreamId,
+    p_transfer_type: params.transferType,
+    p_target_name: params.targetName,
+    p_note: params.note ?? "",
+    p_actor_name: params.actorName,
+    p_actor_org_name: params.actorOrgName,
+  });
+  if (!rpcError && rpcData) return { data: { success: true }, error: null };
+  if (!allowsFixtureData()) return { data: null, error: new Error(`Transfer transaction failed: ${rpcError?.message ?? "no row returned"}`) };
   const sideEffects = await Promise.all([
     insertAuditEvent({
       entityType: "workstream",

@@ -689,7 +689,7 @@ export default function Home() {
         `================================================================================`,
       ].join("\n");
       const fallbackBlob = new Blob([content], { type: version.mimeType || "text/plain" });
-      triggerFileDownload(fallbackBlob, version.fileName || "document.pdf");
+      // The fallback blob was removed; a download is valid only after Storage verification.
       result = { success: true, error: null };
     }
     */

@@ -72,6 +72,10 @@ findings below.
   production mode, and extended the forward RLS migration to remove the
   original generated `Public full access policy` plus broad legacy Storage
   policies.
+- Added server-owned blocker, escalation, and transfer transactions, with
+  production mutations refusing to fall back to browser-side multi-request
+  writes when those RPCs are unavailable. Added source-contract checks for
+  route authentication, production mode behavior, and action RPC coverage.
 
 ## Known blockers and risks
 

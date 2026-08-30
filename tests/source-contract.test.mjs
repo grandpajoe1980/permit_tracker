@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, seedScript, commandSeedScript] = await Promise.all([
+const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, dataMode, projectRoute, workstreamRoute, requestRoute, seedScript, commandSeedScript] = await Promise.all([
   readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
@@ -10,6 +10,11 @@ const [page, layout, css, readme, portalMigration, hardeningMigration, policyMig
   readFile(new URL("../supabase/migrations/20260830120000_customer_portal_delivery.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830150635_harden_command_system_rls_and_seed_portal_support.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830152028_consolidate_customer_request_update_policy.sql", import.meta.url), "utf8"),
+  readFile(new URL("../supabase/migrations/20260830214000_workstream_action_transactions.sql", import.meta.url), "utf8"),
+  readFile(new URL("../lib/data-mode.ts", import.meta.url), "utf8"),
+  readFile(new URL("../app/projects/[projectNumber]/page.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../app/projects/[projectNumber]/workstreams/[workstreamId]/page.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../app/requests/[confirmationNumber]/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../scripts/seed-spacex-demo.mjs", import.meta.url), "utf8"),
   readFile(new URL("../scripts/seed-command-system-supabase.mjs", import.meta.url), "utf8"),
 ]);
@@ -68,4 +73,18 @@ test("ships the customer schema, RLS hardening, and service-role seed contract",
   assert.match(seedScript, /system_admin/);
   assert.doesNotMatch(commandSeedScript, /NEXT_PUBLIC_SUPABASE_ANON_KEY/);
   assert.match(commandSeedScript, /SUPABASE_SERVICE_ROLE_KEY/);
+});
+
+test("keeps production mutations and routes server-confirmed", () => {
+  assert.match(dataMode, /export function requiresSupabase/);
+  assert.match(dataMode, /return getAppDataMode\(\) === "production"/);
+  assert.match(page, /createWorkstreamFromRequestPersisted/);
+  assert.match(page, /clearWorkstreamBlockerPersisted/);
+  assert.doesNotMatch(page, /triggerFileDownload/);
+  assert.match(actionMigration, /rpc_mark_workstream_blocked/);
+  assert.match(actionMigration, /rpc_escalate_workstream/);
+  assert.match(actionMigration, /rpc_transfer_workstream/);
+  assert.match(projectRoute, /createRequestSupabaseClient/);
+  assert.match(workstreamRoute, /\.eq\("project_id", project\.id\)/);
+  assert.match(requestRoute, /createRequestSupabaseClient/);
 });
