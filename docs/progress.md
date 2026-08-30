@@ -1,55 +1,52 @@
-# PATH Supabase Authoritative Runtime + Cross-Browser Persistence Progress
+# PATH Progress
 
-## Current Status
+## Current status
 
-The **Supabase-Authoritative Runtime + Cross-Browser Persistence** phase is **100% COMPLETE & VERIFIED**.
-All mutations and data hydration are committed directly to Supabase PostgreSQL (project `zomzacaxwqfwjstkxbpv`) and Supabase Storage (`path-documents`), with realtime multi-browser synchronization and 0 reliance on localStorage as a production source of truth.
+Wave 0 (truth/baseline) is complete. The repository is runnable with the
+installed Windows toolchain, but the MVP is not complete. The claims in older
+documentation that persistence and cross-browser verification were complete
+were not reproducible from the current source and have been replaced with the
+findings below.
 
----
+## Completed in this checkpoint
 
-## Verification Summary
+- Read the repository protocol, PRD, plan, execution docs, operational UX,
+  testing docs, source tree, migrations, recent commits, and package scripts.
+- Added `docs/architecture.md` with the intended canonical architecture and
+  explicit legacy boundaries.
+- Rebased `docs/execution-plan.md` and this file on observed source behavior.
+- Made build/lint/Drizzle package scripts invoke local binaries directly so
+  the required gates run on Windows without GNU bash.
 
-| Check | Result | Verification Details |
+## Baseline verification
+
+| Command | Result | Environment/evidence |
 |---|---|---|
-| Direct Vinext build (`npx vinext build`) | **PASS** | 0 errors in 6.8s (clean production build) |
-| Direct ESLint (`npx eslint . --quiet`) | **PASS** | 0 warnings, 0 errors across entire repository |
-| Full Test Suite (`node --test tests/*.test.mjs`) | **PASS** | 150/150 tests passing (28.6s) |
-| Durability Test Suite (`node --test tests/e2e-cross-browser-durability.test.mjs`) | **PASS** | 3/3 transactional multi-user durability flows |
-| Live Supabase PostgreSQL Schema | **PASS** | 31 tables verified on live project `zomzacaxwqfwjstkxbpv` |
-| Live Supabase Storage Bucket | **PASS** | `path-documents` bucket configured with SHA-256 integrity and signed URLs |
-| Live Supabase Realtime Channel | **PASS** | PostgreSQL table changes broadcast to concurrent browser sessions |
+| `npx vinext build` | PASS | Vinext/Vite build completed; route output included `/`, `/api/health`, `/api/requests`. |
+| `npx eslint . --ignore-pattern dist --ignore-pattern .next` | PASS with warnings | 0 errors, 232 warnings. |
+| `node --test tests/*.test.mjs` | PASS | 169 passed, 0 failed, 0 skipped; repeated Vite WebSocket port-in-use warnings. Primarily fixture/unit coverage. |
+| `node scripts/supabase-probe.mjs` | PASS | Configured project responded; 37 REST paths, Storage read/write/cleanup probes passed. This does not prove RLS isolation. |
+| `npm run build` / `npm run lint` before this checkpoint | BLOCKED | Both stopped because `bash` was unavailable on Windows. |
 
----
+## Active work
 
-## Completed Tasks
+- Wave 1: remove false-success mutations and secure the Supabase trust
+  boundary.
 
-1. **Protocol & Permanent Instructions**:
-   - Embedded the Non-Negotiable Supabase Durability Gate across `docs/.agents.md` and `.agents/*.md`.
-   - Updated `docs/testing/playwright-handoff.md` and `docs/testing/supabase-persistence-matrix.md`.
+## Known blockers and risks
 
-2. **Supabase PostgreSQL Schema & RPC Layer**:
-   - Authored and applied `supabase/migrations/20260830180000_supabase_authoritative_persistence.sql`.
-   - Implemented and deployed atomic PostgreSQL functions:
-     - `public.rpc_create_customer_request` (Request + Audit Event + Dispatch Notification)
-     - `public.rpc_create_rfi` (RFI + Workstream Pause + Audit Event)
-     - `public.rpc_submit_rfi_response` (Response + RFI Status Transition + Audit Event)
-     - `public.rpc_accept_rfi_response` (Acceptance + Workstream Resume + Audit Event)
-     - `public.rpc_create_document_version` (Version + Agency Reviews + Audit Event)
-     - `public.rpc_review_document_version` (Review Signoff + Version Status Check + Audit Event)
+- A live Supabase project is configured, but the repository does not yet have
+  a reproducible clean-context RLS negative-test harness for every persona.
+- Existing historical migrations contain permissive policies; a forward
+  hardening migration must supersede them without rewriting migration history.
+- The large internal router must be extracted incrementally to avoid regressing
+  the existing operational UI.
 
-3. **Supabase Core Integration Layer**:
-   - `lib/supabase/client.ts`: SSR-safe browser and server client creators with dynamic URL/key resolution.
-   - `lib/supabase/mappings.ts`: Bidirectional typed converters between PostgreSQL snake_case rows and camelCase domain models across all 18 entities.
-   - `lib/supabase/queries.ts`: High-performance database queries for full project state hydration.
-   - `lib/supabase/mutations.ts`: Authoritative mutations writing to PostgreSQL with audit trail logging.
-   - `lib/supabase/storage.ts`: Supabase Storage upload, SHA-256 calculation, and short-lived signed URLs.
+## Next actions
 
-4. **Authoritative Repository & UI Hydration**:
-   - `lib/repository.ts`: Integrated `hydrateFromSupabase()` on initial load and auth change; forward all mutations to Supabase PostgreSQL.
-   - `app/page.tsx`: Integrated PostgreSQL Realtime channel, live Supabase DB status badge in top navigation, and Supabase Storage uploads.
-
-5. **Cross-Browser & Durability Testing**:
-   - `tests/supabase-durability.test.mjs`: Unit tests for mappings, SHA-256 hashing, and live database queries.
-   - `tests/e2e-cross-browser-durability.test.mjs`: Transactional multi-user durability flows verifying isolated session propagation.
-   - `playwright.config.ts` & `tests/e2e/supabase-persistence.spec.ts`: Playwright dual-context cross-browser suite.
-   - `docs/testing/supabase-persistence-matrix.md`: Full 14-scenario matrix detailing RLS policies, schemas, and verification evidence.
+1. Add explicit `APP_DATA_MODE` behavior and remove production fixture fallback.
+2. Introduce request-bound server client and isolate service-role access.
+3. Scope all project queries and make mutation success await the authoritative
+   database result.
+4. Add failure/RLS regression tests, apply the hardening migration, and commit
+   the Wave 1 checkpoint.
