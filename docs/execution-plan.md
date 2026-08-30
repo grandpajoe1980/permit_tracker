@@ -201,4 +201,4 @@ Lower agents must read `docs/PRD.MD`, this file, `docs/progress.md`, and relevan
 - [x] Build passes via direct Vinext command
 - [x] Lint passes with no errors (pre-existing warnings remain)
 - [x] Tests pass
-- [ ] Connected portal mutation hydration and production publish of the remediation branch
+- [ ] Connected portal mutation hydration; production publish of the remediation branch is complete

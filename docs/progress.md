@@ -26,7 +26,7 @@ The customer portal phase is implemented on top of the existing role-aware opera
 
 ## Pending Tasks
 
-- The five logical checkpoints plus remediation changes are committed locally; the remediation branch still needs to be pushed to `origin/main` and republished.
+- The five logical checkpoints plus remediation changes are committed and pushed to `origin/main`; the private production site is republished from the verified remediation commit.
 - Supabase migrations through `20260830152923` are applied to the configured project. The customer portal and command-system baseline is seeded with users, profiles, participants, documents, workstreams, tasks, and external filings.
 - The browser repository remains the deterministic local E2E boundary. Authenticated request intake reads/writes the legacy `requests` table; newly added customer portal mutations are not yet hydrated from Supabase on browser login. This is the only remaining production durability gap.
 
