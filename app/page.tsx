@@ -49,6 +49,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { AdminDirectory } from "@/components/admin/AdminDirectory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -216,7 +217,15 @@ export default function Home() {
   const [currentUser, setCurrentUser] = useState<DemoAccount | null>(null);
   const [currentPersona, setCurrentPersona] = useState<DemoPersona | null>(null);
   const [userPermits, setUserPermits] = useState<ServiceRequest[]>(pecanIslandRequests);
-  const [teamUsers, setTeamUsers] = useState(initialTeamUsers);
+  const [teamUsers, setTeamUsers] = useState(() => {
+    if (typeof window === "undefined") return initialTeamUsers;
+    try {
+      const saved = window.localStorage.getItem("path-admin-team-users-v1");
+      return saved ? JSON.parse(saved) as typeof initialTeamUsers : initialTeamUsers;
+    } catch {
+      return initialTeamUsers;
+    }
+  });
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [showDemoPeople, setShowDemoPeople] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -320,6 +329,14 @@ export default function Home() {
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("path-admin-team-users-v1", JSON.stringify(teamUsers));
+    } catch {
+      // Admin directory durability is best-effort in the local demo boundary.
+    }
+  }, [teamUsers]);
 
   useEffect(() => {
     if (!loggedIn) return;
@@ -567,7 +584,7 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }
 
-  async function uploadCustomerRevision(event: ChangeEvent<HTMLInputElement>) {
+  async function uploadProjectRevision(event: ChangeEvent<HTMLInputElement>, uploadedByOrgName = CUSTOMER_ORGANIZATION_NAME) {
     const file = event.target.files?.[0];
     const document = repository.getDocuments()[0];
     if (!file || !document) return;
@@ -581,12 +598,16 @@ export default function Home() {
       reader.readAsDataURL(file);
     });
     const versionNumber = document.currentVersionNumber + 1;
-    const version = repository.createDocumentVersion(document.id, { versionNumber, versionLabel: `v${versionNumber}.0`, storagePath: dataUrl, fileName: file.name, mimeType: file.type || "application/octet-stream", fileSizeBytes: file.size, sha256Hash: hash, uploadedByName: activePersona.name, uploadedByOrgName: CUSTOMER_ORGANIZATION_NAME, changeNotes: "Customer revision uploaded through the PATH document center.", reviewingAgencyCodes: ["DOTD", "CPRA"] });
+    const version = repository.createDocumentVersion(document.id, { versionNumber, versionLabel: `v${versionNumber}.0`, storagePath: dataUrl, fileName: file.name, mimeType: file.type || "application/octet-stream", fileSizeBytes: file.size, sha256Hash: hash, uploadedByName: activePersona.name, uploadedByOrgName, changeNotes: "Revision uploaded through the PATH document center.", reviewingAgencyCodes: ["DOTD", "CPRA"] });
     if (version) {
       setToast(`${version.versionTag} uploaded. Agency review assignments were reset for the new immutable version.`);
       setMutationVersion((value) => value + 1);
     }
     event.target.value = "";
+  }
+
+  async function uploadCustomerRevision(event: ChangeEvent<HTMLInputElement>) {
+    await uploadProjectRevision(event, CUSTOMER_ORGANIZATION_NAME);
   }
 
   async function handleConfirmAction(event: FormEvent<HTMLFormElement>) {
@@ -841,7 +862,7 @@ export default function Home() {
             </CardHeader>
             <CardContent className="space-y-5 p-6">
               <form onSubmit={handleLogin} className="space-y-4">
-                <div><Label htmlFor="username">Email address / username</Label><Input ref={usernameRef} id="username" name="username" type="text" value={username} required onChange={(event) => { setUsername(event.target.value); setLoginError(""); }} className="mt-1 h-11" placeholder="jordan.lee@spacex.test" /></div>
+                <div><Label htmlFor="username">Email address / username</Label><Input ref={usernameRef} id="username" name="username" type="text" value={username} required onChange={(event) => { setUsername(event.target.value); setLoginError(""); }} className="mt-1 h-11" placeholder="jordan.lee@la.gov" /></div>
                 <div><Label htmlFor="password">Password</Label><Input id="password" name="password" type="password" value={password} required onChange={(event) => { setPassword(event.target.value); setLoginError(""); }} className="mt-1 h-11" placeholder="demo1234" /></div>
                 <Button id="login-submit" type="submit" disabled={loadingData} className="h-11 w-full bg-[#00284d] font-bold hover:bg-[#003c70]">{loadingData ? "Signing in…" : "Sign In"}<ArrowRight className="size-4" aria-hidden="true" /></Button>
               </form>
@@ -965,11 +986,12 @@ export default function Home() {
   }
 
   function renderSecondary() {
-    return <div className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Government tools</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">{secondaryTool === "schedule" ? "Schedule" : secondaryTool === "vault" ? "Document Vault" : "Permit Catalog"}</h1></div><div className="flex flex-wrap gap-2">{([["schedule", "Schedule"], ["vault", "Document Vault"], ["catalog", "Permit Catalog"]] as Array<[SecondaryTool, string]>).map(([tool, label]) => <Button key={tool} type="button" variant={secondaryTool === tool ? "default" : "outline"} onClick={() => setSecondaryTool(tool)} className="text-xs font-bold">{label}</Button>)}</div></div>{secondaryTool === "schedule" && <WorkstreamGraphGantt />}{secondaryTool === "vault" && <DocumentVaultPanel />}{secondaryTool === "catalog" && <WorkflowDesignerPanel />}</div>;
+    return <div className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Government tools</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">{secondaryTool === "schedule" ? "Schedule" : secondaryTool === "vault" ? "Document Vault" : "Permit Catalog"}</h1></div><div className="flex flex-wrap gap-2">{([["schedule", "Schedule"], ["vault", "Document Vault"], ["catalog", "Permit Catalog"]] as Array<[SecondaryTool, string]>).map(([tool, label]) => <Button key={tool} type="button" variant={secondaryTool === tool ? "default" : "outline"} onClick={() => setSecondaryTool(tool)} className="text-xs font-bold">{label}</Button>)}</div></div>{secondaryTool === "schedule" && <WorkstreamGraphGantt />}{secondaryTool === "vault" && <DocumentVaultPanel onUploadRevision={(event) => void uploadProjectRevision(event, activePersona.organization)} />}{secondaryTool === "catalog" && <WorkflowDesignerPanel />}</div>;
   }
 
   function renderAdmin() {
     const [firstUser] = teamUsers;
+    if (activePersona.workspace === "admin") return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">Participants, profiles, and roles</h1><p className="mt-2 text-sm text-slate-600">Manage role assignment, participant activation, customer visibility, workstream responsibility, and profile fields from one audited directory.</p></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent><AdminDirectory teamUsers={teamUsers} roleDefinitions={roleDefinitions} repository={repository} actorUserId={actorUserId()} onRoleChange={(userId, roleId) => { setTeamUsers((current) => current.map((member) => member.id === userId ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${teamUsers.find((member) => member.id === userId)?.name ?? "user"} to ${roleDefinitions[roleId].name}.`); }} onMutation={(message) => { setToast(message); setMutationVersion((value) => value + 1); }} /></CardContent></Card>{repository.getCustomerRequests().length > 0 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-amber-700" /> Customer request triage</CardTitle><p className="text-sm text-slate-600">Submitted customer requests are visible for government-side follow-up.</p></CardHeader><CardContent className="space-y-3">{repository.getCustomerRequests().slice(0, 8).map((request) => <div key={request.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3"><p className="text-sm font-black text-amber-950">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-amber-900">{request.requestType.replaceAll("_", " ")} · {request.description}</p><span className="mt-2 inline-block rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-900">{request.status}</span></div>)}</CardContent></Card>}<p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Admin profile and participant changes persist in this browser demo and are audit logged.</p></div>;
     return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">Participants, profiles, and roles</h1><p className="mt-2 text-sm text-slate-600">Administrators can manage project participation, profile visibility, roles, workstream responsibility, and access. Ordinary users can edit only their own contact fields.</p></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent className="space-y-3">{teamUsers.map((user) => { const profile = repository.getProfileByUserId(user.id); const participant = repository.getParticipants().find((entry) => entry.userId === user.id); return <div key={user.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{user.name} {user.name === "Joe Skaggs" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] uppercase text-amber-900">Space Czar</span>}</p><p className="text-xs font-bold text-teal-800">{profile?.displayTitle ?? user.displayTitle ?? roleDefinitions[user.roleId].name}</p><p className="text-xs text-slate-500">{profile?.workEmail ?? user.workEmail ?? user.email} · {profile?.organizationName ?? user.organization}</p><p className="mt-1 max-w-xl text-xs text-slate-500">{profile?.organizationalUnit ?? user.organizationalUnit ?? user.agency} · {participant?.workstreamIds.length ?? 0} assigned workstream(s)</p></div><select aria-label={`Role for ${user.name}`} value={user.roleId} onChange={(event) => { const roleId = event.target.value as RoleId; setTeamUsers((current) => current.map((member) => member.id === user.id ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user.name} to ${roleDefinitions[roleId].name}.`); }} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800">{(Object.keys(roleDefinitions) as RoleId[]).map((role) => <option key={role} value={role}>{roleDefinitions[role].name}</option>)}</select></div>; })}<p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Joe Skaggs · joe.skaggs@la.gov · Louisiana Economic Development (LED) · Space Czar.</p></CardContent></Card>{repository.getCustomerRequests().length > 0 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-amber-700" /> Customer request triage</CardTitle><p className="text-sm text-slate-600">Escalations, blockers, service requests, and permit tracking records submitted by SpaceX appear here for government-side follow-up.</p></CardHeader><CardContent className="space-y-3">{repository.getCustomerRequests().slice(0, 8).map((request) => <div key={request.id} className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3"><div><p className="text-sm font-black text-amber-950">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-amber-900">{request.requestType.replaceAll("_", " ")} · {request.description}</p><p className="mt-1 text-xs text-amber-800">{request.submittedByName} · {request.locationOrAffectedArea ?? "Project-wide"}</p></div><span className="rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-900">{request.status}</span></div>)}</CardContent></Card>}</div>;
   }
 

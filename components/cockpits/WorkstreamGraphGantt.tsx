@@ -276,7 +276,7 @@ export function WorkstreamGraphGantt({ customerSafe = false, onSelectWorkstream 
                   {opp.explanation}
                 </p>
                 <div className="pt-2 flex justify-end">
-                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">
+                  <Button type="button" size="sm" disabled title="Concurrent review authorization is recorded through the governed project workflow." className="bg-slate-300 text-slate-600 text-xs font-bold shadow-none">
                     Authorize Concurrent Review Track
                   </Button>
                 </div>

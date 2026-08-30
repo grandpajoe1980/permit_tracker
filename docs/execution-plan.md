@@ -25,11 +25,11 @@ The customer portal implementation now includes a customer-safe command center, 
 - Mark Blocked creates the appropriate structured RFI, coordination request, internal blocker, or statutory wait and previews recipients.
 - RFI responses, exact document-version review, escalation history, and supervisor queues are discoverable from the shell.
 - Customer view is sanitized and does not expose government-internal controls.
-- Mutations are server-authorized when Supabase is configured and otherwise use the existing audited repository demo boundary; resulting state is rendered from authoritative mutation results.
+- Legacy request mutations use Supabase/RLS when Auth is configured; the new customer portal command records use the audited repository demo boundary until their browser hydration bridge is implemented.
 - Focused tests cover role routing, queue prioritization, action availability, workflow gates, mutation routing, sanitization, and keyboard semantics.
 - Build, lint, tests, and documentation are current.
 - SpaceX can navigate directly to a customer-safe schedule/Gantt, request center, document center, contact directory, and help/escalation center.
-- External filing records, profile edits, participant assignments, and exact document versions persist through refresh/relogin in the supported runtime boundary.
+- External filing records, profile edits, participant assignments, and exact document versions persist through refresh in the local demo boundary; cross-browser/relogin hydration for these new portal records remains the next production integration step.
 - A deterministic E2E reset and manual/Playwright handoff artifacts exist.
 
 ## Requirements Matrix
@@ -201,4 +201,4 @@ Lower agents must read `docs/PRD.MD`, this file, `docs/progress.md`, and relevan
 - [x] Build passes via direct Vinext command
 - [x] Lint passes with no errors (pre-existing warnings remain)
 - [x] Tests pass
-- [x] Changes committed and site published
+- [ ] Connected portal mutation hydration and production publish of the remediation branch

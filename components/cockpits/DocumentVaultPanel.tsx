@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   CheckCircle2,
   Clock3,
@@ -21,10 +21,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { getFullProjectRecord } from "@/lib/permit-utils";
 
-export function DocumentVaultPanel() {
+export function DocumentVaultPanel({ onUploadRevision }: { onUploadRevision?: (event: React.ChangeEvent<HTMLInputElement>) => void }) {
   const project = getFullProjectRecord();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDocId, setSelectedDocId] = useState<string>(project.documents[0]?.id || "");
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   const filteredDocs = project.documents.filter((doc) =>
     doc.title.toLowerCase().includes(searchTerm.toLowerCase())
@@ -53,9 +54,14 @@ export function DocumentVaultPanel() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow">
+            {onUploadRevision ? <>
+              <Button type="button" size="sm" onClick={() => uploadInputRef.current?.click()} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow">
+                <UploadCloud className="size-3.5" /> Upload New Revision
+              </Button>
+              <input ref={uploadInputRef} type="file" className="sr-only" onChange={onUploadRevision} />
+            </> : <Button type="button" size="sm" disabled title="Open this panel from the authenticated project workspace to upload a revision." className="bg-slate-300 text-slate-600 font-bold text-xs gap-1.5 shadow-none">
               <UploadCloud className="size-3.5" /> Upload New Revision
-            </Button>
+            </Button>}
           </div>
         </div>
       </div>

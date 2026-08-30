@@ -26,8 +26,9 @@ The customer portal phase is implemented on top of the existing role-aware opera
 
 ## Pending Tasks
 
-- The five logical checkpoints are committed and pushed to `origin/main`; the configured private production site is published.
-- Connected Supabase persistence for the new relational customer tables remains a production integration follow-up; the demo/runtime boundary is deterministic and refresh-persistent.
+- The five logical checkpoints plus remediation changes are committed locally; the remediation branch still needs to be pushed to `origin/main` and republished.
+- Supabase migrations through `20260830152923` are applied to the configured project. The customer portal and command-system baseline is seeded with users, profiles, participants, documents, workstreams, tasks, and external filings.
+- The browser repository remains the deterministic local E2E boundary. Authenticated request intake reads/writes the legacy `requests` table; newly added customer portal mutations are not yet hydrated from Supabase on browser login. This is the only remaining production durability gap.
 
 ## Delivery Evidence
 
@@ -45,14 +46,17 @@ The customer portal phase is implemented on top of the existing role-aware opera
 | Direct Vinext build | PASS |
 | Focused tests | PASS — operational UX, permit data, DB persistence, and customer portal |
 | Direct ESLint | PASS — `npx eslint . --quiet` reports 0 errors; generated output is ignored |
-| Full direct test suite | PASS — 139 tests |
+| Full direct test suite | PASS — 141 tests |
+| Supabase migration history | PASS — six migrations through `20260830152923` applied |
+| Supabase advisor | PASS with one WARN — leaked-password protection is disabled in Auth |
 
 ## Integration Status
 
 - Existing cockpit components remain available as government secondary tools.
 - Existing Supabase Auth/request loading/intake integration remains in place.
-- The in-memory repository is the audited fixture command boundary; customer requests, profiles, external filings, document versions, notifications, and audit events are structured records.
-- Browser refresh persistence uses `localStorage` key `path-e2e-demo-state-v1` only for the deterministic local demo. Supabase remains the authoritative production boundary when its integration is enabled.
+- Supabase relational baseline is applied and seeded; RLS hardening removes the prior anonymous full-access policy and scopes customer requests to authorized project access.
+- The repository is the audited fixture command boundary; customer requests, profiles, external filings, document versions, notifications, and audit events are structured records.
+- Browser refresh persistence uses `localStorage` keys `path-e2e-demo-state-v1` and `path-admin-team-users-v1` for the deterministic local demo. Supabase is authoritative for the seeded baseline and legacy request intake; portal mutation hydration remains a production follow-up.
 
 ## Blockers and Assumptions
 
@@ -70,4 +74,4 @@ The customer portal phase is implemented on top of the existing role-aware opera
 
 ## User-Owned Files Preserved
 
-The pre-existing untracked research report and Supabase migration were preserved outside checkpoint staging.
+The research report and Supabase migration supplied during the prior handoff are now retained in repository history.

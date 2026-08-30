@@ -91,7 +91,7 @@ export function WorkflowDesignerPanel() {
                 Published v{activeVersion.versionNumber}.0
               </Badge>
             </div>
-            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs gap-1.5 shadow">
+            <Button type="button" size="sm" disabled title="Workflow version authoring is not enabled in this demo workspace." className="bg-slate-300 text-slate-600 font-bold text-xs gap-1.5 shadow-none">
               <Plus className="size-3.5" /> Create Draft v{activeVersion.versionNumber + 1}.0
             </Button>
           </div>
@@ -180,7 +180,7 @@ export function WorkflowDesignerPanel() {
             <h2 className="text-lg font-bold text-slate-900">
               Living Statutory Permit & Authorization Catalog
             </h2>
-            <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs gap-1.5 shadow">
+            <Button type="button" size="sm" disabled title="Authorization catalog editing is not enabled in this demo workspace." className="bg-slate-300 text-slate-600 font-bold text-xs gap-1.5 shadow-none">
               <Plus className="size-3.5" /> Add Authorization Type
             </Button>
           </div>
@@ -252,7 +252,7 @@ export function WorkflowDesignerPanel() {
             <h2 className="text-lg font-bold text-slate-900">
               Participating Organization & Agency Registry
             </h2>
-            <Button size="sm" className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs gap-1.5 shadow">
+            <Button type="button" size="sm" disabled title="Organization registration is not enabled in this demo workspace." className="bg-slate-300 text-slate-600 font-bold text-xs gap-1.5 shadow-none">
               <Plus className="size-3.5" /> Register Organization
             </Button>
           </div>

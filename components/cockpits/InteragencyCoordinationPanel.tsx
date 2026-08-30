@@ -60,7 +60,7 @@ export function InteragencyCoordinationPanel() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs gap-1.5 shadow">
+            <Button type="button" size="sm" disabled title="Create coordination requests from the governed project action workflow." className="bg-slate-300 text-slate-600 font-bold text-xs gap-1.5 shadow-none">
               <Plus className="size-3.5" /> Create Coordination Request
             </Button>
           </div>
@@ -90,7 +90,7 @@ export function InteragencyCoordinationPanel() {
               <div className="text-[11px] font-semibold text-slate-500">Staged Questions</div>
               <div className="text-xl font-black text-indigo-700">{consolidatedBatch.totalQuestions}</div>
             </div>
-            <Button size="sm" className="bg-indigo-900 hover:bg-indigo-950 text-white font-bold text-xs gap-1.5 shadow">
+            <Button type="button" size="sm" disabled title="Batch dispatch requires a governed lead-review approval step." className="bg-slate-300 text-slate-600 font-bold text-xs gap-1.5 shadow-none">
               <Send className="size-3.5" /> Dispatch Consolidated Batch
             </Button>
           </div>

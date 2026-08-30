@@ -81,7 +81,7 @@ export function PreApplicationReadinessPanel() {
               <strong className="font-bold">Acceleration Principle: </strong>
               The fastest permit review is the one submitted with complete, verified prerequisite packages the first time.
             </div>
-            <Button size="sm" className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs gap-1.5 shadow">
+            <Button type="button" size="sm" disabled title="Complete application submission is not enabled in this read-only readiness view." className="bg-slate-300 text-slate-600 font-bold text-xs gap-1.5 shadow-none">
               <Send className="size-3.5" /> Submit Complete Application
             </Button>
           </div>

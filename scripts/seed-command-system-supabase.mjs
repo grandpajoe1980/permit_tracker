@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
@@ -25,10 +26,10 @@ function readEnvFile(path = ".env") {
 
 const env = { ...readEnvFile(), ...process.env };
 const url = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
-const key = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
+const key = env.SUPABASE_SERVICE_ROLE_KEY || env.LEGACY_SERVICE_ROLE_KEY || env.legacy_service_role_key;
 
 if (!url || !key) {
-  console.error("Missing Supabase credentials in environment");
+  console.error("Missing SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY credentials in environment");
   process.exit(1);
 }
 
@@ -55,7 +56,12 @@ const {
 
 await vite.close();
 
-const supabase = createClient(url, key);
+const supabase = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+
+function stableUuid(value) {
+  const hex = createHash("sha256").update(value).digest("hex").slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
 
 
 async function seed() {
@@ -270,10 +276,26 @@ async function seed() {
 
   // 9. Seed Document Versions & Reviews
   for (const doc of projectDocumentsData) {
+    const documentId = stableUuid(`document:${doc.id}`);
+    const { error: docErr } = await supabase.from("documents").upsert({
+      id: documentId,
+      project_id: projectId,
+      owner_organization_id: (await supabase.from("organizations").select("id").eq("code", doc.ownerOrgCode).single()).data?.id,
+      storage_path: `vault/${projectId}/${doc.id}`,
+      document_type: doc.category,
+      visibility: "customer",
+      version: doc.currentVersionNumber || 1,
+      scan_status: "clean",
+      retention_category: "project_delivery",
+      created_by: (await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })).data?.users?.[0]?.id,
+    }, { onConflict: "id" });
+    if (docErr) console.warn("Document upsert notice:", docErr.message);
     for (const v of doc.versions || []) {
       const vNum = parseInt(v.versionTag?.replace(/[^\d]/g, "") || "1", 10) || 1;
       const { error: vErr } = await supabase.from("document_versions").upsert({
-        id: v.id,
+         id: v.id,
+         document_id: documentId,
+         project_id: projectId,
         document_ref_id: doc.id,
         version_number: vNum,
         version_label: v.versionTag || `Rev ${vNum}`,

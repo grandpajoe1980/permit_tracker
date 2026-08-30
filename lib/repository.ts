@@ -34,7 +34,6 @@ import {
 import { initialExternalFilings, projectParticipants, projectProfiles } from "./customer-portal";
 import { createAuditEvent } from "./engines/audit-engine";
 import { validateStageTransition } from "./engines/workflow-engine";
-import { getSupabaseClient } from "./supabase-client";
 
 /**
  * In-memory persistence store pre-seeded from SpaceX Pecan Island Megaproject fixture
@@ -212,25 +211,54 @@ class ProjectDeliveryRepository {
 
   updateProfile(params: {
     userId: string;
-    updates: Partial<Pick<UserProfileRecord, "fullName" | "displayTitle" | "organizationalUnit" | "workEmail" | "officePhone" | "mobilePhone" | "officeLocation" | "preferredContactMethod" | "availabilityStatus" | "projectRole" | "avatarUrl">>;
+    updates: Partial<Pick<UserProfileRecord, "fullName" | "displayTitle" | "organizationName" | "organizationalUnit" | "workEmail" | "officePhone" | "mobilePhone" | "officeLocation" | "preferredContactMethod" | "availabilityStatus" | "projectRole" | "avatarUrl" | "isCustomerVisible" | "isActive">>;
     actorUserId: string;
     isAdmin?: boolean;
   }): UserProfileRecord | null {
     if (params.actorUserId !== params.userId && !params.isAdmin) return null;
     const profile = this.getProfileByUserId(params.userId);
     if (!profile) return null;
-    Object.assign(profile, params.updates);
+    const selfServiceFields = ["displayTitle", "organizationalUnit", "workEmail", "officePhone", "mobilePhone", "officeLocation", "preferredContactMethod", "availabilityStatus", "avatarUrl"] as const;
+    const updates = params.isAdmin
+      ? params.updates
+      : Object.fromEntries(selfServiceFields.filter((field) => field in params.updates).map((field) => [field, params.updates[field]]));
+    Object.assign(profile, updates);
+    const actor = this.getProfileByUserId(params.actorUserId);
     this.auditEvents.unshift(createAuditEvent({
       entityType: "profile",
       entityId: profile.userId,
-      actorName: profile.fullName,
-      actorOrgName: profile.organizationName,
+      actorName: actor?.fullName ?? profile.fullName,
+      actorOrgName: actor?.organizationName ?? profile.organizationName,
       actionType: "profile_updated",
-      newValue: Object.keys(params.updates).join(", "),
+      newValue: Object.keys(updates).join(", "),
       reason: params.actorUserId === params.userId ? "Self-service profile update" : "Administrator profile update",
     }));
     this.persistToBrowserStorage();
     return profile;
+  }
+
+  updateParticipant(params: {
+    participantId: string;
+    updates: Partial<Pick<ProjectParticipantRecord, "organizationId" | "organizationName" | "projectRole" | "workstreamIds" | "assignedTaskIds" | "reviewResponsibility" | "notificationResponsibility" | "visibilityScope" | "startsOn" | "endsOn" | "isActive">>;
+    actorUserId: string;
+    isAdmin?: boolean;
+  }): ProjectParticipantRecord | null {
+    if (!params.isAdmin) return null;
+    const participant = this.participants.find((entry) => entry.id === params.participantId);
+    if (!participant) return null;
+    Object.assign(participant, params.updates);
+    const actor = this.getProfileByUserId(params.actorUserId);
+    this.auditEvents.unshift(createAuditEvent({
+      entityType: "project_participant",
+      entityId: participant.id,
+      actorName: actor?.fullName ?? "PATH administrator",
+      actorOrgName: actor?.organizationName ?? "PATH",
+      actionType: "participant_updated",
+      newValue: Object.keys(params.updates).join(", "),
+      reason: "Administrator updated project participation controls",
+    }));
+    this.persistToBrowserStorage();
+    return participant;
   }
 
   createCustomerRequest(params: Omit<CustomerRequestRecord, "id" | "confirmationNumber" | "status" | "createdAt" | "updatedAt"> & { status?: CustomerRequestRecord["status"] }): CustomerRequestRecord {

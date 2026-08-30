@@ -83,7 +83,7 @@ export function CommitmentsDecisionsPanel() {
             <h2 className="text-lg font-bold text-slate-900">
               Active Interagency & Applicant Commitments
             </h2>
-            <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs gap-1.5 shadow">
+            <Button type="button" size="sm" disabled title="Use the governed project action workflow to create a commitment." className="bg-slate-300 text-slate-600 font-bold text-xs gap-1.5 shadow-none">
               <Plus className="size-3.5" /> Log New Commitment
             </Button>
           </div>
@@ -146,7 +146,7 @@ export function CommitmentsDecisionsPanel() {
             <h2 className="text-lg font-bold text-slate-900">
               Permanent Institutional Decision Log
             </h2>
-            <Button size="sm" className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs gap-1.5 shadow">
+            <Button type="button" size="sm" disabled title="Decision recording is not enabled in this read-only cockpit." className="bg-slate-300 text-slate-600 font-bold text-xs gap-1.5 shadow-none">
               <Plus className="size-3.5" /> Record Decision
             </Button>
           </div>
@@ -206,7 +206,7 @@ export function CommitmentsDecisionsPanel() {
             <h2 className="text-lg font-bold text-slate-900">
               Interagency Meetings & Workflow Action Pipeline
             </h2>
-            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs gap-1.5 shadow">
+            <Button type="button" size="sm" disabled title="Meeting note capture is not enabled in this read-only cockpit." className="bg-slate-300 text-slate-600 font-bold text-xs gap-1.5 shadow-none">
               <Plus className="size-3.5" /> Log Standup Notes
             </Button>
           </div>

@@ -96,6 +96,28 @@ test("profile edits enforce self-service authorization and preserve role ownersh
   assert.ok(repository.getAuditEvents().some((event) => event.actionType === "profile_updated"));
 });
 
+test("administrators can persist profile and participant access controls", () => {
+  const profile = repository.updateProfile({
+    userId: "user-alex-martin",
+    actorUserId: "user-joe-skaggs",
+    isAdmin: true,
+    updates: { organizationName: "Space Exploration Technologies Corp. (SpaceX)", projectRole: "Customer delivery lead", isCustomerVisible: true },
+  });
+  assert.equal(profile?.projectRole, "Customer delivery lead");
+  const participant = repository.getParticipants().find((entry) => entry.userId === "user-alex-martin");
+  assert.ok(participant);
+  const updated = repository.updateParticipant({
+    participantId: participant.id,
+    actorUserId: "user-joe-skaggs",
+    isAdmin: true,
+    updates: { workstreamIds: ["WS-WETLANDS-PAD-A"], visibilityScope: "customer", isActive: false },
+  });
+  assert.deepEqual(updated?.workstreamIds, ["WS-WETLANDS-PAD-A"]);
+  assert.equal(updated?.isActive, false);
+  assert.ok(repository.getAuditEvents().some((event) => event.actionType === "participant_updated"));
+  repository.resetE2EDemo();
+});
+
 test("external filings and document versions retain authoritative metadata", () => {
   const filing = repository.createExternalFiling({
     projectId: "proj-spacex-pecan",
