@@ -26,6 +26,10 @@ function readEnvFile(path = ".env") {
 }
 
 const env = { ...readEnvFile(), ...process.env };
+for (const [key, value] of Object.entries(env)) {
+  if (!(key in process.env) && value) process.env[key] = value;
+}
+process.env.APP_DATA_MODE ||= "test";
 const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL || "https://zomzacaxwqfwjstkxbpv.supabase.co";
 const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY || env.LEGACY_SERVICE_ROLE_KEY || env.legacy_service_role_key;
 
@@ -181,14 +185,15 @@ test("E2E Durability Flow: RFI Lifecycle & Workstream State Machine in PostgreSQ
 
 test("E2E Durability Flow: Multi-Agency Document Review Signoff in PostgreSQL", async () => {
   const versionId = `test-doc-v-${Date.now()}`;
+  const testVersionNumber = Number(String(Date.now()).slice(-8));
 
   // 1. Create parent document version first to satisfy foreign key
-  await supabase.from("document_versions").insert({
+  const { error: versionInsertErr } = await supabase.from("document_versions").insert({
     id: versionId,
     document_ref_id: "doc-drainage-01",
-    version_number: 99,
-    version_label: "v99.0",
-    storage_path: `doc-drainage-01/v99/test.pdf`,
+    version_number: testVersionNumber,
+    version_label: `v${testVersionNumber}.0`,
+    storage_path: `doc-drainage-01/v${testVersionNumber}/test.pdf`,
     file_name: "test.pdf",
     mime_type: "application/pdf",
     file_size_bytes: 1024,
@@ -199,6 +204,7 @@ test("E2E Durability Flow: Multi-Agency Document Review Signoff in PostgreSQL", 
     status: "under_review",
     created_at: new Date().toISOString(),
   });
+  assert.equal(versionInsertErr, null, versionInsertErr?.message);
 
   // 2. Create document agency review row
   const { error: insErr } = await supabase.from("document_agency_reviews").insert([

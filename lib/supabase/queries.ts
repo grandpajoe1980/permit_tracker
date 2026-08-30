@@ -1,280 +1,207 @@
 import { getSupabaseBrowser } from "./client";
 import {
-  auditEventRowToDomain,
-  commitmentRowToDomain,
-  coordinationRequestRowToDomain,
-  customerRequestRowToDomain,
-  decisionRowToDomain,
-  documentAgencyReviewRowToDomain,
-  documentRowToDomain,
-  documentVersionRowToDomain,
-  externalFilingRowToDomain,
-  meetingRowToDomain,
-  notificationRowToDomain,
-  permitTypeRowToDomain,
-  projectParticipantRowToDomain,
-  requirementResourceRowToDomain,
-  rfiResponseRowToDomain,
-  rfiRowToDomain,
-  taskRowToDomain,
-  userProfileRowToDomain,
-  workstreamRowToDomain,
+  auditEventRowToDomain, commitmentRowToDomain, coordinationRequestRowToDomain,
+  customerRequestRowToDomain, decisionRowToDomain, documentAgencyReviewRowToDomain,
+  documentRowToDomain, documentVersionRowToDomain, externalFilingRowToDomain,
+  meetingRowToDomain, notificationRowToDomain, permitTypeRowToDomain,
+  projectParticipantRowToDomain, requirementResourceRowToDomain, rfiResponseRowToDomain,
+  rfiRowToDomain, taskRowToDomain, userProfileRowToDomain, workstreamRowToDomain,
 } from "./mappings";
 import type {
-  AuditEventRecord,
-  CommitmentRecord,
-  CoordinationRequestRecord,
-  CustomerRequestRecord,
-  DecisionRecord,
-  DocumentAgencyReviewRecord,
-  DocumentRecord,
-  DocumentVersionRecord,
-  ExternalFilingRecord,
-  MeetingRecord,
-  NotificationRecord,
-  PermitTypeRecord,
-  ProjectParticipantRecord,
-  ProjectRecord,
-  RFIRecord,
-  UserProfileRecord,
+  AuditEventRecord, CommitmentRecord, CoordinationRequestRecord, CustomerRequestRecord,
+  DecisionRecord, DocumentRecord, ExternalFilingRecord, MeetingRecord, NotificationRecord,
+  PermitTypeRecord, ProjectParticipantRecord, ProjectRecord, RFIRecord, UserProfileRecord,
   WorkstreamRecord,
 } from "../domain-models";
 
+type QueryClient = NonNullable<ReturnType<typeof getSupabaseBrowser>>;
+type ProjectScope = { id: string; number: string; keys: string[] };
+
+async function resolveProjectScope(client: QueryClient, projectId: string): Promise<ProjectScope | null> {
+  const lookup = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(projectId)
+    ? client.from("projects").select("id, number").eq("id", projectId).maybeSingle()
+    : client.from("projects").select("id, number").eq("number", projectId).maybeSingle();
+  const { data } = await lookup;
+  if (!data) return null;
+  const id = String(data.id);
+  const number = String(data.number ?? projectId);
+  return { id, number, keys: Array.from(new Set([id, number, projectId])) };
+}
+
+function noClient<T>(): T[] { return []; }
+
 export async function fetchWorkstreams(projectId: string): Promise<WorkstreamRecord[]> {
   const client = getSupabaseBrowser();
-  if (!client) return [];
-
-  const [wsRes, taskRes] = await Promise.all([
-    client.from("workstreams").select("*").order("code", { ascending: true }),
-    client.from("tasks").select("*").order("task_code", { ascending: true }),
-  ]);
-
-  if (wsRes.error || !wsRes.data) return [];
+  if (!client) return noClient();
+  const scope = await resolveProjectScope(client, projectId);
+  if (!scope) return noClient();
+  const wsRes = await client.from("workstreams").select("*").eq("project_id", scope.id).order("code", { ascending: true });
+  if (wsRes.error || !wsRes.data) return noClient();
+  const workstreamIds = wsRes.data.map((row) => String(row.id));
+  const taskRes = workstreamIds.length
+    ? await client.from("tasks").select("*").in("workstream_id", workstreamIds).order("task_code", { ascending: true })
+    : { data: [], error: null };
   const tasks = (taskRes.data ?? []).map(taskRowToDomain);
-
   return wsRes.data.map((row) => {
     const ws = workstreamRowToDomain(row);
-    ws.tasks = tasks.filter((t) => t.workstreamId === ws.id || t.workstreamId === ws.code);
+    ws.tasks = tasks.filter((task) => task.workstreamId === ws.id || task.workstreamId === ws.code);
     return ws;
   });
 }
 
 export async function fetchCustomerRequests(projectId: string): Promise<CustomerRequestRecord[]> {
   const client = getSupabaseBrowser();
-  if (!client) return [];
-  const { data, error } = await client
-    .from("customer_requests")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error || !data) return [];
-  return data.map(customerRequestRowToDomain);
+  if (!client) return noClient();
+  const scope = await resolveProjectScope(client, projectId);
+  if (!scope) return noClient();
+  const { data, error } = await client.from("customer_requests").select("*").in("project_id", scope.keys).order("created_at", { ascending: false });
+  return error || !data ? noClient() : data.map(customerRequestRowToDomain);
 }
 
 export async function fetchExternalFilings(projectId: string): Promise<ExternalFilingRecord[]> {
   const client = getSupabaseBrowser();
-  if (!client) return [];
-  const { data, error } = await client
-    .from("external_filings")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error || !data) return [];
-  return data.map(externalFilingRowToDomain);
+  if (!client) return noClient();
+  const scope = await resolveProjectScope(client, projectId);
+  if (!scope) return noClient();
+  const { data, error } = await client.from("external_filings").select("*").in("project_id", scope.keys).order("created_at", { ascending: false });
+  return error || !data ? noClient() : data.map(externalFilingRowToDomain);
+}
+
+async function workstreamIdsForProject(client: QueryClient, projectId: string): Promise<string[]> {
+  const scope = await resolveProjectScope(client, projectId);
+  if (!scope) return [];
+  const { data } = await client.from("workstreams").select("id").eq("project_id", scope.id);
+  return (data ?? []).map((row) => String(row.id));
 }
 
 export async function fetchRFIs(projectId: string): Promise<RFIRecord[]> {
   const client = getSupabaseBrowser();
-  if (!client) return [];
-
+  if (!client) return noClient();
+  const ids = await workstreamIdsForProject(client, projectId);
+  if (!ids.length) return noClient();
   const [rfiRes, respRes] = await Promise.all([
-    client.from("rfis").select("*").order("created_at", { ascending: false }),
+    client.from("rfis").select("*").in("workstream_id", ids).order("created_at", { ascending: false }),
     client.from("rfi_responses").select("*").order("submitted_date", { ascending: true }),
   ]);
-
-  if (rfiRes.error || !rfiRes.data) return [];
+  if (rfiRes.error || !rfiRes.data) return noClient();
   const responses = (respRes.data ?? []).map(rfiResponseRowToDomain);
-
-  return rfiRes.data.map((row) => {
-    const rfiResponses = responses.filter((r) => r.rfiId === row.id || r.rfiId === row.code);
-    return rfiRowToDomain(row, rfiResponses);
-  });
+  return rfiRes.data.map((row) => rfiRowToDomain(row, responses.filter((response) => response.rfiId === row.id || response.rfiId === row.code)));
 }
 
 export async function fetchCoordinationRequests(projectId: string): Promise<CoordinationRequestRecord[]> {
   const client = getSupabaseBrowser();
-  if (!client) return [];
-  const { data, error } = await client
-    .from("coordination_requests")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error || !data) return [];
-  return data.map(coordinationRequestRowToDomain);
+  if (!client) return noClient();
+  const ids = await workstreamIdsForProject(client, projectId);
+  if (!ids.length) return noClient();
+  const { data, error } = await client.from("coordination_requests").select("*").in("workstream_id", ids).order("created_at", { ascending: false });
+  return error || !data ? noClient() : data.map(coordinationRequestRowToDomain);
 }
 
 export async function fetchCommitments(projectId: string): Promise<CommitmentRecord[]> {
   const client = getSupabaseBrowser();
-  if (!client) return [];
-  const { data, error } = await client
-    .from("commitments")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error || !data) return [];
-  return data.map(commitmentRowToDomain);
+  if (!client) return noClient();
+  const ids = await workstreamIdsForProject(client, projectId);
+  if (!ids.length) return noClient();
+  const { data, error } = await client.from("commitments").select("*").in("workstream_id", ids).order("created_at", { ascending: false });
+  return error || !data ? noClient() : data.map(commitmentRowToDomain);
 }
 
 export async function fetchDecisions(projectId: string): Promise<DecisionRecord[]> {
   const client = getSupabaseBrowser();
-  if (!client) return [];
-  const { data, error } = await client
-    .from("decisions")
-    .select("*")
-    .order("decision_date", { ascending: false });
-  if (error || !data) return [];
-  return data.map(decisionRowToDomain);
+  if (!client) return noClient();
+  const scope = await resolveProjectScope(client, projectId);
+  if (!scope) return noClient();
+  const { data, error } = await client.from("decisions").select("*").eq("project_id", scope.id).order("decision_date", { ascending: false });
+  return error || !data ? noClient() : data.map(decisionRowToDomain);
 }
 
 export async function fetchMeetings(projectId: string): Promise<MeetingRecord[]> {
   const client = getSupabaseBrowser();
-  if (!client) return [];
-  const { data, error } = await client
-    .from("meetings")
-    .select("*")
-    .order("meeting_date", { ascending: false });
-  if (error || !data) return [];
-  return data.map(meetingRowToDomain);
+  if (!client) return noClient();
+  const scope = await resolveProjectScope(client, projectId);
+  if (!scope) return noClient();
+  const { data, error } = await client.from("meetings").select("*").eq("project_id", scope.id).order("meeting_date", { ascending: false });
+  return error || !data ? noClient() : data.map(meetingRowToDomain);
 }
 
 export async function fetchDocuments(projectId: string): Promise<DocumentRecord[]> {
   const client = getSupabaseBrowser();
-  if (!client) return [];
-
-  const [docRes, verRes, revRes] = await Promise.all([
-    client.from("documents").select("*").order("created_at", { ascending: false }),
-    client.from("document_versions").select("*").order("version_number", { ascending: false }),
-    client.from("document_agency_reviews").select("*").order("created_at", { ascending: true }),
+  if (!client) return noClient();
+  const scope = await resolveProjectScope(client, projectId);
+  if (!scope) return noClient();
+  const { data: documents, error } = await client.from("documents").select("*").eq("project_id", scope.id).order("created_at", { ascending: false });
+  if (error || !documents) return noClient();
+  const documentIds = documents.map((row) => String(row.id));
+  const [versionRes, reviewRes] = await Promise.all([
+    documentIds.length ? client.from("document_versions").select("*").in("document_id", documentIds).order("version_number", { ascending: false }) : Promise.resolve({ data: [], error: null }),
+    documentIds.length ? client.from("document_agency_reviews").select("*").order("created_at", { ascending: true }) : Promise.resolve({ data: [], error: null }),
   ]);
-
-  if (docRes.error || !docRes.data) return [];
-  const reviews = (revRes.data ?? []).map(documentAgencyReviewRowToDomain);
-  const versions = (verRes.data ?? []).map((row) => {
-    const versionReviews = reviews.filter((r) => r.documentVersionId === row.id);
-    return documentVersionRowToDomain(row, versionReviews);
-  });
-
-  return docRes.data.map((row) => {
-    const docVersions = versions.filter((v) => v.documentId === row.id || v.documentId === row.document_ref_id);
-    docVersions.sort((left, right) => (right.versionNumber ?? 0) - (left.versionNumber ?? 0));
-    const docReviews = reviews.filter((r) => docVersions.some((v) => v.id === r.documentVersionId));
+  const reviews = (reviewRes.data ?? []).map(documentAgencyReviewRowToDomain);
+  const versions = (versionRes.data ?? []).map((row) => documentVersionRowToDomain(row, reviews.filter((review) => review.documentVersionId === row.id)));
+  return documents.map((row) => {
+    const docVersions = versions.filter((version) => version.documentId === row.id || version.documentId === row.document_ref_id).sort((left, right) => (right.versionNumber ?? 0) - (left.versionNumber ?? 0));
+    const docReviews = reviews.filter((review) => docVersions.some((version) => version.id === review.documentVersionId));
     return documentRowToDomain(row, docVersions, docReviews);
   });
 }
 
 export async function fetchUserProfiles(): Promise<UserProfileRecord[]> {
   const client = getSupabaseBrowser();
-  if (!client) return [];
-  const { data, error } = await client
-    .from("user_profiles")
-    .select("*")
-    .order("full_name", { ascending: true });
-  if (error || !data) return [];
-  return data.map(userProfileRowToDomain);
+  if (!client) return noClient();
+  const { data, error } = await client.from("user_profiles").select("*").order("full_name", { ascending: true });
+  return error || !data ? noClient() : data.map(userProfileRowToDomain);
 }
 
 export async function fetchProjectParticipants(projectId: string): Promise<ProjectParticipantRecord[]> {
   const client = getSupabaseBrowser();
-  if (!client) return [];
-  const { data, error } = await client
-    .from("project_participants")
-    .select("*")
-    .order("created_at", { ascending: true });
-  if (error || !data) return [];
-  return data.map(projectParticipantRowToDomain);
+  if (!client) return noClient();
+  const scope = await resolveProjectScope(client, projectId);
+  if (!scope) return noClient();
+  const { data, error } = await client.from("project_participants").select("*").eq("project_id", scope.id).order("created_at", { ascending: true });
+  return error || !data ? noClient() : data.map(projectParticipantRowToDomain);
 }
 
 export async function fetchNotifications(userId?: string): Promise<NotificationRecord[]> {
   const client = getSupabaseBrowser();
-  if (!client) return [];
-  let query = client.from("notifications").select("*").order("created_at", { ascending: false }).limit(50);
-  if (userId) {
-    query = query.or(`user_id.eq.${userId},recipient_id.eq.${userId}`);
-  }
-  const { data, error } = await query;
-  if (error || !data) return [];
-  return data.map(notificationRowToDomain);
+  if (!client) return noClient();
+  const resolvedUserId = userId ?? (await client.auth.getUser()).data.user?.id;
+  if (!resolvedUserId) return noClient();
+  const email = (await client.auth.getUser()).data.user?.email;
+  const targets = [resolvedUserId, email].filter(Boolean).join(",");
+  const { data, error } = await client.from("notifications").select("*").or(`user_id.in.(${targets}),recipient_id.eq.${resolvedUserId}`).order("created_at", { ascending: false }).limit(50);
+  return error || !data ? noClient() : data.map(notificationRowToDomain);
 }
 
 export async function fetchAuditEvents(projectId?: string): Promise<AuditEventRecord[]> {
   const client = getSupabaseBrowser();
-  if (!client) return [];
-  const { data, error } = await client
-    .from("audit_events")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(100);
-  if (error || !data) return [];
-  return data.map(auditEventRowToDomain);
+  if (!client) return noClient();
+  let query = client.from("audit_events").select("*").order("created_at", { ascending: false }).limit(100);
+  if (projectId) {
+    const scope = await resolveProjectScope(client, projectId);
+    if (!scope) return noClient();
+    query = query.in("project_id", scope.keys);
+  }
+  const { data, error } = await query;
+  return error || !data ? noClient() : data.map(auditEventRowToDomain);
 }
 
 export async function fetchCatalog(): Promise<PermitTypeRecord[]> {
   const client = getSupabaseBrowser();
-  if (!client) return [];
-
-  const [pRes, rRes] = await Promise.all([
+  if (!client) return noClient();
+  const [permitRes, resourceRes] = await Promise.all([
     client.from("permit_types").select("*").order("code", { ascending: true }),
     client.from("requirement_resources").select("*").order("resource_name", { ascending: true }),
   ]);
-
-  if (pRes.error || !pRes.data) return [];
-  const resources = (rRes.data ?? []).map(requirementResourceRowToDomain);
-
-  return pRes.data.map((row) => {
-    const permitResources = resources.filter((r) => r.permitTypeId === row.id);
-    return permitTypeRowToDomain(row, permitResources);
-  });
+  if (permitRes.error || !permitRes.data) return noClient();
+  const resources = (resourceRes.data ?? []).map(requirementResourceRowToDomain);
+  return permitRes.data.map((row) => permitTypeRowToDomain(row, resources.filter((resource) => resource.permitTypeId === row.id)));
 }
 
 export async function fetchFullProjectState(projectId = "PRJ-PECAN-2026"): Promise<Partial<ProjectRecord>> {
-  const [
-    workstreams,
-    customerRequests,
-    externalFilings,
-    rfis,
-    coordinationRequests,
-    commitments,
-    decisions,
-    meetings,
-    documents,
-    profiles,
-    participants,
-    notifications,
-    auditLedger,
-    catalog,
-  ] = await Promise.all([
-    fetchWorkstreams(projectId),
-    fetchCustomerRequests(projectId),
-    fetchExternalFilings(projectId),
-    fetchRFIs(projectId),
-    fetchCoordinationRequests(projectId),
-    fetchCommitments(projectId),
-    fetchDecisions(projectId),
-    fetchMeetings(projectId),
-    fetchDocuments(projectId),
-    fetchUserProfiles(),
-    fetchProjectParticipants(projectId),
-    fetchNotifications(),
-    fetchAuditEvents(projectId),
-    fetchCatalog(),
+  const [workstreams, customerRequests, externalFilings, rfis, coordinationRequests, commitments, decisions, meetings, documents, participants, auditLedger] = await Promise.all([
+    fetchWorkstreams(projectId), fetchCustomerRequests(projectId), fetchExternalFilings(projectId), fetchRFIs(projectId),
+    fetchCoordinationRequests(projectId), fetchCommitments(projectId), fetchDecisions(projectId), fetchMeetings(projectId),
+    fetchDocuments(projectId), fetchProjectParticipants(projectId), fetchAuditEvents(projectId),
   ]);
-
-  return {
-    workstreams,
-    customerRequests,
-    externalFilings,
-    coordinationRequests,
-    commitments,
-    decisions,
-    meetings,
-    documents,
-    auditLedger,
-    participants,
-  };
+  return { workstreams, customerRequests, externalFilings, coordinationRequests, commitments, decisions, meetings, documents, auditLedger, participants };
 }

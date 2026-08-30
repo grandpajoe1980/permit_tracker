@@ -71,6 +71,7 @@ import {
 } from "./supabase/mutations";
 import { mutateReviewDocumentVersion, mutateUploadDocumentVersion } from "./supabase/storage";
 import { isSupabaseConfigured } from "./supabase/client";
+import { allowsFixtureData } from "./data-mode";
 
 /**
  * PATH Authoritative Service & Repository Layer
@@ -138,20 +139,21 @@ class ProjectDeliveryRepository {
         fetchCatalog(),
       ]);
 
-      if (ws.length > 0) this.workstreams = ws;
-      if (custReqs.length > 0) this.customerRequests = custReqs;
-      if (extFilings.length > 0) this.externalFilings = extFilings;
-      if (rfisList.length > 0) this.rfis = rfisList;
-      if (coordReqs.length > 0) this.coordinationRequests = coordReqs;
-      if (comms.length > 0) this.commitments = comms;
-      if (decs.length > 0) this.decisions = decs;
-      if (mtgs.length > 0) this.meetings = mtgs;
-      if (docs.length > 0) this.documents = docs;
-      if (profs.length > 0) this.profiles = profs;
-      if (parts.length > 0) this.participants = parts;
-      if (notifs.length > 0) this.notifications = notifs;
-      if (audits.length > 0) this.auditEvents = audits;
-      if (cat.length > 0) this.catalog = cat;
+      const keepFixtures = allowsFixtureData();
+      if (!keepFixtures || ws.length > 0) this.workstreams = ws;
+      if (!keepFixtures || custReqs.length > 0) this.customerRequests = custReqs;
+      if (!keepFixtures || extFilings.length > 0) this.externalFilings = extFilings;
+      if (!keepFixtures || rfisList.length > 0) this.rfis = rfisList;
+      if (!keepFixtures || coordReqs.length > 0) this.coordinationRequests = coordReqs;
+      if (!keepFixtures || comms.length > 0) this.commitments = comms;
+      if (!keepFixtures || decs.length > 0) this.decisions = decs;
+      if (!keepFixtures || mtgs.length > 0) this.meetings = mtgs;
+      if (!keepFixtures || docs.length > 0) this.documents = docs;
+      if (!keepFixtures || profs.length > 0) this.profiles = profs;
+      if (!keepFixtures || parts.length > 0) this.participants = parts;
+      if (!keepFixtures || notifs.length > 0) this.notifications = notifs;
+      if (!keepFixtures || audits.length > 0) this.auditEvents = audits;
+      if (!keepFixtures || cat.length > 0) this.catalog = cat;
 
       this.isHydratedFromDb = true;
       return true;
@@ -419,6 +421,35 @@ class ProjectDeliveryRepository {
     return profile;
   }
 
+  async updateProfilePersisted(params: {
+    userId: string;
+    updates: Partial<Pick<UserProfileRecord, "fullName" | "displayTitle" | "organizationName" | "organizationalUnit" | "workEmail" | "officePhone" | "mobilePhone" | "officeLocation" | "preferredContactMethod" | "availabilityStatus" | "projectRole" | "avatarUrl" | "isCustomerVisible" | "isActive">>;
+    actorUserId: string;
+    actorName?: string;
+    isAdmin?: boolean;
+  }): Promise<{ data: UserProfileRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      const profile = this.updateProfile(params);
+      return profile ? { data: profile, error: null } : { data: null, error: new Error("Profile update is not authorized.") };
+    }
+    if (params.actorUserId !== params.userId && !params.isAdmin) return { data: null, error: new Error("Only the profile owner or an authorized administrator can update this profile.") };
+    const actor = this.getProfileByUserId(params.actorUserId);
+    const result = await mutateUpdateUserProfile({
+      userId: params.userId,
+      updates: params.updates,
+      actorUserId: params.actorUserId,
+      actorName: params.actorName ?? actor?.fullName ?? "PATH user",
+      isAdmin: params.isAdmin,
+    });
+    if (result.error) return { data: null, error: result.error };
+    const profiles = await fetchUserProfiles();
+    const saved = profiles.find((profile) => profile.userId === params.userId || profile.id === params.userId);
+    if (!saved) return { data: null, error: new Error("Profile update was not confirmed by the database.") };
+    this.profiles = profiles;
+    return { data: saved, error: null };
+  }
+
   updateParticipant(params: {
     participantId: string;
     updates: Partial<Pick<ProjectParticipantRecord, "organizationId" | "organizationName" | "projectRole" | "workstreamIds" | "assignedTaskIds" | "reviewResponsibility" | "notificationResponsibility" | "visibilityScope" | "startsOn" | "endsOn" | "isActive">>;
@@ -521,6 +552,43 @@ class ProjectDeliveryRepository {
     return request;
   }
 
+  /** Production mutation: commit first, then expose the authoritative row. */
+  async createCustomerRequestPersisted(
+    params: Omit<CustomerRequestRecord, "id" | "confirmationNumber" | "status" | "createdAt" | "updatedAt"> & { status?: CustomerRequestRecord["status"] }
+  ): Promise<{ data: CustomerRequestRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      return { data: this.createCustomerRequest(params), error: null };
+    }
+    const now = new Date().toISOString();
+    const requestId = `customer-request-${crypto.randomUUID()}`;
+    const confirmationNumber = `PATH-${new Date().getUTCFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    const result = await mutateCreateCustomerRequest({
+      id: requestId,
+      confirmationNumber,
+      projectId: params.projectId,
+      requestType: params.requestType,
+      title: params.title,
+      description: params.description,
+      requestedOutcome: params.requestedOutcome,
+      locationOrAffectedArea: params.locationOrAffectedArea,
+      desiredDate: params.desiredDate,
+      scheduleImportance: params.scheduleImportance,
+      knownAgencyCode: params.knownAgencyCode,
+      knownPermitTypeId: params.knownPermitTypeId,
+      submittedByUserId: params.submittedByUserId,
+      submittedByName: params.submittedByName,
+      relatedWorkstreamId: params.relatedWorkstreamId,
+      blocksActiveWork: params.blocksActiveWork,
+      status: params.status ?? "submitted",
+      attachmentDocumentVersionIds: params.attachmentDocumentVersionIds,
+    });
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Customer request was not persisted.") };
+    const request = { ...result.data, id: String(result.data.id), createdAt: result.data.createdAt || now, updatedAt: result.data.updatedAt || now };
+    this.customerRequests = [request, ...this.customerRequests.filter((entry) => entry.id !== request.id)];
+    return { data: request, error: null };
+  }
+
   createExternalFiling(params: Omit<ExternalFilingRecord, "id" | "createdAt" | "updatedAt">): ExternalFilingRecord {
     const now = new Date().toISOString();
     const filing: ExternalFilingRecord = {
@@ -565,6 +633,18 @@ class ProjectDeliveryRepository {
     }
 
     return filing;
+  }
+
+  async createExternalFilingPersisted(params: Omit<ExternalFilingRecord, "id" | "createdAt" | "updatedAt">): Promise<{ data: ExternalFilingRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      return { data: this.createExternalFiling(params), error: null };
+    }
+    const filing = { ...params, id: `external-filing-${crypto.randomUUID()}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const result = await mutateCreateExternalFiling(filing);
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("External filing was not persisted.") };
+    this.externalFilings = [result.data, ...this.externalFilings.filter((entry) => entry.id !== result.data?.id)];
+    return result;
   }
 
   updateExternalFiling(
@@ -788,6 +868,39 @@ class ProjectDeliveryRepository {
     return newRfi;
   }
 
+  async createRFIPersisted(params: {
+    workstreamId: string;
+    workstreamTitle: string;
+    requestingOrgId: string;
+    requestingOrgCode: string;
+    recipientOrgId: string;
+    recipientOrgCode: string;
+    title: string;
+    questionText: string;
+    technicalReason: string;
+    requiredDocumentTypes?: string[];
+    responseDeadline: string;
+    clockImpact?: RFIRecord["clockImpact"];
+    scheduleImpactDays?: number;
+    actorName: string;
+  }): Promise<{ data: RFIRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      return { data: this.createRFI(params), error: null };
+    }
+    const workstream = this.getWorkstreamById(params.workstreamId);
+    if (!workstream) return { data: null, error: new Error("Workstream not found.") };
+    const result = await mutateCreateRFI({
+      ...params,
+      id: `rfi-${crypto.randomUUID()}`,
+      code: `RFI-${new Date().getUTCFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+      workstreamId: workstream.id,
+    });
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("RFI creation was not confirmed by the database.") };
+    await this.hydrateFromSupabase();
+    return { data: result.data, error: null };
+  }
+
   markWorkstreamBlocked(params: {
     workstreamId: string;
     reason: string;
@@ -829,6 +942,26 @@ class ProjectDeliveryRepository {
     }
 
     return ws;
+  }
+
+  async markWorkstreamBlockedPersisted(params: {
+    workstreamId: string;
+    reason: string;
+    waitingOn: string;
+    actorName: string;
+    actorOrgName: string;
+    pauseClock?: boolean;
+  }): Promise<{ data: WorkstreamRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      return { data: this.markWorkstreamBlocked(params), error: null };
+    }
+    const workstream = this.getWorkstreamById(params.workstreamId);
+    if (!workstream) return { data: null, error: new Error("Workstream not found.") };
+    const result = await mutateMarkWorkstreamBlocked({ ...params, workstreamId: workstream.id, workstreamCode: workstream.code });
+    if (result.error) return { data: null, error: result.error };
+    await this.hydrateFromSupabase();
+    return { data: result.data, error: null };
   }
 
   clearWorkstreamBlocker(params: {
@@ -979,6 +1112,29 @@ class ProjectDeliveryRepository {
     return { success: true, workstream: ws, nextOwner: nextStage?.responsibleOrgCode ?? "Project Office" };
   }
 
+  async completeWorkstreamStagePersisted(params: {
+    workstreamId: string;
+    completedChecklists: string[];
+    actorName: string;
+    actorOrgName: string;
+  }): Promise<{ success: boolean; error: Error | null; nextStageName?: string }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { success: false, error: new Error("Supabase is required in production mode.") };
+      const result = this.completeWorkstreamStage({ ...params, providedDocs: [] });
+      return { success: result.success, error: result.success ? null : new Error(result.errors?.join(" ") ?? "Transition rejected."), nextStageName: result.workstream?.currentStageName };
+    }
+    const workstream = this.getWorkstreamById(params.workstreamId);
+    if (!workstream) return { success: false, error: new Error("Workstream not found.") };
+    const result = await mutateCompleteWorkstreamStage({
+      ...params,
+      workstreamId: workstream.id,
+      workstreamCode: workstream.code,
+    });
+    if (result.error || !result.data) return { success: false, error: result.error ?? new Error("The workflow transition was not confirmed by the database.") };
+    await this.hydrateFromSupabase();
+    return { success: true, error: null, nextStageName: result.data.nextStageName };
+  }
+
   addWorkstreamNote(params: { workstreamId: string; note: string; actorName: string; actorOrgName: string }) {
     const ws = this.getWorkstreamById(params.workstreamId);
     if (!ws) return null;
@@ -1091,6 +1247,45 @@ class ProjectDeliveryRepository {
     return event;
   }
 
+  async escalateWorkstreamPersisted(params: { workstreamId: string; problemType: string; actorName: string; actorOrgName: string }): Promise<{ success: boolean; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { success: false, error: new Error("Supabase is required in production mode.") };
+      return { success: Boolean(this.escalateWorkstream(params)), error: null };
+    }
+    const workstream = this.getWorkstreamById(params.workstreamId);
+    if (!workstream) return { success: false, error: new Error("Workstream not found.") };
+    const result = await mutateEscalateWorkstream({ ...params, workstreamId: workstream.id, workstreamCode: workstream.code, currentLevel: workstream.escalationLevel });
+    if (result.error) return { success: false, error: result.error };
+    await this.hydrateFromSupabase();
+    return { success: true, error: null };
+  }
+
+  async transferWorkstreamPersisted(params: { workstreamId: string; transferType: string; targetName: string; actorName: string; actorOrgName: string; note?: string }): Promise<{ success: boolean; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { success: false, error: new Error("Supabase is required in production mode.") };
+      return { success: Boolean(this.transferWorkstream(params)), error: null };
+    }
+    const workstream = this.getWorkstreamById(params.workstreamId);
+    if (!workstream) return { success: false, error: new Error("Workstream not found.") };
+    const result = await mutateTransferWorkstream({ ...params, workstreamId: workstream.id, workstreamCode: workstream.code });
+    if (result.error) return { success: false, error: result.error };
+    await this.hydrateFromSupabase();
+    return { success: true, error: null };
+  }
+
+  async addWorkstreamNotePersisted(params: { workstreamId: string; note: string; actorName: string; actorOrgName: string }): Promise<{ success: boolean; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { success: false, error: new Error("Supabase is required in production mode.") };
+      return { success: Boolean(this.addWorkstreamNote(params)), error: null };
+    }
+    const workstream = this.getWorkstreamById(params.workstreamId);
+    if (!workstream) return { success: false, error: new Error("Workstream not found.") };
+    const result = await mutateAddWorkstreamNote({ ...params, workstreamId: workstream.id, workstreamCode: workstream.code });
+    if (result.error) return { success: false, error: result.error };
+    await this.hydrateFromSupabase();
+    return { success: true, error: null };
+  }
+
   acceptRfiResponse(params: { rfiId: string; actorName: string; actorOrgName: string; notes?: string }) {
     const rfi = this.rfis.find((entry) => entry.id === params.rfiId || entry.code === params.rfiId);
     if (!rfi) return null;
@@ -1135,6 +1330,19 @@ class ProjectDeliveryRepository {
     }
 
     return response;
+  }
+
+  async acceptRfiResponsePersisted(params: { rfiId: string; actorName: string; actorOrgName: string; notes?: string }): Promise<{ success: boolean; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { success: false, error: new Error("Supabase is required in production mode.") };
+      return { success: Boolean(this.acceptRfiResponse(params)), error: null };
+    }
+    const rfi = this.rfis.find((entry) => entry.id === params.rfiId || entry.code === params.rfiId);
+    if (!rfi) return { success: false, error: new Error("RFI not found.") };
+    const result = await mutateAcceptRFIResponse({ ...params, rfiId: rfi.id, rfiCode: rfi.code, workstreamId: rfi.workstreamId });
+    if (result.error) return { success: false, error: result.error };
+    await this.hydrateFromSupabase();
+    return { success: true, error: null };
   }
 
   submitRfiResponse(params: { rfiId: string; submittedByName: string; responseText: string; actorOrgName: string; attachedDocumentVersionIds?: string[] }) {
@@ -1186,8 +1394,40 @@ class ProjectDeliveryRepository {
     return response;
   }
 
+  async submitRfiResponsePersisted(params: { rfiId: string; submittedByName: string; responseText: string; actorOrgName: string; attachedDocumentVersionIds?: string[] }): Promise<{ data: RFIResponseRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      return { data: this.submitRfiResponse(params), error: null };
+    }
+    const rfi = this.rfis.find((entry) => entry.id === params.rfiId || entry.code === params.rfiId);
+    if (!rfi) return { data: null, error: new Error("RFI not found.") };
+    const result = await mutateSubmitRFIResponse({
+      id: `resp-${crypto.randomUUID()}`,
+      rfiCode: rfi.code,
+      submittedByName: params.submittedByName,
+      responseText: params.responseText,
+      actorOrgName: params.actorOrgName,
+      attachedDocumentVersionIds: params.attachedDocumentVersionIds,
+      rfiId: rfi.id,
+    });
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("RFI response was not confirmed by the database.") };
+    await this.hydrateFromSupabase();
+    return { data: result.data, error: null };
+  }
+
   reviewDocumentVersion(params: { versionId: string; agencyCode: string; decision: "approved" | "approved_with_conditions" | "revision_requested"; actorName: string; comments: string }) {
     return this.signoffDocumentAgencyReview(params.versionId, params.agencyCode, params.decision, params.actorName, params.comments);
+  }
+
+  async reviewDocumentVersionPersisted(params: { versionId: string; agencyCode: string; decision: "approved" | "approved_with_conditions" | "revision_requested"; actorName: string; comments: string }): Promise<{ success: boolean; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { success: false, error: new Error("Supabase is required in production mode.") };
+      return { success: Boolean(this.reviewDocumentVersion(params)), error: null };
+    }
+    const result = await mutateReviewDocumentVersion(params);
+    if (result.error) return { success: false, error: result.error };
+    await this.hydrateFromSupabase();
+    return { success: true, error: null };
   }
 
   createCommitment(params: {

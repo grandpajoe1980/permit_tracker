@@ -18,8 +18,8 @@ function readEnvFile(path = ".env") {
 
 const env = { ...readEnvFile(), ...process.env };
 const admin = createClient(
-  env.SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL,
-  env.SUPABASE_SERVICE_ROLE_KEY ?? env.legacy_service_role_key,
+  env.SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+  env.SUPABASE_SERVICE_ROLE_KEY ?? env.legacy_service_role_key ?? "",
   { auth: { autoRefreshToken: false, persistSession: false } },
 );
 

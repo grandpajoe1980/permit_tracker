@@ -48,6 +48,8 @@ export default defineConfig(async ({ mode }) => {
     "process.env.NEXT_PUBLIC_SUPABASE_URL": JSON.stringify(publicSupabaseUrl),
     "process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(publicSupabaseKey),
     "process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY": JSON.stringify(publicSupabaseKey),
+    "process.env.APP_DATA_MODE": JSON.stringify(runtimeEnv.APP_DATA_MODE ?? runtimeEnv.NEXT_PUBLIC_APP_DATA_MODE ?? "production"),
+    "process.env.NEXT_PUBLIC_APP_DATA_MODE": JSON.stringify(runtimeEnv.NEXT_PUBLIC_APP_DATA_MODE ?? runtimeEnv.APP_DATA_MODE ?? "production"),
   };
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.

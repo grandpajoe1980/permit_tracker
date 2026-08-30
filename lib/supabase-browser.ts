@@ -9,6 +9,7 @@ import type {
   RequestCategory,
   ServiceRequest,
 } from "./demo-data";
+import { mutateCreateCustomerRequest } from "./supabase/mutations";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey =
@@ -181,10 +182,41 @@ export function requestRowToPermit(row: RequestRow): ServiceRequest {
 export async function loadRequestsForUser() {
   const client = getSupabaseBrowserClient();
   if (!client) return { permits: [] as PermitRecord[], error: new Error("Supabase is not configured.") };
-  const { data, error } = await client.from("requests").select("*").order("created_at", { ascending: false });
+  const { data: userData, error: userError } = await client.auth.getUser();
+  if (userError || !userData.user) return { permits: [] as PermitRecord[], error: userError ?? new Error("Sign in before loading requests.") };
+  const { data, error } = await client.from("customer_requests").select("*").eq("submitted_by_user_id", userData.user.id).order("created_at", { ascending: false });
   const rows = (data ?? []) as unknown as RequestRow[];
   return { permits: rows.map((row: RequestRow) => requestRowToPermit(row)), error };
 }
+
+/* Retained as historical context only; production uses the RPC-backed path below.
+async function createRequestForUserLegacy(input: { title: string; requestType: string; description: string }) {
+  const client = getSupabaseBrowserClient();
+  if (!client) return { error: new Error("Supabase is not configured.") };
+  const { data: userData } = await client.auth.getUser();
+  const user = userData.user;
+  if (!user) return { error: new Error("Sign in before submitting a request.") };
+  const { data: project, error: projectError } = await client.from("projects").select("id").eq("number", "PRJ-PECAN-2026").single();
+  if (projectError || !project) return { error: projectError ?? new Error("SpaceX project is not configured.") };
+  const { error } = await client.from("customer_requests").insert(Object.fromEntries(Object.entries({
+    project_id: project.id,
+    submitted_by_user_id: user.id,
+    request_type: ["permit_authorization", "government_help", "project_question", "blocker_coordination", "escalation", "concierge"].includes(input.requestType) ? input.requestType : "government_help",
+    title: input.title.trim(),
+    description: input.description.trim(),
+    confirmation_number: `PATH-${new Date().getUTCFullYear()}-${String(Date.now()).slice(-6)}`,
+    submitted_by_name: String(user.user_metadata?.full_name ?? user.email ?? "SpaceX employee"),
+    blocks_active_work: false,
+    schedule_importance: "normal",
+    attachment_document_version_ids: [],
+    id: crypto.randomUUID(),
+    updated_at: new Date().toISOString(),
+    status_label: "Submitted · Triage Queue",
+    total_days: 180,
+  }).filter(([key]) => key !== "status_label" && key !== "total_days")));
+  return { error };
+}
+*/
 
 export async function createRequestForUser(input: { title: string; requestType: string; description: string }) {
   const client = getSupabaseBrowserClient();
@@ -194,23 +226,22 @@ export async function createRequestForUser(input: { title: string; requestType: 
   if (!user) return { error: new Error("Sign in before submitting a request.") };
   const { data: project, error: projectError } = await client.from("projects").select("id").eq("number", "PRJ-PECAN-2026").single();
   if (projectError || !project) return { error: projectError ?? new Error("SpaceX project is not configured.") };
-  const { data: team, error: teamError } = await client.from("organizations").select("id").eq("code", "SPACEPORT").single();
-  if (teamError || !team) return { error: teamError ?? new Error("Workspace routing is not configured.") };
-  const { error } = await client.from("requests").insert({
-    project_id: project.id,
-    submitter_id: user.id,
-    owning_organization_id: team.id,
-    request_type: input.requestType,
-    category: input.requestType,
+  const requestType = ["permit_authorization", "government_help", "project_question", "blocker_coordination", "escalation", "concierge"].includes(input.requestType)
+    ? input.requestType
+    : "government_help";
+  const result = await mutateCreateCustomerRequest({
+    id: crypto.randomUUID(),
+    confirmationNumber: `PATH-${new Date().getUTCFullYear()}-${String(Date.now()).slice(-6)}`,
+    projectId: String(project.id),
+    requestType: requestType as "permit_authorization" | "government_help" | "project_question" | "blocker_coordination" | "escalation" | "concierge",
     title: input.title.trim(),
     description: input.description.trim(),
+    submittedByUserId: user.id,
+    submittedByName: String(user.user_metadata?.full_name ?? user.email ?? "SpaceX employee"),
+    blocksActiveWork: false,
+    scheduleImportance: "normal",
+    attachmentDocumentVersionIds: [],
     status: "submitted",
-    current_stage: "intake",
-    priority: "normal",
-    applicant_name: String(user.user_metadata?.full_name ?? user.email ?? "SpaceX employee"),
-    organization_name: "Space Exploration Technologies Corp.",
-    status_label: "Submitted · Triage Queue",
-    total_days: 180,
   });
-  return { error };
+  return { data: result.data, error: result.error };
 }

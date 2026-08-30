@@ -13,10 +13,11 @@ false-success and fixture behavior with verified Supabase-backed behavior.
   state; only `/api/health` and `/api/requests` are physical routes.
 - Existing typed domain models, operational projections, document UI, Gantt UI,
   workflow engine helpers, migrations, and fixture tests are useful foundations.
-- The production trust boundary is not yet acceptable: the server client can
-  use a service key, API request handlers do not authenticate/validate actors,
-  several queries ignore `projectId`, and later migrations installed broad
-  write/read policies.
+- The main production trust-boundary defects are now addressed in source and
+  forward migrations: browser code uses publishable credentials, the requests
+  API authenticates and validates input, repository reads carry project scope,
+  and later broad policies are superseded by explicit policies. Live migration
+  application and full clean-context RLS verification remain outstanding.
 - Repository mutations frequently update memory and return before Supabase
   succeeds. Empty Supabase results are often replaced with fixture data.
 

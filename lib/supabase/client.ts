@@ -1,39 +1,46 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { getAppDataMode } from "../data-mode";
+
+function runtimeEnv(name: string): string {
+  const processValue = process.env[name];
+  if (processValue) return processValue;
+  const viteValue = (import.meta.env as Record<string, string | undefined>)[name];
+  return viteValue ?? "";
+}
 
 export function getSupabaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.SUPABASE_URL ||
-    "https://zomzacaxwqfwjstkxbpv.supabase.co"
-  );
+  return runtimeEnv("NEXT_PUBLIC_SUPABASE_URL") || runtimeEnv("SUPABASE_URL") ||
+    (getAppDataMode() === "test" ? "https://zomzacaxwqfwjstkxbpv.supabase.co" : "");
 }
 
 export function getSupabaseAnonKey(): string {
-  return (
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvbXphY2F4d3Fmd2pzdGt4YnB2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MTA0OTMsImV4cCI6MjEwMzA4NjQ5M30.MO84_KXLzxK1yVpEBTyw0L2Jz550VoaEhatpyC2ric0"
-  );
+  return runtimeEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") ||
+    runtimeEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY") || runtimeEnv("SUPABASE_ANON_KEY") ||
+    (getAppDataMode() === "test" ? runtimeEnv("PATH_TEST_ANON_KEY") || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvbXphY2F4d3Fmd2pzdGt4YnB2IiwiaWF0IjoxNzg3NTEwNDkzLCJleHAiOjIxMDMwODY0OTN9.MO84_KXLzxK1yVpEBTyw0L2Jz550VoaEhatpyC2ric0" : "");
 }
 
 let browserClientInstance: SupabaseClient | null = null;
 let serverClientInstance: SupabaseClient | null = null;
+let testAnonClientInstance: SupabaseClient | null = null;
 
-/**
- * Returns the canonical Supabase client for browser contexts.
- */
+/** Returns the RLS-bound client for browser code. */
 export function getSupabaseBrowser(): SupabaseClient | null {
   if (typeof window === "undefined") {
-    return getSupabaseServer();
+    const privileged = getSupabaseServiceRoleClient();
+    if (privileged) return privileged;
+    if (getAppDataMode() !== "test") return null;
+    if (testAnonClientInstance) return testAnonClientInstance;
+    const url = getSupabaseUrl();
+    const anonKey = getSupabaseAnonKey();
+    if (!url || !anonKey) return null;
+    testAnonClientInstance = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    return testAnonClientInstance;
   }
   if (browserClientInstance) return browserClientInstance;
-
   const url = getSupabaseUrl();
   const anonKey = getSupabaseAnonKey();
   if (!url || !anonKey) return null;
-
   try {
     browserClientInstance = createBrowserClient(url, anonKey);
     return browserClientInstance;
@@ -44,36 +51,31 @@ export function getSupabaseBrowser(): SupabaseClient | null {
 }
 
 /**
- * Returns the Supabase client for server/testing environments.
+ * Legacy server/testing accessor. User-facing HTTP routes must use
+ * createRequestSupabaseClient() so the caller's session and RLS apply.
  */
 export function getSupabaseServer(): SupabaseClient | null {
+  return getSupabaseServiceRoleClient();
+}
+
+/** Privileged client reserved for trusted seed, health, and maintenance code. */
+export function getSupabaseServiceRoleClient(): SupabaseClient | null {
   if (serverClientInstance) return serverClientInstance;
-
   const url = getSupabaseUrl();
-  const serviceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.LEGACY_SERVICE_ROLE_KEY ||
-    process.env.legacy_service_role_key ||
-    getSupabaseAnonKey();
-
+  const serviceKey = runtimeEnv("SUPABASE_SERVICE_ROLE_KEY") ||
+    runtimeEnv("LEGACY_SERVICE_ROLE_KEY") || runtimeEnv("legacy_service_role_key") || "";
   if (!url || !serviceKey) return null;
-
   try {
     serverClientInstance = createClient(url, serviceKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
+      auth: { persistSession: false, autoRefreshToken: false },
     });
     return serverClientInstance;
   } catch (err) {
-    console.warn("Failed to initialize Supabase server client:", err);
+    console.warn("Failed to initialize Supabase service-role client:", err);
     return null;
   }
 }
 
 export function isSupabaseConfigured(): boolean {
-  const url = getSupabaseUrl();
-  const key = getSupabaseAnonKey();
-  return Boolean(url && key);
+  return Boolean(getSupabaseUrl() && getSupabaseAnonKey());
 }

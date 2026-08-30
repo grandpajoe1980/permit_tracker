@@ -1,4 +1,5 @@
 import { getSupabaseBrowser } from "./client";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AuditEventRecord,
   CommitmentRecord,
@@ -14,10 +15,36 @@ import type {
   UserProfileRecord,
   WorkstreamRecord,
 } from "../domain-models";
+import { allowsFixtureData, requiresSupabase } from "../data-mode";
 
 export interface MutationResult<T> {
   data: T | null;
   error: Error | null;
+}
+
+function customerRequestFromRow(row: Record<string, unknown>): CustomerRequestRecord {
+  return {
+    id: String(row.id),
+    confirmationNumber: String(row.confirmation_number),
+    projectId: String(row.project_id),
+    requestType: String(row.request_type) as CustomerRequestRecord["requestType"],
+    title: String(row.title),
+    description: String(row.description),
+    requestedOutcome: (row.requested_outcome as string) || undefined,
+    locationOrAffectedArea: (row.location_or_affected_area as string) || undefined,
+    desiredDate: (row.desired_date as string) || undefined,
+    scheduleImportance: (row.schedule_importance as CustomerRequestRecord["scheduleImportance"]) || "normal",
+    knownAgencyCode: (row.known_agency_code as string) || undefined,
+    knownPermitTypeId: (row.known_permit_type_id as string) || undefined,
+    submittedByUserId: (row.submitted_by_user_id as string) || undefined,
+    submittedByName: String(row.submitted_by_name),
+    relatedWorkstreamId: (row.related_workstream_id as string) || undefined,
+    blocksActiveWork: Boolean(row.blocks_active_work),
+    status: String(row.status) as CustomerRequestRecord["status"],
+    attachmentDocumentVersionIds: (row.attachment_document_version_ids as string[]) || [],
+    createdAt: String(row.created_at || new Date().toISOString()),
+    updatedAt: String(row.updated_at || new Date().toISOString()),
+  };
 }
 
 // ====================================================================
@@ -39,6 +66,12 @@ export async function insertAuditEvent(params: {
   const client = getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
+  const { data: authData, error: authError } = await client.auth.getUser();
+  const actorId = params.actorId ?? authData.user?.id;
+  if (requiresSupabase() && (authError || !actorId)) {
+    return { data: null, error: authError ?? new Error("An authenticated actor is required for audit events.") };
+  }
+
   const now = new Date().toISOString();
   const payload = {
     entity_type: params.entityType,
@@ -51,7 +84,7 @@ export async function insertAuditEvent(params: {
     new_value: params.newValue ?? null,
     reason: params.reason ?? null,
     project_id: params.projectId ?? "PRJ-PECAN-2026",
-    actor_id: params.actorId ?? null,
+    actor_id: actorId ?? null,
     created_at: now,
   };
 
@@ -148,15 +181,33 @@ export async function mutateCreateCustomerRequest(params: {
   blocksActiveWork: boolean;
   status: CustomerRequestRecord["status"];
   attachmentDocumentVersionIds?: string[];
-}): Promise<MutationResult<CustomerRequestRecord>> {
-  const client = getSupabaseBrowser();
+}, requestClient?: SupabaseClient): Promise<MutationResult<CustomerRequestRecord>> {
+  const client = requestClient ?? getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+
+  let projectId = params.projectId;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(projectId)) {
+    const { data: project, error: projectError } = await client
+      .from("projects")
+      .select("id")
+      .eq("number", projectId)
+      .maybeSingle();
+    if (projectError || !project) {
+      return { data: null, error: new Error(projectError?.message ?? `Project ${projectId} was not found.`) };
+    }
+    projectId = String(project.id);
+  }
+  const { data: authData, error: authError } = await client.auth.getUser();
+  if (requiresSupabase() && (authError || !authData.user)) {
+    return { data: null, error: authError ?? new Error("Sign in before creating a customer request.") };
+  }
+  const submittedByUserId = authData.user?.id ?? params.submittedByUserId;
 
   // Try PostgreSQL RPC function first
   const rpcPayload = {
     p_id: params.id,
     p_confirmation_number: params.confirmationNumber,
-    p_project_id: params.projectId,
+    p_project_id: projectId,
     p_request_type: params.requestType,
     p_title: params.title,
     p_description: params.description,
@@ -166,7 +217,7 @@ export async function mutateCreateCustomerRequest(params: {
     p_schedule_importance: params.scheduleImportance ?? "normal",
     p_known_agency_code: params.knownAgencyCode ?? null,
     p_known_permit_type_id: params.knownPermitTypeId ?? null,
-    p_submitted_by_user_id: params.submittedByUserId ?? null,
+    p_submitted_by_user_id: submittedByUserId ?? null,
     p_submitted_by_name: params.submittedByName,
     p_related_workstream_id: params.relatedWorkstreamId ?? null,
     p_blocks_active_work: params.blocksActiveWork,
@@ -176,6 +227,11 @@ export async function mutateCreateCustomerRequest(params: {
 
   const { data: rpcData, error: rpcError } = await client.rpc("rpc_create_customer_request", rpcPayload);
   if (!rpcError && rpcData) {
+    // The RPC owns the request, audit, and notification transaction. Do not
+    // emit client-side duplicates after it commits.
+    return { data: customerRequestFromRow(rpcData as Record<string, unknown>), error: null };
+    /* legacy non-atomic side-effect path retained below only for offline
+       compatibility; it is unreachable when the RPC succeeds. */
     const row = rpcData as Record<string, unknown>;
     await Promise.all([
       insertAuditEvent({
@@ -226,7 +282,11 @@ export async function mutateCreateCustomerRequest(params: {
     };
   }
 
-  // Fallback to direct table writes
+  if (!allowsFixtureData()) {
+    return { data: null, error: new Error(`Customer request transaction failed: ${rpcError?.message ?? "no row returned"}`) };
+  }
+
+  // Test/demo compatibility fallback. Production must use the atomic RPC.
   const now = new Date().toISOString();
   const insertPayload = {
     id: params.id,
@@ -848,7 +908,7 @@ export async function mutateEscalateWorkstream(params: {
 
   if (error) return { data: null, error: new Error(error.message) };
 
-  await Promise.all([
+  const sideEffects = await Promise.all([
     insertAuditEvent({
       entityType: "workstream",
       entityId: params.workstreamCode,
@@ -868,6 +928,8 @@ export async function mutateEscalateWorkstream(params: {
     }),
   ]);
 
+  const sideEffectError = sideEffects.find((result) => result.error)?.error;
+  if (sideEffectError) return { data: null, error: sideEffectError };
   return { data: { newLevel: nextLevel }, error: null };
 }
 
@@ -880,7 +942,9 @@ export async function mutateTransferWorkstream(params: {
   actorOrgName: string;
   note?: string;
 }): Promise<MutationResult<{ success: boolean }>> {
-  await Promise.all([
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const sideEffects = await Promise.all([
     insertAuditEvent({
       entityType: "workstream",
       entityId: params.workstreamCode,
@@ -900,6 +964,8 @@ export async function mutateTransferWorkstream(params: {
     }),
   ]);
 
+  const sideEffectError = sideEffects.find((result) => result.error)?.error;
+  if (sideEffectError) return { data: null, error: sideEffectError };
   return { data: { success: true }, error: null };
 }
 
@@ -910,7 +976,7 @@ export async function mutateAddWorkstreamNote(params: {
   actorName: string;
   actorOrgName: string;
 }): Promise<MutationResult<{ success: boolean }>> {
-  await insertAuditEvent({
+  const result = await insertAuditEvent({
     entityType: "workstream",
     entityId: params.workstreamCode,
     actorName: params.actorName,
@@ -918,6 +984,7 @@ export async function mutateAddWorkstreamNote(params: {
     actionType: "note_added",
     reason: params.note,
   });
+  if (result.error) return { data: null, error: result.error };
   return { data: { success: true }, error: null };
 }
 

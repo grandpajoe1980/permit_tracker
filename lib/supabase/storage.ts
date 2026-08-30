@@ -1,5 +1,6 @@
 import { getSupabaseBrowser } from "./client";
-import { insertAuditEvent, insertNotification } from "./mutations";
+import { insertAuditEvent } from "./mutations";
+import { allowsFixtureData, requiresSupabase } from "../data-mode";
 import type { DocumentAgencyReviewRecord, DocumentVersionRecord } from "../domain-models";
 
 export async function calculateSHA256(buffer: ArrayBuffer): Promise<string> {
@@ -101,6 +102,11 @@ export async function mutateUploadDocumentVersion(params: {
   const client = getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
+  const { data: authData, error: authError } = await client.auth.getUser();
+  if (requiresSupabase() && (authError || !authData.user)) {
+    return { data: null, error: authError ?? new Error("Sign in before uploading a document.") };
+  }
+
   const fileBuffer = await params.file.arrayBuffer();
   const sha256Hash = await calculateSHA256(fileBuffer);
   const uploadId = crypto.randomUUID();
@@ -136,7 +142,7 @@ export async function mutateUploadDocumentVersion(params: {
     p_change_notes: params.changeNotes,
     p_reviewing_agency_codes: params.reviewingAgencyCodes,
     p_project_id: isUuid(params.projectId) ? params.projectId : null,
-    p_actor_id: isUuid(params.actorId) ? params.actorId : null,
+    p_actor_id: isUuid(params.actorId) ? params.actorId : authData.user?.id ?? null,
   };
 
   const { data: rpcData, error: rpcError } = await client.rpc("rpc_create_document_version", rpcPayload);
@@ -168,7 +174,12 @@ export async function mutateUploadDocumentVersion(params: {
     };
   }
 
-  // 3. Fallback direct PostgreSQL inserts
+  await client.storage.from("path-documents").remove([storagePath]);
+  if (!allowsFixtureData()) {
+    return { data: null, error: new Error(`Document version transaction failed: ${rpcError?.message ?? "no row returned"}`) };
+  }
+
+  // Test/demo compatibility fallback. Production uses the atomic RPC only.
   const { error: verError } = await client.from("document_versions").insert({
     id: versionId,
     document_ref_id: params.documentId,
@@ -275,7 +286,11 @@ export async function mutateReviewDocumentVersion(params: {
     return { success: true, error: null };
   }
 
-  // Fallback
+  if (!allowsFixtureData()) {
+    return { success: false, error: new Error(`Document review transaction failed: ${rpcError.message}`) };
+  }
+
+  // Test/demo compatibility fallback.
   const now = new Date().toISOString();
   const { error: reviewError } = await client
     .from("document_agency_reviews")

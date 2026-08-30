@@ -83,8 +83,9 @@ import {
   supabaseConfigured,
 } from "@/lib/supabase-browser";
 import { repository } from "@/lib/repository";
+import { allowsFixtureData } from "@/lib/data-mode";
 import { downloadDocumentFile, mutateUploadDocumentVersion } from "@/lib/supabase/storage";
-import { downloadDocumentVersion, triggerFileDownload } from "@/lib/document-download-utils";
+import { downloadDocumentVersion } from "@/lib/document-download-utils";
 import {
   getAvailableActions,
   getCompletionPreview,
@@ -225,8 +226,9 @@ export default function Home() {
   const [secondaryTool, setSecondaryTool] = useState<SecondaryTool>("schedule");
   const [currentUser, setCurrentUser] = useState<DemoAccount | null>(null);
   const [currentPersona, setCurrentPersona] = useState<DemoPersona | null>(null);
-  const [userPermits, setUserPermits] = useState<ServiceRequest[]>(pecanIslandRequests);
+  const [userPermits, setUserPermits] = useState<ServiceRequest[]>(allowsFixtureData() ? pecanIslandRequests : []);
   const [teamUsers, setTeamUsers] = useState(() => {
+    if (!allowsFixtureData()) return [] as typeof initialTeamUsers;
     if (typeof window === "undefined") return initialTeamUsers;
     try {
       const saved = window.localStorage.getItem("path-admin-team-users-v1");
@@ -299,11 +301,11 @@ export default function Home() {
   const loggedIn = Boolean(currentUser && currentPersona);
   const projectRecord = repository.getProject();
   const projectOverview: ProjectOverview = getProjectOverview(projectRecord, repository.getWorkstreams(), repository.getCustomerRequests(), repository.getExternalFilings());
-  const currentProfile = repository.getProfileByUserId(activePersona.id.startsWith("user-") ? activePersona.id : `user-${activePersona.id}`) ?? projectProfiles.find((profile) => profile.fullName === activePersona.name);
+  const currentProfile = repository.getProfileByUserId(activePersona.id.startsWith("user-") ? activePersona.id : `user-${activePersona.id}`) ?? (allowsFixtureData() ? projectProfiles.find((profile) => profile.fullName === activePersona.name) : undefined);
 
   function profileDraftForPersona(persona: DemoPersona) {
     const operational = getOperationalPersona(persona);
-    const profile = repository.getProfileByUserId(operational.id.startsWith("user-") ? operational.id : `user-${operational.id}`) ?? projectProfiles.find((entry) => entry.fullName === operational.name);
+    const profile = repository.getProfileByUserId(operational.id.startsWith("user-") ? operational.id : `user-${operational.id}`) ?? (allowsFixtureData() ? projectProfiles.find((entry) => entry.fullName === operational.name) : undefined);
     return profile ? {
       displayTitle: profile.displayTitle,
       organizationalUnit: profile.organizationalUnit ?? "",
@@ -335,7 +337,7 @@ export default function Home() {
       await repository.hydrateFromSupabase();
       const loaded = await loadRequestsForUser();
       const persona = makeAuthenticatedPersona(user.email ?? "authenticated@path.local", String(user.user_metadata?.full_name ?? user.email ?? "Authenticated User"));
-      const permits = loaded.permits.length > 0 ? loaded.permits : pecanIslandRequests;
+      const permits = loaded.permits.length > 0 || !allowsFixtureData() ? loaded.permits : pecanIslandRequests;
       setCurrentPersona(persona);
       setProfileDraft(profileDraftForPersona(persona));
       setCurrentUser({ username: user.email ?? "", name: persona.name, agencyId: "spaceport", applicationIds: permits.map((item) => item.id), scenario: persona.role });
@@ -346,7 +348,7 @@ export default function Home() {
       if (event === "SIGNED_OUT") {
         setCurrentUser(null);
         setCurrentPersona(null);
-        setUserPermits(pecanIslandRequests);
+        setUserPermits(allowsFixtureData() ? pecanIslandRequests : []);
       }
     });
     return () => {
@@ -450,7 +452,7 @@ export default function Home() {
     await repository.hydrateFromSupabase();
     const loaded = await loadRequestsForUser();
     const persona = makeAuthenticatedPersona(user.email ?? username, String(user.user_metadata?.full_name ?? user.email ?? "Authenticated User"));
-    const permits = loaded.permits.length > 0 ? loaded.permits : pecanIslandRequests;
+    const permits = loaded.permits.length > 0 || !allowsFixtureData() ? loaded.permits : pecanIslandRequests;
     setLoadingData(false);
     setLoginError(loaded.error ? `Signed in, but the project queue could not be loaded: ${loaded.error.message}` : "");
     setCurrentPersona(persona);
@@ -471,13 +473,13 @@ export default function Home() {
       if (user) {
         await repository.hydrateFromSupabase();
         const loaded = await loadRequestsForUser();
-        loadedPermits = loaded.permits.length > 0 ? loaded.permits : pecanIslandRequests;
+        loadedPermits = loaded.permits.length > 0 || !allowsFixtureData() ? loaded.permits : pecanIslandRequests;
       }
     }
     const permits = loadedPermits ?? (getOperationalPersona(persona).isCustomer && persona.email.startsWith("applicant.")
       ? userPermits
-      : pecanIslandRequests);
-    const finalPermits = permits.length > 0 ? permits : pecanIslandRequests;
+      : allowsFixtureData() ? pecanIslandRequests : []);
+    const finalPermits = permits.length > 0 || !allowsFixtureData() ? permits : pecanIslandRequests;
     setCurrentPersona(persona);
     setProfileDraft(profileDraftForPersona(persona));
     setCurrentUser({ username: persona.email, name: persona.name, agencyId: "spaceport", applicationIds: finalPermits.map((item) => item.id), scenario: `${persona.role} · ${persona.scenario}` });
@@ -492,7 +494,7 @@ export default function Home() {
     await signOutBrowser();
     setCurrentUser(null);
     setCurrentPersona(null);
-    setUserPermits(pecanIslandRequests);
+    setUserPermits(allowsFixtureData() ? pecanIslandRequests : []);
     setSelectedItemId(null);
     setRoute("my-work");
     setUsername("");
@@ -518,13 +520,13 @@ export default function Home() {
     return activePersona.id.startsWith("user-") ? activePersona.id : `user-${activePersona.id}`;
   }
 
-  function submitCustomerRequest(event: FormEvent<HTMLFormElement>, requestType: "permit_authorization" | "government_help" | "project_question" | "blocker_coordination" | "escalation") {
+  async function submitCustomerRequest(event: FormEvent<HTMLFormElement>, requestType: "permit_authorization" | "government_help" | "project_question" | "blocker_coordination" | "escalation") {
     event.preventDefault();
     if (!requestDescription.trim() && !requestTitle.trim()) return;
     const inferredServiceType = requestTitle === "Project question" ? "project_question" : requestTitle === "Project blocker or coordination problem" ? "blocker_coordination" : requestTitle === "Concierge help" ? "concierge" : "government_help";
     const effectiveRequestType = requestType === "government_help" && requestCenterMode === "service" ? inferredServiceType : requestType;
     const selectedPermit = repository.getCatalog().find((permit) => permit.id === selectedCatalogPermitId);
-    const request = repository.createCustomerRequest({
+    const requestResult = await repository.createCustomerRequestPersisted({
       projectId: projectRecord.id,
       requestType: effectiveRequestType,
       title: requestTitle.trim() || selectedPermit?.name || "Customer project request",
@@ -541,8 +543,13 @@ export default function Home() {
       blocksActiveWork: requestBlocksWork,
       attachmentDocumentVersionIds: [],
     });
+    if (requestResult.error || !requestResult.data) {
+      setToast(`Request could not be saved: ${requestResult.error?.message ?? "the database did not confirm the submission"}`);
+      return;
+    }
+    const request = requestResult.data;
     if (effectiveRequestType === "permit_authorization" && selectedPermit?.filingMode === "EXTERNAL_PORTAL") {
-      repository.createExternalFiling({
+      const filingResult = await repository.createExternalFilingPersisted({
         projectId: projectRecord.id,
         workstreamId: request.relatedWorkstreamId ?? "WS-WETLANDS-PAD-A",
         permitTypeId: selectedPermit.id,
@@ -562,6 +569,10 @@ export default function Home() {
         notes: "Manually tracked in PATH; the agency system remains authoritative.",
         receiptDocumentVersionIds: [],
       });
+      if (filingResult.error) {
+        setToast(`${request.confirmationNumber} was saved, but the external filing tracker could not be saved: ${filingResult.error.message}`);
+        return;
+      }
     }
     setRequestTitle("");
     setRequestOutcome("");
@@ -572,11 +583,11 @@ export default function Home() {
     setMutationVersion((value) => value + 1);
   }
 
-  function saveCustomerDraft() {
+  async function saveCustomerDraft() {
     if (!requestDescription.trim() && !requestTitle.trim()) return;
     const selectedPermit = repository.getCatalog().find((permit) => permit.id === selectedCatalogPermitId);
     const requestType = requestCenterMode === "escalation" ? "escalation" : requestTitle === "Project question" ? "project_question" : requestTitle === "Project blocker or coordination problem" ? "blocker_coordination" : requestTitle === "Concierge help" ? "concierge" : "government_help";
-    const request = repository.createCustomerRequest({
+    const requestResult = await repository.createCustomerRequestPersisted({
       projectId: projectRecord.id,
       requestType,
       title: requestTitle.trim() || selectedPermit?.name || "Customer project request",
@@ -594,19 +605,27 @@ export default function Home() {
       attachmentDocumentVersionIds: [],
       status: "draft",
     });
+    if (requestResult.error || !requestResult.data) {
+      setToast(`Draft could not be saved: ${requestResult.error?.message ?? "the database did not confirm the draft"}`);
+      return;
+    }
+    const request = requestResult.data;
     setRequestCenterMode("menu");
     setToast(`${request.confirmationNumber} saved as a draft.`);
     setMutationVersion((value) => value + 1);
   }
 
-  function saveProfile(event: FormEvent<HTMLFormElement>) {
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!currentProfile) return;
-    const updated = repository.updateProfile({ userId: currentProfile.userId, actorUserId: actorUserId(), updates: profileDraft, isAdmin: activePersona.workspace === "admin" });
-    if (!updated) {
-      setProfileStatus("Only your own contact fields can be edited from this profile view.");
+    setSaveStatus("saving");
+    const result = await repository.updateProfilePersisted({ userId: currentProfile.userId, actorUserId: actorUserId(), updates: profileDraft, isAdmin: activePersona.workspace === "admin" });
+    if (result.error || !result.data) {
+      setSaveStatus("error");
+      setProfileStatus(result.error?.message ?? "Only your own contact fields can be edited from this profile view.");
       return;
     }
+    setSaveStatus("saved");
     setProfileStatus("Profile saved. Your updated contact details are now available to authorized project participants.");
     setToast("Profile updated.");
     setMutationVersion((value) => value + 1);
@@ -617,9 +636,13 @@ export default function Home() {
     const version = (versionId ? document?.versions.find((entry) => entry.id === versionId) : null) ?? document?.versions[0];
     if (!document || !version) return;
     setSaveStatus("saving");
-    let result = await downloadDocumentVersion(document, version, downloadDocumentFile);
+    const result = await downloadDocumentVersion(document, version, downloadDocumentFile);
     if (!result.success) {
-      // Fall back to certified package download if remote bucket object is not yet seeded
+      setSaveStatus("error");
+      setToast(`Download failed: ${result.error?.message ?? "the document could not be retrieved"}`);
+      return;
+    }
+    /*
       const content = [
         `================================================================================`,
         `STATE OF LOUISIANA · EXECUTIVE PROJECT OFFICE · PATH VERIFIED DOCUMENT PACKAGE`,
@@ -638,12 +661,12 @@ export default function Home() {
           ? document.agencyReviews.map((r) => `  - ${r.reviewingOrgCode}: ${r.reviewStatus.toUpperCase()} (Reviewer: ${r.reviewedByName ?? r.reviewedByUserName ?? "Assigned Engineer"})`)
           : ["  - Verified by State Project Office"]),
         `================================================================================`,
-        `This certified package was retrieved from the State of Louisiana Megaproject Permitting Ledger.`,
       ].join("\n");
       const fallbackBlob = new Blob([content], { type: version.mimeType || "text/plain" });
       triggerFileDownload(fallbackBlob, version.fileName || "document.pdf");
       result = { success: true, error: null };
     }
+    */
     setSaveStatus("saved");
     setToast(`Verified ${version.fileName} and started the download.`);
   }
@@ -720,30 +743,22 @@ export default function Home() {
         setDialogError("Complete each required item before sending this step forward. The missing item is shown above.");
         return;
       }
-      if (item.kind === "customer_request") {
-        const req = repository.getCustomerRequests().find((r) => r.id === item.id);
-        if (req) {
-          req.status = "resolved";
-          req.updatedAt = new Date().toISOString();
-        }
-      }
       if (!workstreamId) {
         notify(`${item.title} completed successfully.`);
         return;
       }
-      const result = repository.completeWorkstreamStage({
+      const result = await repository.completeWorkstreamStagePersisted({
         workstreamId,
         completedChecklists: ["completeness_checklist_passed", "drainage_concurrence_received", "ecological_signoff", "public_comment_closed", "comment_response_package", "executive_director_signature", "reviewer_determination_recorded"],
-        providedDocs: ["site_plans", "wetlands_delineation", "drainage_model", "mitigation_plan", "public_notice_text", "final_order_doc"],
         actorName,
         actorOrgName,
       });
       if (!result.success) {
-        setDialogError(result.errors?.join(" ") ?? "The workflow did not accept this transition.");
+        setDialogError(result.error?.message ?? "The workflow did not accept this transition.");
         return;
       }
       applyRepositoryWorkstream(item);
-      notify(`Technical review completed. Work assigned to ${result.nextOwner ?? "the next configured owner"}.`);
+      notify(`Technical review completed. The next configured stage is ${result.nextStageName ?? "the next workflow stage"}.`);
       return;
     }
 
@@ -768,7 +783,7 @@ export default function Home() {
         setDialogError("Tell the recipient what information is needed.");
         return;
       }
-      const rfi = repository.createRFI({
+      const rfiResult = await repository.createRFIPersisted({
         workstreamId,
         workstreamTitle: item.workstreamTitle,
         requestingOrgId: `org-${activePersona.agencyCode.toLowerCase()}`,
@@ -783,7 +798,11 @@ export default function Home() {
         scheduleImpactDays: 3,
         actorName,
       });
-      repository.dispatchNotification({ userId: "user-spacex", title: `${rfi.code} requires a response`, message: questionText.trim(), type: "action_required", linkUrl: `/rfis/${rfi.code}`, urgency: "high", metadata: { rfiCode: rfi.code } });
+      if (rfiResult.error || !rfiResult.data) {
+        setDialogError(rfiResult.error?.message ?? "The RFI was not confirmed by the database.");
+        return;
+      }
+      const rfi = rfiResult.data;
       applyRepositoryWorkstream(item);
       notify(`${rfi.code} created. SpaceX Regulatory Engineering and the project concierge were notified.`);
       return;
@@ -797,7 +816,7 @@ export default function Home() {
       let createdLabel = "Structured blocker";
       const target = blockReason === "customer" ? "SpaceX Regulatory Engineering" : blockReason === "another_agency" ? blockAgency : blockReason === "statutory" ? "Statutory waiting period" : "Internal agency team";
       if (blockReason === "customer") {
-        const rfi = repository.createRFI({
+        const rfiResult = await repository.createRFIPersisted({
           workstreamId,
           workstreamTitle: item.workstreamTitle,
           requestingOrgId: `org-${activePersona.agencyCode.toLowerCase()}`,
@@ -813,7 +832,11 @@ export default function Home() {
           scheduleImpactDays: 5,
           actorName,
         });
-        createdLabel = `RFI ${rfi.code}`;
+        if (rfiResult.error || !rfiResult.data) {
+          setDialogError(rfiResult.error?.message ?? "The RFI was not confirmed by the database.");
+          return;
+        }
+        createdLabel = `RFI ${rfiResult.data.code}`;
       } else if (blockReason === "another_agency") {
         const coordination = repository.createCoordinationRequest({
           workstreamId,
@@ -831,7 +854,11 @@ export default function Home() {
         });
         createdLabel = `Coordination Request ${coordination.code}`;
       }
-      repository.markWorkstreamBlocked({ workstreamId, reason: blockNeed.trim(), waitingOn: target, actorName, actorOrgName, pauseClock: blockReason === "customer" || blockReason === "statutory" });
+      const blockedResult = await repository.markWorkstreamBlockedPersisted({ workstreamId, reason: blockNeed.trim(), waitingOn: target, actorName, actorOrgName, pauseClock: blockReason === "customer" || blockReason === "statutory" });
+      if (blockedResult.error || !blockedResult.data) {
+        setDialogError(blockedResult.error?.message ?? "The blocker was not confirmed by the database.");
+        return;
+      }
       repository.dispatchNotification({ userId: "user-sarah-johnson", title: `${createdLabel} needs attention`, message: blockNeed.trim(), type: "action_required", linkUrl: `/workstreams/${workstreamId}`, urgency: item.isCriticalPath ? "critical" : "high", metadata: { workstreamId, target } });
       applyRepositoryWorkstream(item);
       notify(`${createdLabel} created. The responsible recipient and project concierge were notified.`);
@@ -840,7 +867,7 @@ export default function Home() {
 
     if (dialog.action === "escalate") {
       if (activePersona.isCustomer) {
-        const escalation = repository.createCustomerRequest({
+        const escalationResult = await repository.createCustomerRequestPersisted({
           projectId: projectRecord.id,
           requestType: "escalation",
           title: `Escalation request · ${item.workstreamTitle}`,
@@ -855,14 +882,22 @@ export default function Home() {
           blocksActiveWork: item.isCriticalPath,
           attachmentDocumentVersionIds: [],
         });
-        notify(`${escalation.confirmationNumber} submitted. The project office will acknowledge the escalation.`);
+        if (escalationResult.error || !escalationResult.data) {
+          setDialogError(escalationResult.error?.message ?? "The escalation was not confirmed by the database.");
+          return;
+        }
+        notify(`${escalationResult.data.confirmationNumber} submitted. The project office will acknowledge the escalation.`);
         return;
       }
       if (!workstreamId) {
         setDialogError("This work item is not connected to a configured workstream.");
         return;
       }
-      repository.escalateWorkstream({ workstreamId, problemType: escalationType, actorName, actorOrgName });
+      const escalationResult = await repository.escalateWorkstreamPersisted({ workstreamId, problemType: escalationType, actorName, actorOrgName });
+      if (!escalationResult.success) {
+        setDialogError(escalationResult.error?.message ?? "The escalation was not confirmed by the database.");
+        return;
+      }
       notify(`Escalated to the configured next supervisor for ${item.workstreamTitle}.`);
       return;
     }
@@ -872,7 +907,11 @@ export default function Home() {
         setDialogError("This work item is not connected to a configured workstream.");
         return;
       }
-      repository.transferWorkstream({ workstreamId, transferType, targetName: "Maya Chen", actorName, actorOrgName, note: actionNote.trim() });
+      const transferResult = await repository.transferWorkstreamPersisted({ workstreamId, transferType, targetName: "Maya Chen", actorName, actorOrgName, note: actionNote.trim() });
+      if (!transferResult.success) {
+        setDialogError(transferResult.error?.message ?? "The transfer request was not confirmed by the database.");
+        return;
+      }
       notify("Help request recorded for supervisor review.");
       return;
     }
@@ -882,7 +921,11 @@ export default function Home() {
         setDialogError("Add a note before saving.");
         return;
       }
-      repository.addWorkstreamNote({ workstreamId, note: actionNote.trim(), actorName, actorOrgName });
+      const noteResult = await repository.addWorkstreamNotePersisted({ workstreamId, note: actionNote.trim(), actorName, actorOrgName });
+      if (!noteResult.success) {
+        setDialogError(noteResult.error?.message ?? "The note was not confirmed by the database.");
+        return;
+      }
       notify("Note added to the activity history.");
       return;
     }
@@ -893,9 +936,9 @@ export default function Home() {
         return;
       }
       const decision = dialog.action === "request_revision" ? "revision_requested" : dialog.action === "approve_with_comments" ? "approved_with_conditions" : "approved";
-      const review = repository.reviewDocumentVersion({ versionId: item.exactDocumentVersionId, agencyCode: activePersona.agencyCode.split(" /")[0], decision, actorName, comments: actionNote.trim() || `${actionLabel(dialog.action)} recorded for ${item.exactDocumentVersionLabel}.` });
-      if (!review) {
-        setDialogError("This exact document version is not assigned to your agency.");
+      const review = await repository.reviewDocumentVersionPersisted({ versionId: item.exactDocumentVersionId, agencyCode: activePersona.agencyCode.split(" /")[0], decision, actorName, comments: actionNote.trim() || `${actionLabel(dialog.action)} recorded for ${item.exactDocumentVersionLabel}.` });
+      if (!review.success) {
+        setDialogError(review.error?.message ?? "The exact document version is not assigned to your agency.");
         return;
       }
       notify(`${item.exactDocumentVersionLabel} decision saved against the exact version.`);
@@ -904,9 +947,9 @@ export default function Home() {
 
     if (dialog.action === "accept_rfi_response") {
       if (!item.sourceRfi) return;
-      const accepted = repository.acceptRfiResponse({ rfiId: item.sourceRfi.id, actorName, actorOrgName, notes: actionNote.trim() });
-      if (!accepted) {
-        setDialogError("The RFI response could not be accepted.");
+      const accepted = await repository.acceptRfiResponsePersisted({ rfiId: item.sourceRfi.id, actorName, actorOrgName, notes: actionNote.trim() });
+      if (!accepted.success) {
+        setDialogError(accepted.error?.message ?? "The RFI response could not be accepted.");
         return;
       }
       notify(`${item.sourceRfi.code} accepted. The linked review can resume.`);
@@ -918,7 +961,7 @@ export default function Home() {
         setDialogError("Tell SpaceX what needs clarification.");
         return;
       }
-      const clarification = repository.createRFI({
+      const clarificationResult = await repository.createRFIPersisted({
         workstreamId: item.sourceRfi.workstreamId,
         workstreamTitle: item.sourceRfi.workstreamTitle,
         requestingOrgId: `org-${activePersona.agencyCode.toLowerCase()}`,
@@ -931,7 +974,11 @@ export default function Home() {
         responseDeadline: questionDueDate,
         actorName,
       });
-      notify(`${clarification.code} created for clarification.`);
+      if (clarificationResult.error || !clarificationResult.data) {
+        setDialogError(clarificationResult.error?.message ?? "The clarification RFI was not confirmed by the database.");
+        return;
+      }
+      notify(`${clarificationResult.data.code} created for clarification.`);
       return;
     }
 
@@ -940,9 +987,9 @@ export default function Home() {
         setDialogError("Add the response before submitting.");
         return;
       }
-      const response = repository.submitRfiResponse({ rfiId: item.sourceRfi.id, submittedByName: actorName, responseText: actionNote.trim(), actorOrgName });
-      if (!response) {
-        setDialogError("The response could not be submitted.");
+      const response = await repository.submitRfiResponsePersisted({ rfiId: item.sourceRfi.id, submittedByName: actorName, responseText: actionNote.trim(), actorOrgName });
+      if (response.error || !response.data) {
+        setDialogError(response.error?.message ?? "The response could not be submitted.");
         return;
       }
       notify(`${item.sourceRfi.code} response submitted to the requesting agency.`);
