@@ -67,6 +67,11 @@ findings below.
   versions. Each route authenticates with the RLS-bound server client and
   returns a non-disclosing access/not-found response when the record is not
   visible.
+- Converted administrator profile and participant edits to awaited persisted
+  repository operations, guarded the last RFI direct-write fallbacks from
+  production mode, and extended the forward RLS migration to remove the
+  original generated `Public full access policy` plus broad legacy Storage
+  policies.
 
 ## Known blockers and risks
 

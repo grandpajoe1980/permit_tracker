@@ -616,6 +616,10 @@ export async function mutateCreateRFI(params: {
     };
   }
 
+  if (!allowsFixtureData()) {
+    return { data: null, error: new Error(`RFI transaction failed: ${rpcError.message}`) };
+  }
+
   // Fallback
   const now = new Date().toISOString();
   const { data, error } = await client.from("rfis").insert({
@@ -723,6 +727,10 @@ export async function mutateSubmitRFIResponse(params: {
     };
   }
 
+  if (!allowsFixtureData()) {
+    return { data: null, error: new Error(`RFI response transaction failed: ${rpcError.message}`) };
+  }
+
   // Fallback
   const now = new Date().toISOString();
   const { data, error } = await client.from("rfi_responses").insert({
@@ -785,6 +793,10 @@ export async function mutateAcceptRFIResponse(params: {
   const { error: rpcError } = await client.rpc("rpc_accept_rfi_response", rpcPayload);
   if (!rpcError) {
     return { data: { success: true }, error: null };
+  }
+
+  if (!allowsFixtureData()) {
+    return { data: null, error: new Error(`RFI acceptance transaction failed: ${rpcError.message}`) };
   }
 
   // Fallback

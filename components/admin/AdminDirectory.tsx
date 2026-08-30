@@ -10,18 +10,18 @@ import type { RoleId, RoleDefinition, TeamUser } from "@/lib/demo-data";
 type AdminRepository = {
   getProfileByUserId: (userId: string) => UserProfileRecord | undefined;
   getParticipants: () => ProjectParticipantRecord[];
-  updateProfile: (params: {
+  updateProfilePersisted: (params: {
     userId: string;
     updates: Partial<Pick<UserProfileRecord, "organizationName" | "displayTitle" | "organizationalUnit" | "projectRole" | "workEmail" | "isCustomerVisible" | "isActive">>;
     actorUserId: string;
     isAdmin?: boolean;
-  }) => UserProfileRecord | null;
-  updateParticipant: (params: {
+  }) => Promise<{ data: UserProfileRecord | null; error: Error | null }>;
+  updateParticipantPersisted: (params: {
     participantId: string;
     updates: Partial<Pick<ProjectParticipantRecord, "workstreamIds" | "visibilityScope" | "isActive">>;
     actorUserId: string;
     isAdmin?: boolean;
-  }) => ProjectParticipantRecord | null;
+  }) => Promise<{ data: ProjectParticipantRecord | null; error: Error | null }>;
 };
 
 const fieldClass = "mt-1 h-9 text-xs";
@@ -41,14 +41,17 @@ export function AdminDirectory({
   onRoleChange: (userId: string, roleId: RoleId) => void;
   onMutation: (message: string) => void;
 }) {
-  function updateProfile(user: TeamUser, updates: Partial<Pick<UserProfileRecord, "organizationName" | "displayTitle" | "organizationalUnit" | "projectRole" | "workEmail" | "isCustomerVisible" | "isActive">>) {
-    if (!repository.updateProfile({ userId: user.id, actorUserId, updates, isAdmin: true })) return;
+  async function updateProfile(user: TeamUser, updates: Partial<Pick<UserProfileRecord, "organizationName" | "displayTitle" | "organizationalUnit" | "projectRole" | "workEmail" | "isCustomerVisible" | "isActive">>) {
+    const result = await repository.updateProfilePersisted({ userId: user.id, actorUserId, updates, isAdmin: true });
+    if (result.error || !result.data) return;
     onMutation(`${user.name}'s profile was updated.`);
   }
 
-  function updateParticipant(user: TeamUser, updates: Partial<Pick<ProjectParticipantRecord, "workstreamIds" | "visibilityScope" | "isActive">>) {
+  async function updateParticipant(user: TeamUser, updates: Partial<Pick<ProjectParticipantRecord, "workstreamIds" | "visibilityScope" | "isActive">>) {
     const participant = repository.getParticipants().find((entry) => entry.userId === user.id);
-    if (!participant || !repository.updateParticipant({ participantId: participant.id, actorUserId, updates, isAdmin: true })) return;
+    if (!participant) return;
+    const result = await repository.updateParticipantPersisted({ participantId: participant.id, actorUserId, updates, isAdmin: true });
+    if (result.error || !result.data) return;
     onMutation(`${user.name}'s project access was updated.`);
   }
 

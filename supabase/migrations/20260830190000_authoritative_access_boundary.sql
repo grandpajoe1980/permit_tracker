@@ -51,6 +51,33 @@ drop policy if exists tasks_insert on public.tasks;
 drop policy if exists tasks_update on public.tasks;
 drop policy if exists project_participants_update on public.project_participants;
 
+-- The initial schema used one generated policy name for every table. Remove
+-- that policy explicitly as well; dropping only the later named policies
+-- would leave the original `USING (true)` policy active.
+do $$
+declare
+  v_table text;
+begin
+  foreach v_table in array array[
+    'organizations', 'customer_organizations', 'profiles',
+    'organization_memberships', 'projects', 'project_participants',
+    'workflow_definitions', 'workflow_stages', 'requests', 'case_workflows',
+    'assignments', 'documents', 'notifications', 'audit_events',
+    'user_profiles', 'external_filings', 'customer_requests',
+    'permit_types', 'requirement_resources', 'workflow_versions',
+    'workstreams', 'tasks', 'task_dependencies', 'coordination_requests',
+    'rfis', 'rfi_responses', 'document_versions', 'document_agency_reviews',
+    'commitments', 'decisions', 'meetings'
+  ] loop
+    execute format('drop policy if exists %I on public.%I', 'Public full access policy', v_table);
+  end loop;
+end;
+$$;
+
+drop policy if exists "Authenticated users can upload documents" on storage.objects;
+drop policy if exists "Authenticated users can read documents" on storage.objects;
+drop policy if exists "Authenticated users can update documents" on storage.objects;
+
 -- Direct writes are denied by default. Compound writes are performed by
 -- authenticated RPCs or by a future server action that uses the RLS client.
 revoke all on table public.audit_events, public.notifications,
@@ -117,8 +144,30 @@ create policy tasks_update_project on public.tasks
   with check (exists (select 1 from public.workstreams w where w.id = workstream_id and (select app_private.has_project_access(w.project_id))));
 create policy project_participants_update_project on public.project_participants
   for update to authenticated
-  using ((select app_private.has_project_access(project_id)))
-  with check ((select app_private.has_project_access(project_id)));
+  using (
+    (select app_private.is_system_admin())
+    or exists (
+      select 1
+      from public.projects p
+      join public.organization_memberships m on m.organization_id = p.lead_organization_id
+      where p.id = project_participants.project_id
+        and m.user_id = (select auth.uid())
+        and m.status = 'active'
+        and m.role in ('organization_admin', 'system_admin')
+    )
+  )
+  with check (
+    (select app_private.is_system_admin())
+    or exists (
+      select 1
+      from public.projects p
+      join public.organization_memberships m on m.organization_id = p.lead_organization_id
+      where p.id = project_participants.project_id
+        and m.user_id = (select auth.uid())
+        and m.status = 'active'
+        and m.role in ('organization_admin', 'system_admin')
+    )
+  );
 
 -- Customer intake is canonical and project-scoped. The legacy `requests`
 -- table is not part of this application intake policy.

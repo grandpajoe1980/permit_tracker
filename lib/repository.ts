@@ -452,6 +452,35 @@ class ProjectDeliveryRepository {
     return { data: saved, error: null };
   }
 
+  async updateParticipantPersisted(params: {
+    participantId: string;
+    updates: Partial<Pick<ProjectParticipantRecord, "organizationId" | "organizationName" | "projectRole" | "workstreamIds" | "assignedTaskIds" | "reviewResponsibility" | "notificationResponsibility" | "visibilityScope" | "startsOn" | "endsOn" | "isActive">>;
+    actorUserId: string;
+    actorName?: string;
+    isAdmin?: boolean;
+  }): Promise<{ data: ProjectParticipantRecord | null; error: Error | null }> {
+    if (!params.isAdmin) return { data: null, error: new Error("Administrator access is required to update project participation.") };
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      const participant = this.updateParticipant(params);
+      return participant ? { data: participant, error: null } : { data: null, error: new Error("Participant update is not authorized.") };
+    }
+    const participant = this.participants.find((entry) => entry.id === params.participantId);
+    if (!participant) return { data: null, error: new Error("Participant not found.") };
+    const actor = this.getProfileByUserId(params.actorUserId);
+    const result = await mutateUpdateProjectParticipant({
+      participantId: participant.id,
+      updates: params.updates,
+      actorName: params.actorName ?? actor?.fullName ?? "PATH administrator",
+    });
+    if (result.error) return { data: null, error: result.error };
+    const participants = await fetchProjectParticipants(participant.projectId);
+    const saved = participants.find((entry) => entry.id === participant.id);
+    if (!saved) return { data: null, error: new Error("Participant update was not confirmed by the database.") };
+    this.participants = this.participants.map((entry) => entry.id === saved.id ? saved : entry);
+    return { data: saved, error: null };
+  }
+
   updateParticipant(params: {
     participantId: string;
     updates: Partial<Pick<ProjectParticipantRecord, "organizationId" | "organizationName" | "projectRole" | "workstreamIds" | "assignedTaskIds" | "reviewResponsibility" | "notificationResponsibility" | "visibilityScope" | "startsOn" | "endsOn" | "isActive">>;
