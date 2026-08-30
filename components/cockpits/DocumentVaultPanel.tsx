@@ -149,7 +149,7 @@ export function DocumentVaultPanel() {
                           </div>
                           {rev.reviewComments && (
                             <p className="text-[11px] text-slate-600 italic mt-1 bg-white p-2 rounded border border-slate-100">
-                              "{rev.reviewComments}"
+                              &quot;{rev.reviewComments}&quot;
                             </p>
                           )}
                         </div>

@@ -193,7 +193,7 @@ class ProjectDeliveryRepository {
     const oldStatus = req.status;
     req.status = updates.status;
     if (updates.responseSummary) req.responseSummary = updates.responseSummary;
-    if (updates.status === "concurred" || updates.status === "resolved") {
+    if (updates.status === "concurred" || updates.status === "closed") {
       req.concurredAt = new Date().toISOString();
     }
 
@@ -210,6 +210,295 @@ class ProjectDeliveryRepository {
     this.auditEvents.unshift(audit);
 
     return req;
+  }
+
+  /**
+   * Creates an RFI from a plain-language information request and records the
+   * action in the same audited store as the rest of the command system.
+   */
+  createRFI(params: {
+    workstreamId: string;
+    workstreamTitle: string;
+    requestingOrgId: string;
+    requestingOrgCode: string;
+    recipientOrgId: string;
+    recipientOrgCode: string;
+    title: string;
+    questionText: string;
+    technicalReason: string;
+    requiredDocumentTypes?: string[];
+    responseDeadline: string;
+    clockImpact?: RFIRecord["clockImpact"];
+    scheduleImpactDays?: number;
+    actorName: string;
+  }): RFIRecord {
+    const count = this.rfis.length + 43;
+    const code = `RFI-2026-${String(count).padStart(4, "0")}`;
+    const newRfi: RFIRecord = {
+      id: `rfi-${Date.now()}`,
+      code,
+      workstreamId: params.workstreamId,
+      workstreamTitle: params.workstreamTitle,
+      requestingOrgId: params.requestingOrgId,
+      requestingOrgCode: params.requestingOrgCode,
+      recipientOrgId: params.recipientOrgId,
+      recipientOrgCode: params.recipientOrgCode,
+      title: params.title,
+      questionText: params.questionText,
+      technicalReason: params.technicalReason,
+      requiredDocumentTypes: params.requiredDocumentTypes ?? [],
+      issuedDate: new Date().toISOString().split("T")[0],
+      responseDeadline: params.responseDeadline,
+      clockImpact: params.clockImpact ?? "clock_paused",
+      scheduleImpactDays: params.scheduleImpactDays ?? 0,
+      status: "issued",
+      isConsolidatedCycle: false,
+    };
+    this.rfis.unshift(newRfi);
+    const ws = this.getWorkstreamById(params.workstreamId);
+    if (ws) {
+      ws.operationalState = "waiting_applicant";
+      ws.operationalStateLabel = "Waiting on Applicant (RFI Issued)";
+      ws.waitingReason = `Waiting for response to ${code}.`;
+      ws.waitingOnEntity = params.recipientOrgCode;
+    }
+    this.auditEvents.unshift(createAuditEvent({
+      entityType: "rfi",
+      entityId: code,
+      actorName: params.actorName,
+      actorOrgName: params.requestingOrgCode,
+      actionType: "rfi_issued",
+      newValue: `Issued ${code} to ${params.recipientOrgCode}`,
+      reason: params.questionText,
+    }));
+    return newRfi;
+  }
+
+  /**
+   * Marks a workstream as waiting with an explicit structured reason. The
+   * caller chooses the object type first; free-text is retained only as the
+   * human explanation attached to the audit record.
+   */
+  markWorkstreamBlocked(params: {
+    workstreamId: string;
+    reason: string;
+    waitingOn: string;
+    actorName: string;
+    actorOrgName: string;
+    pauseClock?: boolean;
+  }): WorkstreamRecord | null {
+    const ws = this.getWorkstreamById(params.workstreamId);
+    if (!ws) return null;
+    const oldState = ws.operationalState;
+    ws.operationalState = params.pauseClock ? "waiting_government" : "blocked";
+    ws.operationalStateLabel = params.pauseClock ? "Waiting on Government (Clock Paused)" : "Blocked (Action Required)";
+    ws.waitingReason = params.reason;
+    ws.waitingOnEntity = params.waitingOn;
+    this.auditEvents.unshift(createAuditEvent({
+      entityType: "workstream",
+      entityId: ws.code,
+      actorName: params.actorName,
+      actorOrgName: params.actorOrgName,
+      actionType: "blocked",
+      oldValue: oldState,
+      newValue: ws.operationalState,
+      reason: `${params.reason} · Waiting on ${params.waitingOn}`,
+    }));
+    return ws;
+  }
+
+  /**
+   * Completes the current configured workflow stage after server-side-style
+   * checklist validation and writes the handoff audit event.
+   */
+  completeWorkstreamStage(params: {
+    workstreamId: string;
+    completedChecklists: string[];
+    providedDocs: string[];
+    actorName: string;
+    actorOrgName: string;
+  }): { success: boolean; errors?: string[]; workstream?: WorkstreamRecord; nextOwner?: string } {
+    const ws = this.getWorkstreamById(params.workstreamId);
+    if (!ws) return { success: false, errors: ["Workstream not found"] };
+    const template = workflowTemplatesData.find((candidate) => candidate.permitTypeId === ws.permitTypeId) ?? workflowTemplatesData[0];
+    const stages = template?.versions.find((version) => version.versionNumber === template.activeVersionNumber)?.stages ?? [];
+    const currentStage = stages.find((stage) => ws.currentStageName?.toLowerCase().includes(stage.name.toLowerCase().split(" ")[0])) ?? stages[0];
+    if (currentStage) {
+      const validation = validateStageTransition(currentStage, params.completedChecklists, params.providedDocs);
+      if (!validation.allowed) {
+        return {
+          success: false,
+          errors: [
+            ...validation.missingChecklists.map((item) => `Missing checklist item: ${item}`),
+            ...validation.missingDocs.map((item) => `Missing required input document: ${item}`),
+          ],
+        };
+      }
+    }
+    const oldStage = ws.currentStageName ?? "Current workflow stage";
+    const currentIndex = currentStage ? stages.findIndex((stage) => stage.id === currentStage.id) : -1;
+    const nextStage = currentIndex >= 0 ? stages[currentIndex + 1] : undefined;
+    ws.currentStageName = nextStage?.name ?? "Complete & Ready for Final Determination";
+    ws.operationalState = nextStage ? "running" : "complete";
+    ws.operationalStateLabel = nextStage ? `Running (${nextStage.name})` : "Complete";
+    ws.waitingReason = undefined;
+    ws.waitingOnEntity = undefined;
+    ws.actualCompletionDate = nextStage ? undefined : new Date().toISOString().split("T")[0];
+    this.auditEvents.unshift(createAuditEvent({
+      entityType: "workstream",
+      entityId: ws.code,
+      actorName: params.actorName,
+      actorOrgName: params.actorOrgName,
+      actionType: "workflow_transition",
+      oldValue: oldStage,
+      newValue: ws.currentStageName,
+      reason: `Completed configured stage requirements: ${params.completedChecklists.join(", ")}`,
+    }));
+    this.dispatchNotification({
+      userId: "user-sarah-johnson",
+      title: `${ws.title} moved forward`,
+      message: nextStage ? `The next action is ${nextStage.name}.` : "The workstream is complete.",
+      type: "completion",
+      linkUrl: `/workstreams/${ws.code}`,
+      urgency: "info",
+      metadata: { workstreamCode: ws.code, nextOwner: nextStage?.responsibleOrgCode ?? "Project Office" },
+    });
+    return { success: true, workstream: ws, nextOwner: nextStage?.responsibleOrgCode ?? "Project Office" };
+  }
+
+  /** Adds an operational note to the immutable audit trail. */
+  addWorkstreamNote(params: { workstreamId: string; note: string; actorName: string; actorOrgName: string }) {
+    const ws = this.getWorkstreamById(params.workstreamId);
+    if (!ws) return null;
+    const event = createAuditEvent({
+      entityType: "workstream",
+      entityId: ws.code,
+      actorName: params.actorName,
+      actorOrgName: params.actorOrgName,
+      actionType: "note_added",
+      reason: params.note,
+    });
+    this.auditEvents.unshift(event);
+    return event;
+  }
+
+  /** Records a plain-language escalation against the workstream. */
+  escalateWorkstream(params: { workstreamId: string; problemType: string; actorName: string; actorOrgName: string }) {
+    const ws = this.getWorkstreamById(params.workstreamId);
+    if (!ws) return null;
+    ws.operationalState = "escalated";
+    ws.operationalStateLabel = "Escalated for Help";
+    ws.escalationLevel = Math.min(5, Math.max(1, ws.escalationLevel + 1)) as WorkstreamRecord["escalationLevel"];
+    ws.escalationTriggeredAt = new Date().toISOString();
+    ws.escalationSummary = params.problemType;
+    const event = createAuditEvent({
+      entityType: "workstream",
+      entityId: ws.code,
+      actorName: params.actorName,
+      actorOrgName: params.actorOrgName,
+      actionType: "escalated",
+      newValue: `Escalation ${ws.escalationLevel}: ${params.problemType}`,
+      reason: params.problemType,
+    });
+    this.auditEvents.unshift(event);
+    this.dispatchNotification({
+      userId: "user-maya-chen",
+      title: `Help requested on ${ws.code}`,
+      message: `${params.actorName} requested ${params.problemType}.`,
+      type: "escalation",
+      linkUrl: `/workstreams/${ws.code}`,
+      urgency: "high",
+      metadata: { workstreamCode: ws.code, escalationLevel: ws.escalationLevel },
+    });
+    return ws;
+  }
+
+  /** Records a transfer/help request without bypassing the assignment audit trail. */
+  transferWorkstream(params: { workstreamId: string; transferType: string; targetName: string; actorName: string; actorOrgName: string; note?: string }) {
+    const ws = this.getWorkstreamById(params.workstreamId);
+    if (!ws) return null;
+    const event = createAuditEvent({
+      entityType: "workstream",
+      entityId: ws.code,
+      actorName: params.actorName,
+      actorOrgName: params.actorOrgName,
+      actionType: "transfer_requested",
+      newValue: `${params.transferType} → ${params.targetName}`,
+      reason: params.note || "Help requested from supervisor.",
+    });
+    this.auditEvents.unshift(event);
+    this.dispatchNotification({
+      userId: "user-maya-chen",
+      title: `Transfer request for ${ws.code}`,
+      message: `${params.actorName} requested ${params.transferType}.`,
+      type: "action_required",
+      linkUrl: `/workstreams/${ws.code}`,
+      urgency: "high",
+      metadata: { workstreamCode: ws.code, targetName: params.targetName },
+    });
+    return event;
+  }
+
+  /** Accepts the latest unreviewed response for an RFI and resumes its linked workstream. */
+  acceptRfiResponse(params: { rfiId: string; actorName: string; actorOrgName: string; notes?: string }) {
+    const rfi = this.rfis.find((entry) => entry.id === params.rfiId || entry.code === params.rfiId);
+    if (!rfi) return null;
+    const response = rfi.responses?.find((entry) => !entry.reviewDecision);
+    if (!response) return null;
+    response.reviewDecision = "accepted";
+    response.reviewedByName = params.actorName;
+    response.reviewedAt = new Date().toISOString();
+    response.reviewNotes = params.notes || "Response accepted and linked review resumed.";
+    rfi.status = "accepted";
+    const ws = this.getWorkstreamById(rfi.workstreamId);
+    if (ws) {
+      ws.operationalState = "running";
+      ws.operationalStateLabel = "Running (Response Accepted)";
+      ws.waitingReason = undefined;
+      ws.waitingOnEntity = undefined;
+    }
+    this.auditEvents.unshift(createAuditEvent({
+      entityType: "rfi",
+      entityId: rfi.code,
+      actorName: params.actorName,
+      actorOrgName: params.actorOrgName,
+      actionType: "rfi_response_accepted",
+      oldValue: "submitted_by_applicant",
+      newValue: "accepted",
+      reason: response.reviewNotes,
+    }));
+    return response;
+  }
+
+  /** Persists a customer response as an RFI response and audits the submission. */
+  submitRfiResponse(params: { rfiId: string; submittedByName: string; responseText: string; actorOrgName: string; attachedDocumentVersionIds?: string[] }) {
+    const rfi = this.rfis.find((entry) => entry.id === params.rfiId || entry.code === params.rfiId);
+    if (!rfi) return null;
+    const response = {
+      id: `resp-${Date.now()}`,
+      rfiId: rfi.id,
+      submittedByName: params.submittedByName,
+      responseText: params.responseText,
+      attachedDocumentVersionIds: params.attachedDocumentVersionIds ?? [],
+      submittedAt: new Date().toISOString(),
+    };
+    rfi.responses = [...(rfi.responses ?? []), response];
+    rfi.status = "submitted_by_applicant";
+    this.auditEvents.unshift(createAuditEvent({
+      entityType: "rfi_response",
+      entityId: rfi.code,
+      actorName: params.submittedByName,
+      actorOrgName: params.actorOrgName,
+      actionType: "rfi_response_submitted",
+      newValue: `Response submitted to ${rfi.requestingOrgCode}`,
+      reason: params.responseText,
+    }));
+    return response;
+  }
+
+  /** Applies a decision to the requested document version only. */
+  reviewDocumentVersion(params: { versionId: string; agencyCode: string; decision: "approved" | "approved_with_conditions" | "revision_requested"; actorName: string; comments: string }) {
+    return this.signoffDocumentAgencyReview(params.versionId, params.agencyCode, params.decision, params.actorName, params.comments);
   }
 
   /**
@@ -368,21 +657,36 @@ class ProjectDeliveryRepository {
     for (const doc of this.documents) {
       const version = doc.versions.find((v) => v.id === versionId);
       if (version) {
-        const review = version.agencyReviews.find((r) => r.reviewingOrgCode === agencyCode);
+        const versionRecord = version as unknown as {
+          agencyReviews?: DocumentAgencyReviewRecord[];
+          status?: string;
+        };
+        const reviews = versionRecord.agencyReviews ?? doc.agencyReviews.filter((review) => review.documentVersionId === versionId);
+        const review = reviews.find((entry) => entry.reviewingOrgCode === agencyCode);
         if (review) {
-          review.status = decision;
-          review.reviewedByUserName = actorName;
-          review.reviewedAt = new Date().toISOString();
-          review.comments = comments;
+          const reviewRecord = review as DocumentAgencyReviewRecord & {
+            status?: string;
+            reviewedByUserName?: string;
+            reviewedAt?: string;
+            comments?: string;
+          };
+          reviewRecord.reviewStatus = decision === "revision_requested" ? "revisions_requested" : decision === "approved_with_conditions" ? "approved" : decision;
+          reviewRecord.reviewedByName = actorName;
+          reviewRecord.decisionDate = new Date().toISOString().split("T")[0];
+          reviewRecord.reviewComments = comments;
+          reviewRecord.status = decision;
+          reviewRecord.reviewedByUserName = actorName;
+          reviewRecord.reviewedAt = new Date().toISOString();
+          reviewRecord.comments = comments;
 
           // If all agency reviews are approved, promote document version status
-          const allApproved = version.agencyReviews.every(
-            (r) => r.status === "approved" || r.status === "approved_with_conditions"
+          const allApproved = reviews.every(
+            (entry) => ["approved", "approved_with_conditions"].includes((entry as DocumentAgencyReviewRecord & { status?: string }).status ?? entry.reviewStatus)
           );
           if (allApproved) {
-            version.status = "approved";
+            versionRecord.status = "approved";
           } else if (decision === "revision_requested") {
-            version.status = "superseded";
+            versionRecord.status = "superseded";
           }
 
           const audit = createAuditEvent({

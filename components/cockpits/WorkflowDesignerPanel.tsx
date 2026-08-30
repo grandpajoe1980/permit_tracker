@@ -138,7 +138,7 @@ export function WorkflowDesignerPanel() {
                     {stage.name}
                   </CardTitle>
                   <CardDescription className="text-xs text-slate-500">
-                    Customer Visibility Label: <strong className="text-slate-700">"{stage.customerVisibilityLabel}"</strong>
+                    Customer Visibility Label: <strong className="text-slate-700">&quot;{stage.customerVisibilityLabel}&quot;</strong>
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 pt-1">

@@ -61,7 +61,7 @@ export function ExecutiveBriefingReport() {
               <span className="text-xs font-mono text-slate-400">Classified: State Project Office / SpaceX Executive</span>
             </div>
             <h1 className="mt-2 text-2xl font-black text-white sm:text-3xl">
-              Governor's Weekly Megaproject Briefing
+              Governor&apos;s Weekly Megaproject Briefing
             </h1>
             <p className="mt-1 text-sm text-slate-300">
               One-click synthesized executive intelligence, critical path slip analysis, and institutional decision log.
@@ -91,7 +91,7 @@ export function ExecutiveBriefingReport() {
                 : "bg-white/5 border-white/20 text-slate-300 hover:bg-white/10 hover:text-white"
             }`}
           >
-            <FileText className="size-3" /> Governor's One-Pager Briefing
+            <FileText className="size-3" /> Governor&apos;s One-Pager Briefing
           </Button>
           <Button
             size="sm"

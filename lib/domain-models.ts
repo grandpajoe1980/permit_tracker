@@ -417,6 +417,19 @@ export interface AuditEventRecord {
   occurredAt: string;
 }
 
+export interface NotificationRecord {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: "action_required" | "mention" | "status_update" | "escalation" | "deadline_warning" | "completion" | "system";
+  linkUrl?: string;
+  urgency: "info" | "high" | "critical";
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  isRead: boolean;
+}
+
 export interface WorkstreamRecord {
   id: string;
   projectId: string;

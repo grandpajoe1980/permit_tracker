@@ -1,5 +1,13 @@
 # Critical Path — SpaceX Louisiana Project Operations
 
+## Operational UX
+
+PATH now opens authenticated users into a role-aware workspace instead of a cockpit selector. Reviewers land on **My Work**, where prioritized cards explain why a work item is assigned, what action is required, the due date, wait time, schedule impact, and what removes it from the queue. The reusable Work Action Bar keeps **Complete Step**, **Request Information**, **Mark Blocked**, **Ask for Help / Transfer**, **Escalate**, and **Add Note** visible at the point of work.
+
+Completion and blocked flows use the existing audited workflow/repository layer. Completion shows configured requirements and the next handoff. A blocked reviewer selects a plain-language reason; PATH creates an RFI for SpaceX, a Coordination Request for another agency, an internal blocker, or a structured statutory wait, then previews recipients and the customer-safe status message.
+
+Supervisors see an operational exception queue. The State Project Office sees cross-agency exceptions. SpaceX sees a sanitized **Needs SpaceX / Needs Government / Blocked / Upcoming decisions** workspace without internal government controls. See [docs/operational-ux.md](docs/operational-ux.md) for the reviewer, supervisor, State Project Office, and SpaceX journeys.
+
 **Critical Path** is an accessible, multi-agency operational coordination and permit tracking platform for the **SpaceX Louisiana Pecan Island Launch Complex** project. It brings together state infrastructure requests, statutory permit tracking, critical path milestones, agency workload distribution, role-based access control, workflow flow editing, and executive escalation across Federal, State, and Local Louisiana departments.
 
 ---

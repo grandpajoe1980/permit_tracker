@@ -95,7 +95,7 @@ export function InteractiveScheduleSimulator() {
               <span className="text-xs text-slate-400 font-mono">Branch: {currentScenario.name}</span>
             </div>
             <h1 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">
-              "What-If" Schedule Perturbation & Scenario Simulator
+              &quot;What-If&quot; Schedule Perturbation &amp; Scenario Simulator
             </h1>
             <p className="mt-1 text-sm text-slate-300">
               Drag and adjust task durations, simulate interagency review delays, and observe real-time critical-path ripple effects.
@@ -442,7 +442,7 @@ export function InteractiveScheduleSimulator() {
               Scenario Variance & Milestone Comparison Table
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
-              Comparing "{baseForecastScenario.name}" vs. "{currentScenario.name}"
+              Comparing &quot;{baseForecastScenario.name}&quot; vs. &quot;{currentScenario.name}&quot;
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">

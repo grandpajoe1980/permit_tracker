@@ -76,7 +76,7 @@ export function WorkstreamGraphGantt() {
             onClick={() => setActiveTab("simulator")}
             className="text-xs gap-1.5 font-bold bg-indigo-600 hover:bg-indigo-700 text-white"
           >
-            <Zap className="size-3.5" /> Interactive "What-If" Simulator
+            <Zap className="size-3.5" /> Interactive &quot;What-If&quot; Simulator
           </Button>
           <Button
             variant={activeTab === "graph" ? "default" : "ghost"}

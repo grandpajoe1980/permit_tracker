@@ -1,4 +1,6 @@
-const fs = require("fs");
+import fs from "node:fs";
+import https from "node:https";
+import http from "node:http";
 const content = fs.readFileSync("C:\\Intel\\Permit\\.env", "utf8");
 const lines = content.split(/\r?\n/);
 const results = {};
@@ -24,7 +26,7 @@ for (let line of lines) {
     else if (trimmedVal.startsWith("sb_")) { format = "publishable/secret style"; }
     let host = "N/A";
     if (key === "SUPABASE_URL") {
-      try { host = new URL(trimmedVal).host; } catch(e) { host = "Invalid URL"; }
+      try { host = new URL(trimmedVal).host; } catch { host = "Invalid URL"; }
     }
     results[key] = { present: true, length: len, hasMatchingQuotes, quoteChar, format, host, val: trimmedVal };
   }
@@ -32,8 +34,6 @@ for (let line of lines) {
 ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"].forEach(k => {
   if (!results[k]) results[k] = { present: false, length: 0, hasMatchingQuotes: false, quoteChar: "", format: "opaque", host: "N/A", val: "" };
 });
-const https = require("https");
-const http = require("http");
 function makeRequest(url) {
   return new Promise((resolve) => {
     try {
