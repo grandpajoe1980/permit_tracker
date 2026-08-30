@@ -177,16 +177,28 @@ export function WorkstreamGraphGantt({
   const [filterState, setFilterState] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [hoveredWorkstreamId, setHoveredWorkstreamId] = useState<string | null>(null);
+  const todayDate = useMemo(() => new Date(), []);
 
   // Timeline boundaries include the earliest baseline work and the current forecast.
-  const timelineStart = useMemo(() => new Date("2026-03-01T00:00:00Z"), []);
-  const timelineEnd = useMemo(() => new Date("2026-12-31T23:59:59Z"), []);
+  const timelineStart = useMemo(() => {
+    const dates = [project.baselineLaunchDate, ...project.workstreams.flatMap((ws) => [ws.baselineStartDate, ws.baselineTargetDate])]
+      .filter(Boolean)
+      .map((value) => new Date(`${value}T00:00:00Z`).getTime());
+    const earliest = Math.min(...dates);
+    return new Date(Number.isFinite(earliest) ? earliest : todayDate.getTime());
+  }, [project, todayDate]);
+  const timelineEnd = useMemo(() => {
+    const dates = [project.currentForecastLaunchDate, ...project.workstreams.flatMap((ws) => [ws.forecastTargetDate, ws.baselineTargetDate])]
+      .filter(Boolean)
+      .map((value) => new Date(`${value}T23:59:59Z`).getTime());
+    const latest = Math.max(...dates);
+    return new Date(Number.isFinite(latest) ? latest : todayDate.getTime());
+  }, [project, todayDate]);
   const totalTimelineDays = useMemo(() => {
     return Math.max(1, Math.round((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24)));
   }, [timelineStart, timelineEnd]);
 
   // Today marker (August 30, 2026)
-  const todayDate = useMemo(() => new Date("2026-08-30T12:00:00Z"), []);
   const todayPositionPercent = useMemo(() => {
     const elapsed = (todayDate.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24);
     return Math.max(0, Math.min(100, (elapsed / totalTimelineDays) * 100));

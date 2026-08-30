@@ -55,12 +55,14 @@ import {
   insertNotification,
   mutateAcceptRFIResponse,
   mutateAddWorkstreamNote,
+  mutateClearWorkstreamBlocker,
   mutateCompleteWorkstreamStage,
   mutateCreateCommitment,
   mutateCreateCoordinationRequest,
   mutateCreateCustomerRequest,
   mutateCreateExternalFiling,
   mutateCreateRFI,
+  mutateCreateWorkstreamFromRequest,
   mutateEscalateWorkstream,
   mutateMarkWorkstreamBlocked,
   mutateSubmitRFIResponse,
@@ -589,6 +591,27 @@ class ProjectDeliveryRepository {
     return { data: request, error: null };
   }
 
+  async createWorkstreamFromRequestPersisted(params: {
+    requestId: string;
+    code: string;
+    title: string;
+    category: string;
+    permitTypeId?: string;
+    leadOrgCode?: string;
+    leadOrgName?: string;
+    workflowVersionId?: string;
+  }): Promise<{ data: { requestId: string; workstreamId: string; workstreamCode: string; workflowVersionId?: string } | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      return allowsFixtureData()
+        ? { data: null, error: new Error("Workstream triage requires a configured Supabase administrator session.") }
+        : { data: null, error: new Error("Supabase is required in production mode.") };
+    }
+    const result = await mutateCreateWorkstreamFromRequest(params);
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Workstream creation was not confirmed by the database.") };
+    await this.hydrateFromSupabase();
+    return { data: result.data, error: null };
+  }
+
   createExternalFiling(params: Omit<ExternalFilingRecord, "id" | "createdAt" | "updatedAt">): ExternalFilingRecord {
     const now = new Date().toISOString();
     const filing: ExternalFilingRecord = {
@@ -964,6 +987,24 @@ class ProjectDeliveryRepository {
     return { data: result.data, error: null };
   }
 
+  async clearWorkstreamBlockerPersisted(params: {
+    workstreamId: string;
+    resolutionNotes?: string;
+    actorName: string;
+    actorOrgName: string;
+  }): Promise<{ data: WorkstreamRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      return { data: this.clearWorkstreamBlocker(params), error: null };
+    }
+    const workstream = this.getWorkstreamById(params.workstreamId);
+    if (!workstream) return { data: null, error: new Error("Workstream not found.") };
+    const result = await mutateClearWorkstreamBlocker({ ...params, workstreamId: workstream.id });
+    if (result.error) return { data: null, error: result.error };
+    await this.hydrateFromSupabase();
+    return { data: this.getWorkstreamById(workstream.id) ?? null, error: null };
+  }
+
   clearWorkstreamBlocker(params: {
     workstreamId: string;
     resolutionNotes?: string;
@@ -1285,6 +1326,26 @@ class ProjectDeliveryRepository {
     if (result.error) return { success: false, error: result.error };
     await this.hydrateFromSupabase();
     return { success: true, error: null };
+  }
+
+  async createCoordinationRequestPersisted(params: Parameters<ProjectDeliveryRepository["createCoordinationRequest"]>[0]): Promise<{ data: CoordinationRequestRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      return { data: this.createCoordinationRequest(params), error: null };
+    }
+    const workstream = this.getWorkstreamById(params.workstreamId);
+    if (!workstream) return { data: null, error: new Error("Workstream not found.") };
+    const count = this.coordinationRequests.length + 1;
+    const result = await mutateCreateCoordinationRequest({
+      id: `cr-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+      code: `CR-${String(450 + count).padStart(5, "0")}`,
+      ...params,
+      workstreamId: workstream.id,
+      priority: params.priority === "urgent" ? "high" : params.priority,
+    });
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Coordination request was not persisted.") };
+    this.coordinationRequests = [result.data, ...this.coordinationRequests.filter((entry) => entry.id !== result.data?.id)];
+    return result;
   }
 
   acceptRfiResponse(params: { rfiId: string; actorName: string; actorOrgName: string; notes?: string }) {

@@ -108,7 +108,7 @@ export function InteractiveScheduleSimulator() {
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-300">
                 Baseline Launch
               </div>
-              <div className="text-lg font-mono font-bold text-white">2026-12-01</div>
+                <div className="text-lg font-mono font-bold text-white">{project.baselineLaunchDate}</div>
             </div>
 
             <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-2.5 text-center backdrop-blur">

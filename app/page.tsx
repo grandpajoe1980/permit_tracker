@@ -53,7 +53,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { AdminDirectory } from "@/components/admin/AdminDirectory";
 import { DocumentViewerModal } from "@/components/documents/DocumentViewerModal";
-import type { DocumentRecord, DocumentVersionRecord } from "@/lib/domain-models";
+import type { CustomerRequestRecord, DocumentRecord, DocumentVersionRecord } from "@/lib/domain-models";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -219,6 +219,18 @@ function syncRequestState(request: ServiceRequest, workstreamState?: ReturnType<
       state: completed ? "done" as const : index === request.steps.findIndex((entry) => entry.state === "active" || entry.state === "blocked") ? blocked ? "blocked" as const : "active" as const : step.state,
     })),
   } as ServiceRequest;
+}
+
+function CustomerRequestTriageQueue({
+  requests,
+  onTriage,
+}: {
+  requests: CustomerRequestRecord[];
+  onTriage: (request: CustomerRequestRecord) => void;
+}) {
+  const pending = requests.filter((request) => request.status !== "in_progress" && request.status !== "resolved");
+  if (pending.length === 0) return null;
+  return <Card className="mb-6 border-amber-200 bg-amber-50/60"><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Customer intake queue</CardTitle><p className="text-sm text-slate-600">Create a linked workstream only after the request is confirmed in the database.</p></CardHeader><CardContent className="space-y-3">{pending.slice(0, 8).map((request) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white p-3"><div><p className="text-sm font-black text-[#00284d]">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-slate-600">{request.requestType.replaceAll("_", " ")} · {request.submittedByName}</p></div><Button type="button" size="sm" onClick={() => onTriage(request)} className="bg-[#00284d] text-xs font-bold">Create workstream</Button></div>)}</CardContent></Card>;
 }
 
 export default function Home() {
@@ -516,6 +528,20 @@ export default function Home() {
     setIntakeText("");
   }
 
+  async function triageCustomerRequest(request: CustomerRequestRecord) {
+    const result = await repository.createWorkstreamFromRequestPersisted({
+      requestId: request.id,
+      code: `WS-${request.confirmationNumber.replace(/[^A-Z0-9]+/gi, "-").slice(-18)}`,
+      title: request.title,
+      category: request.requestType,
+      permitTypeId: request.knownPermitTypeId,
+      leadOrgCode: request.knownAgencyCode ?? "STATEPO",
+      leadOrgName: request.knownAgencyCode ?? "Louisiana Governor's Office of Major Projects & Delivery",
+    });
+    setToast(result.error ? `Triage failed: ${result.error.message}` : `Workstream ${result.data?.workstreamCode ?? "created"} created from ${request.confirmationNumber}.`);
+    if (!result.error) setMutationVersion((value) => value + 1);
+  }
+
   function actorUserId() {
     return activePersona.id.startsWith("user-") ? activePersona.id : `user-${activePersona.id}`;
   }
@@ -642,7 +668,7 @@ export default function Home() {
       setToast(`Download failed: ${result.error?.message ?? "the document could not be retrieved"}`);
       return;
     }
-    /*
+    /* legacy fallback intentionally disabled
       const content = [
         `================================================================================`,
         `STATE OF LOUISIANA · EXECUTIVE PROJECT OFFICE · PATH VERIFIED DOCUMENT PACKAGE`,
@@ -768,12 +794,16 @@ export default function Home() {
         setDialogError("This work item is not connected to a configured workstream.");
         return;
       }
-      repository.clearWorkstreamBlocker({
+      const clearResult = await repository.clearWorkstreamBlockerPersisted({
         workstreamId,
         resolutionNotes: actionNote.trim(),
         actorName,
         actorOrgName,
       });
+      if (clearResult.error || !clearResult.data) {
+        setDialogError(clearResult.error?.message ?? "The blocker was not confirmed as cleared by the database.");
+        return;
+      }
       applyRepositoryWorkstream(item);
       notify(`Blocker cleared. ${item.workstreamTitle} has resumed active review.`);
       return;
@@ -839,7 +869,7 @@ export default function Home() {
         }
         createdLabel = `RFI ${rfiResult.data.code}`;
       } else if (blockReason === "another_agency") {
-        const coordination = repository.createCoordinationRequest({
+        const coordination = await repository.createCoordinationRequestPersisted({
           workstreamId,
           workstreamTitle: item.workstreamTitle,
           requestingOrgId: `org-${activePersona.agencyCode.toLowerCase()}`,
@@ -853,7 +883,11 @@ export default function Home() {
           dueDate: blockDueDate,
           priority: item.isCriticalPath ? "critical_path" : "high",
         });
-        createdLabel = `Coordination Request ${coordination.code}`;
+        if (coordination.error || !coordination.data) {
+          setDialogError(coordination.error?.message ?? "The coordination request was not confirmed by the database.");
+          return;
+        }
+        createdLabel = `Coordination Request ${coordination.data.code}`;
       }
       const blockedResult = await repository.markWorkstreamBlockedPersisted({ workstreamId, reason: blockNeed.trim(), waitingOn: target, actorName, actorOrgName, pauseClock: blockReason === "customer" || blockReason === "statutory" });
       if (blockedResult.error || !blockedResult.data) {
@@ -1352,7 +1386,7 @@ export default function Home() {
     if (route === "help") return renderHelp();
     if (route === "notifications") return renderNotifications();
     if (route === "secondary") return renderSecondary();
-    return renderAdmin();
+    return <>{canAdmin && <CustomerRequestTriageQueue requests={repository.getCustomerRequests()} onTriage={(request) => void triageCustomerRequest(request)} />}{renderAdmin()}</>;
   }
 
   return <div className="min-h-screen bg-[#f3f6f7] text-[#172033]"><a className="skip-link" href="#main-content">Skip to main content</a><div className="road-stripe" /><header className="site-header sticky top-0 z-30"><div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-3 sm:px-6"><Button type="button" variant="ghost" size="icon" onClick={() => setMobileNavOpen((value) => !value)} className="text-white hover:bg-white/10 lg:hidden" aria-label="Toggle navigation"><Menu className="size-5" /></Button><span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d]"><Zap className="size-5 fill-current" aria-hidden="true" /></span><div className="min-w-0"><p className="text-sm font-black text-white">PATH</p><button type="button" onClick={() => openProject()} className="truncate text-left text-[11px] font-semibold text-slate-300 hover:text-white hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 cursor-pointer" title="Go to SpaceX Pecan Island project page">{workspaceTitle(activePersona.workspace)} · SpaceX Pecan Island</button></div><div className="ml-auto hidden items-center gap-2 text-xs text-slate-200 md:flex"><span className="flex items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-950/60 px-3 py-1 font-bold text-emerald-200" title="State committed directly to Supabase PostgreSQL & Storage"><span className="size-2 rounded-full bg-emerald-400" />Supabase DB {lastSavedTime ? `· ${lastSavedTime}` : "· Connected"}</span><span className="rounded-full border border-white/20 px-3 py-1.5">{activePersona.name}</span><span className="rounded-full border border-teal-300/40 bg-teal-900/40 px-3 py-1.5 font-bold text-teal-100">{activePersona.roleLabel}</span></div><Button type="button" variant="ghost" size="icon" onClick={() => navigate("notifications")} className="relative text-white hover:bg-white/10" aria-label="Open notifications"><Bell className="size-5" /><span className="absolute right-1 top-1 size-2 rounded-full bg-[#f4a100]" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => void signOut()} className="text-white hover:bg-white/10"><LogOut className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Sign out</span></Button></div></header><div className="mx-auto flex max-w-[1600px] items-start"><aside className={`${mobileNavOpen ? "block" : "hidden"} fixed inset-x-0 top-[69px] z-20 max-h-[calc(100vh-69px)] overflow-y-auto border-b border-slate-200 bg-white p-3 shadow-xl lg:sticky lg:top-[69px] lg:block lg:min-h-[calc(100vh-69px)] lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}><button type="button" onClick={() => openProject()} className="group mb-4 w-full rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-left transition hover:border-teal-400 hover:bg-teal-50 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 cursor-pointer" aria-label="Open SpaceX Pecan Island project page" title="Open SpaceX Pecan Island project page"><div className="flex items-center justify-between"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500 group-hover:text-teal-800">Current context</p><ArrowRight className="size-3 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-teal-700" aria-hidden="true" /></div><p className="mt-1 text-sm font-black text-[#00284d] group-hover:text-teal-950">SpaceX Pecan Island</p><p className="mt-1 text-xs text-slate-500 group-hover:text-teal-900">Vermilion Parish · Louisiana</p></button><nav aria-label="Primary navigation" className="space-y-1"><p className="px-3 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Work</p>{primaryNav.map((item) => <button key={item.id} type="button" onClick={() => navigate(item.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${route === item.id ? "bg-[#00284d] text-white shadow-sm" : "text-slate-700 hover:bg-teal-50 hover:text-teal-950"}`}>{item.icon}<span className="flex-1">{item.label}</span>{typeof item.count === "number" && <span className={`rounded-full px-2 py-0.5 text-[10px] ${route === item.id ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700"}`}>{item.count}</span>}</button>)}<p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Secondary tools</p>{!activePersona.isCustomer && <><button type="button" onClick={() => { setSecondaryTool("schedule"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "schedule" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><CalendarClock className="size-4" />Schedule</button><button type="button" onClick={() => { setSecondaryTool("vault"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "vault" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><BookOpen className="size-4" />Document Vault</button><button type="button" onClick={() => { setSecondaryTool("catalog"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "catalog" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><Landmark className="size-4" />Permit Catalog</button></>}{canAdmin && <><p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Administration</p><button type="button" onClick={() => navigate("admin")} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "admin" ? "bg-[#00284d] text-white" : "text-slate-700 hover:bg-teal-50"}`}><Settings2 className="size-4" />Administration</button></>}</nav><div className="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-xs font-black text-amber-950">Official filing notice</p><p className="mt-1 text-xs leading-5 text-amber-900">PATH coordinates work. Formal statutory filings remain in agency systems.</p></div></aside><main id="main-content" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">{toast && <div role="status" aria-live="polite" className="mb-5 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-950"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" aria-hidden="true" />{toast}</div>}{renderMain()}</main></div>{renderDialog()}{viewerModalDoc && <DocumentViewerModal document={viewerModalDoc} version={viewerModalVer} isOpen={Boolean(viewerModalDoc)} onClose={() => { setViewerModalDoc(null); setViewerModalVer(undefined); }} onDownload={(docId, verId) => void downloadVersion(docId, verId)} />}</div>;

@@ -21,6 +21,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getPermitCatalog, getRegisteredOrganizations, getWorkflowTemplates } from "@/lib/permit-utils";
+import { getSupabaseBrowser } from "@/lib/supabase/client";
+import { allowsFixtureData } from "@/lib/data-mode";
+import type { WorkflowStageRecord } from "@/lib/domain-models";
 
 export function WorkflowDesignerPanel() {
   const templates = getWorkflowTemplates();
@@ -28,9 +31,84 @@ export function WorkflowDesignerPanel() {
   const orgs = getRegisteredOrganizations();
   const [activeTab, setActiveTab] = useState<"workflows" | "catalog" | "agencies">("workflows");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(templates[0]?.id || "");
+  const [draftVersionId, setDraftVersionId] = useState<string | null>(null);
+  const [draftStages, setDraftStages] = useState<WorkflowStageRecord[]>([]);
+  const [selectedStageKey, setSelectedStageKey] = useState<string | null>(null);
+  const [stageLabel, setStageLabel] = useState("");
+  const [designerMessage, setDesignerMessage] = useState("");
+  const [designerBusy, setDesignerBusy] = useState(false);
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
   const activeVersion = selectedTemplate?.versions.find((v) => v.status === "published") || selectedTemplate?.versions[0];
+  const visibleStages = draftStages.length > 0 ? draftStages : activeVersion?.stages ?? [];
+  const selectedStage = visibleStages.find((stage) => stage.stageKey === selectedStageKey);
+
+  async function createDraft() {
+    if (!activeVersion) return;
+    const client = getSupabaseBrowser();
+    if (!client) {
+      setDesignerMessage(allowsFixtureData() ? "Demo mode: draft publishing requires a configured Supabase administrator session." : "Supabase is required for workflow authoring.");
+      return;
+    }
+    setDesignerBusy(true);
+    const { data, error } = await client.rpc("rpc_create_workflow_draft", {
+      p_source_version_id: activeVersion.id,
+      p_change_summary: `Draft revision of ${selectedTemplate?.name ?? "workflow"}`,
+    });
+    setDesignerBusy(false);
+    if (error || !data) {
+      setDesignerMessage(error?.message ?? "The draft was not confirmed by the database.");
+      return;
+    }
+    const draftId = String((data as { id?: string }).id ?? data);
+    setDraftVersionId(draftId);
+    setDraftStages(activeVersion.stages.map((stage) => ({ ...stage, workflowVersionId: draftId })));
+    setDesignerMessage(`Draft ${draftId} created. Select a stage to edit its configuration.`);
+  }
+
+  async function saveStage() {
+    if (!draftVersionId || !selectedStage) return;
+    const client = getSupabaseBrowser();
+    if (!client) return;
+    setDesignerBusy(true);
+    const { data, error } = await client.rpc("rpc_update_workflow_draft_stage", {
+      p_version_id: draftVersionId,
+      p_stage_key: selectedStage.stageKey,
+      p_label: stageLabel.trim() || selectedStage.name,
+      p_customer_visibility_label: selectedStage.customerVisibilityLabel,
+      p_responsible_org_code: selectedStage.responsibleOrgCode,
+      p_target_duration_days: selectedStage.targetDurationDays,
+      p_minimum_statutory_days: selectedStage.minimumStatutoryDays,
+      p_required_inputs: selectedStage.requiredInputs,
+      p_completion_requirements: selectedStage.completionRequirements,
+      p_permitted_transitions: selectedStage.permittedTransitions,
+      p_can_run_in_parallel: selectedStage.canRunInParallel,
+      p_is_milestone_gate: selectedStage.isMilestoneGate,
+    });
+    setDesignerBusy(false);
+    if (error || !data) {
+      setDesignerMessage(error?.message ?? "The stage edit was not confirmed by the database.");
+      return;
+    }
+    setDraftStages((stages) => stages.map((stage) => stage.stageKey === selectedStage.stageKey ? { ...stage, name: stageLabel.trim() || stage.name } : stage));
+    setDesignerMessage(`${selectedStage.stageKey} saved to draft ${draftVersionId}.`);
+  }
+
+  async function publishDraft() {
+    if (!draftVersionId) return;
+    const client = getSupabaseBrowser();
+    if (!client) return;
+    setDesignerBusy(true);
+    const validation = await client.rpc("rpc_validate_workflow_draft", { p_version_id: draftVersionId });
+    if (validation.error || !(validation.data as { valid?: boolean } | null)?.valid) {
+      setDesignerBusy(false);
+      setDesignerMessage(validation.error?.message ?? "The draft did not pass validation.");
+      return;
+    }
+    const { error } = await client.rpc("rpc_publish_workflow_version", { p_version_id: draftVersionId });
+    setDesignerBusy(false);
+    setDesignerMessage(error?.message ?? `Workflow ${draftVersionId} published. New workstreams will use this version.`);
+  }
 
   return (
     <div className="space-y-6">
@@ -91,10 +169,23 @@ export function WorkflowDesignerPanel() {
                 Published v{activeVersion.versionNumber}.0
               </Badge>
             </div>
-            <Button type="button" size="sm" disabled title="Workflow version authoring is not enabled in this demo workspace." className="bg-slate-300 text-slate-600 font-bold text-xs gap-1.5 shadow-none">
-              <Plus className="size-3.5" /> Create Draft v{activeVersion.versionNumber + 1}.0
+            <Button type="button" size="sm" onClick={() => void createDraft()} disabled={designerBusy || Boolean(draftVersionId)} className="bg-[#00284d] text-white font-bold text-xs gap-1.5 shadow-none">
+              <Plus className="size-3.5" /> {draftVersionId ? `Editing Draft ${draftVersionId}` : `Create Draft v${activeVersion.versionNumber + 1}.0`}
             </Button>
+            {draftVersionId && <Button type="button" size="sm" onClick={() => void publishDraft()} disabled={designerBusy} className="bg-emerald-700 text-white font-bold text-xs">Validate & publish</Button>}
           </div>
+
+          {designerMessage && <div role="status" className="rounded-lg border border-slate-200 bg-white p-3 text-xs font-semibold text-slate-700">{designerMessage}</div>}
+
+          {draftVersionId && selectedStage && (
+            <Card className="border-amber-200 bg-amber-50/50">
+              <CardHeader className="pb-3"><CardTitle className="text-base">Edit draft stage: {selectedStage.stageKey}</CardTitle><CardDescription>Only the draft version is editable. Published workflows remain immutable.</CardDescription></CardHeader>
+              <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <label className="flex-1 text-xs font-bold text-slate-700">Stage label<input value={stageLabel} onChange={(event) => setStageLabel(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium" /></label>
+                <Button type="button" onClick={() => void saveStage()} disabled={designerBusy} className="bg-[#00284d] text-white">Save stage</Button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Version Guardrail Alert */}
           <div className="rounded-xl border border-sky-200 bg-sky-50/50 p-4 text-xs text-sky-900 flex items-start gap-2.5">
@@ -107,7 +198,7 @@ export function WorkflowDesignerPanel() {
 
           {/* Stages List */}
           <div className="space-y-4">
-            {activeVersion.stages.map((stage, idx) => (
+            {visibleStages.map((stage) => (
               <Card key={stage.id} className="border-slate-200 bg-white shadow-sm">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
@@ -129,7 +220,8 @@ export function WorkflowDesignerPanel() {
                         </Badge>
                       )}
                     </div>
-                    <div className="text-right text-xs font-semibold text-slate-600">
+                    <div className="flex items-center gap-2 text-right text-xs font-semibold text-slate-600">
+                      {draftVersionId && <Button type="button" variant="outline" size="sm" onClick={() => { setSelectedStageKey(stage.stageKey); setStageLabel(stage.name); }} className="text-[10px]">Edit</Button>}
                       SLA: {stage.targetDurationDays} Business Days
                       {stage.minimumStatutoryDays > 0 && ` (${stage.minimumStatutoryDays}d statutory min)`}
                     </div>

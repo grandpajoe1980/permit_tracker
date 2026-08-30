@@ -28,7 +28,7 @@ findings below.
 | `node scripts/supabase-probe.mjs` | PASS | Configured project responded; 37 REST paths, Storage read/write/cleanup probes passed. This does not prove RLS isolation. |
 | `npm run build` / `npm run lint` before this checkpoint | BLOCKED | Both stopped because `bash` was unavailable on Windows. |
 
-## Wave 2 checkpoint in progress
+## Wave 3/4/7 checkpoint in progress
 
 - Added explicit `APP_DATA_MODE` handling. Production does not seed empty
   database reads from fixtures; demo/test mode retains deterministic fixtures.
@@ -47,6 +47,21 @@ findings below.
   stage-run history, and an RPC-backed stage-completion gate that checks actor
   access, blockers, unresolved RFIs, checklist presence, minimum processing
   time, and records the handoff/audit in one transaction.
+- Added version-scoped workflow designer transactions for draft creation, stage
+  edits, validation, publication, and retirement of the prior active version.
+  Published definitions remain immutable and the designer reports database
+  confirmation before showing a saved/published state.
+- Added the customer-request triage transaction that creates a linked
+  workstream, pins its first stage/workflow version, updates the intake queue,
+  and records the triage audit. The administration queue now exposes the
+  server-backed triage operation.
+- Replaced the schedule's fixed calendar window and fixed current date with
+  project/workstream baseline and forecast dates plus the runtime current date.
+- Removed the former commented document-content download fallback and routed
+  blocker clearing and inter-agency coordination creation through awaited
+  persistence paths. New forward migration
+  `20260830213000_workstream_coordination_transactions.sql` owns those
+  transactions.
 
 ## Known blockers and risks
 
@@ -63,5 +78,5 @@ findings below.
    RPCs or explicit demo/test-only paths.
 2. Add failure/RLS regression tests and validate the forward migrations against
    a running Supabase database.
-3. Add designer draft/publish transactions, then continue through intake,
-   workbench, document, schedule, and route checkpoints.
+3. Continue through government workbench, document lifecycle, schedule
+   persistence, and physical route extraction checkpoints.

@@ -370,6 +370,41 @@ export async function mutateCreateCustomerRequest(params: {
 // 3. EXTERNAL FILINGS
 // ====================================================================
 
+export async function mutateCreateWorkstreamFromRequest(params: {
+  requestId: string;
+  code: string;
+  title: string;
+  category: string;
+  permitTypeId?: string;
+  leadOrgCode?: string;
+  leadOrgName?: string;
+  workflowVersionId?: string;
+}): Promise<MutationResult<{ requestId: string; workstreamId: string; workstreamCode: string; workflowVersionId?: string }>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data, error } = await client.rpc("rpc_create_workstream_from_request", {
+    p_request_id: params.requestId,
+    p_code: params.code,
+    p_title: params.title,
+    p_category: params.category,
+    p_permit_type_id: params.permitTypeId ?? null,
+    p_lead_org_code: params.leadOrgCode ?? "STATEPO",
+    p_lead_org_name: params.leadOrgName ?? "Louisiana Governor's Office of Major Projects & Delivery",
+    p_workflow_version_id: params.workflowVersionId ?? null,
+  });
+  if (error || !data) return { data: null, error: new Error(error?.message ?? "Workstream creation was not confirmed by the database.") };
+  const row = data as Record<string, unknown>;
+  return {
+    data: {
+      requestId: String(row.requestId ?? row.request_id),
+      workstreamId: String(row.workstreamId ?? row.workstream_id),
+      workstreamCode: String(row.workstreamCode ?? row.workstream_code),
+      workflowVersionId: row.workflowVersionId ? String(row.workflowVersionId) : undefined,
+    },
+    error: null,
+  };
+}
+
 export async function mutateCreateExternalFiling(params: {
   id: string;
   projectId: string;
@@ -783,6 +818,24 @@ export async function mutateAcceptRFIResponse(params: {
 // 5. WORKSTREAMS (BLOCKED, STAGE, ESCALATE, TRANSFER, NOTE)
 // ====================================================================
 
+export async function mutateClearWorkstreamBlocker(params: {
+  workstreamId: string;
+  resolutionNotes?: string;
+  actorName: string;
+  actorOrgName: string;
+}): Promise<MutationResult<{ success: boolean }>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data, error } = await client.rpc("rpc_clear_workstream_blocker", {
+    p_workstream_id: params.workstreamId,
+    p_resolution_notes: params.resolutionNotes ?? "",
+    p_actor_name: params.actorName,
+    p_actor_org_name: params.actorOrgName,
+  });
+  if (error || !data) return { data: null, error: new Error(error?.message ?? "The blocker clear was not confirmed by the database.") };
+  return { data: { success: true }, error: null };
+}
+
 export async function mutateMarkWorkstreamBlocked(params: {
   workstreamId: string;
   workstreamCode: string;
@@ -1027,6 +1080,51 @@ export async function mutateCreateCoordinationRequest(params: {
 }): Promise<MutationResult<CoordinationRequestRecord>> {
   const client = getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+
+  const { data: rpcData, error: rpcError } = await client.rpc("rpc_create_coordination_request", {
+    p_id: params.id,
+    p_code: params.code,
+    p_workstream_id: params.workstreamId,
+    p_workstream_title: params.workstreamTitle,
+    p_requesting_org_id: params.requestingOrgId,
+    p_requesting_org_code: params.requestingOrgCode,
+    p_target_org_id: params.targetOrgId,
+    p_target_org_code: params.targetOrgCode,
+    p_requesting_user_name: params.requestingUserName,
+    p_assigned_to_user_name: params.assignedToUserName ?? null,
+    p_title: params.title,
+    p_need_description: params.needDescription,
+    p_due_date: params.dueDate,
+    p_attached_document_version_ids: params.attachedDocumentVersionIds ?? [],
+    p_priority: params.priority ?? "normal",
+  });
+  if (!rpcError && rpcData) {
+    const row = rpcData as Record<string, unknown>;
+    return {
+      data: {
+        id: String(row.id),
+        code: String(row.code),
+        workstreamId: String(row.workstream_id ?? row.workstreamId),
+        workstreamTitle: String(row.workstream_title ?? row.workstreamTitle),
+        requestingOrgId: String(row.requesting_org_id ?? row.requestingOrgId),
+        requestingOrgCode: String(row.requesting_org_code ?? row.requestingOrgCode),
+        targetOrgId: String(row.target_org_id ?? row.targetOrgId),
+        targetOrgCode: String(row.target_org_code ?? row.targetOrgCode),
+        requestingUserName: String(row.requesting_user_name ?? row.requestingUserName),
+        assignedToUserName: (row.assigned_to_user_name ?? row.assignedToUserName) as string | undefined,
+        title: String(row.title),
+        needDescription: String(row.need_description ?? row.needDescription),
+        requestedDate: String(row.requested_date ?? row.requestedDate),
+        dueDate: String(row.due_date ?? row.dueDate),
+        attachedDocumentVersionIds: (row.attached_document_version_ids ?? row.attachedDocumentVersionIds ?? []) as string[],
+        blocksWorkstreamTitle: String(row.blocks_workstream_title ?? row.blocksWorkstreamTitle),
+        priority: String(row.priority) as CoordinationRequestRecord["priority"],
+        status: String(row.status) as CoordinationRequestRecord["status"],
+      },
+      error: null,
+    };
+  }
+  if (!allowsFixtureData()) return { data: null, error: new Error(`Coordination request transaction failed: ${rpcError?.message ?? "no row returned"}`) };
 
   const now = new Date().toISOString();
   const payload = {

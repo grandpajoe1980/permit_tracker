@@ -22,7 +22,8 @@ set search_path = public, app_private
 as $$
 begin
   if auth.uid() is not null then
-    if new.submitted_by_user_id is distinct from auth.uid() then
+    if new.submitted_by_user_id is distinct from auth.uid()
+       and not (select app_private.is_system_admin()) then
       raise exception 'submitted_by_user_id must match the authenticated user';
     end if;
     if not (select app_private.has_project_access_text(new.project_id)) then
