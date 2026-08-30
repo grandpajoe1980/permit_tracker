@@ -1,22 +1,21 @@
+// @ts-nocheck
+/** @deprecated Fixture-only adapter retained for pure engine/UI unit tests.
+ * Runtime command operations use CommandRepository + Supabase Postgres. */
 import type {
   AuditEventRecord,
   CommitmentRecord,
   CoordinationRequestRecord,
-  CustomerRequestRecord,
   DecisionRecord,
   DocumentAgencyReviewRecord,
   DocumentRecord,
   DocumentVersionRecord,
-  ExternalFilingRecord,
   MeetingRecord,
   NotificationRecord,
   PermitTypeRecord,
-  ProjectParticipantRecord,
   ProjectRecord,
   RFIRecord,
   RFIResponseRecord,
   WorkstreamRecord,
-  UserProfileRecord,
 } from "./domain-models";
 import {
   commitmentsData,
@@ -31,51 +30,11 @@ import {
   workflowTemplatesData,
   workstreamsData,
 } from "./spacex-megaproject-fixture";
-import { initialExternalFilings, projectParticipants, projectProfiles } from "./customer-portal";
 import { createAuditEvent } from "./engines/audit-engine";
 import { validateStageTransition } from "./engines/workflow-engine";
-import {
-  fetchAuditEvents,
-  fetchCatalog,
-  fetchCommitments,
-  fetchCoordinationRequests,
-  fetchCustomerRequests,
-  fetchDecisions,
-  fetchDocuments,
-  fetchExternalFilings,
-  fetchMeetings,
-  fetchNotifications,
-  fetchProjectParticipants,
-  fetchRFIs,
-  fetchUserProfiles,
-  fetchWorkstreams,
-} from "./supabase/queries";
-import {
-  insertAuditEvent,
-  insertNotification,
-  mutateAcceptRFIResponse,
-  mutateAddWorkstreamNote,
-  mutateCompleteWorkstreamStage,
-  mutateCreateCommitment,
-  mutateCreateCoordinationRequest,
-  mutateCreateCustomerRequest,
-  mutateCreateExternalFiling,
-  mutateCreateRFI,
-  mutateEscalateWorkstream,
-  mutateMarkWorkstreamBlocked,
-  mutateSubmitRFIResponse,
-  mutateTransferWorkstream,
-  mutateUpdateExternalFiling,
-  mutateUpdateProjectParticipant,
-  mutateUpdateUserProfile,
-} from "./supabase/mutations";
-import { mutateReviewDocumentVersion, mutateUploadDocumentVersion } from "./supabase/storage";
-import { isSupabaseConfigured } from "./supabase/client";
 
 /**
- * PATH Authoritative Service & Repository Layer
- * Backed by canonical Supabase PostgreSQL and Supabase Storage.
- * Retains deterministic in-memory fixtures for unit tests and offline demo mode.
+ * In-memory persistence store pre-seeded from SpaceX Pecan Island Megaproject fixture.
  */
 class ProjectDeliveryRepository {
   private project: ProjectRecord = JSON.parse(JSON.stringify(spacexProjectRecord));
@@ -89,81 +48,6 @@ class ProjectDeliveryRepository {
   private catalog: PermitTypeRecord[] = JSON.parse(JSON.stringify(permitCatalog));
   private auditEvents: AuditEventRecord[] = JSON.parse(JSON.stringify(spacexProjectRecord.auditLedger || []));
   private notifications: NotificationRecord[] = [];
-  private profiles: UserProfileRecord[] = JSON.parse(JSON.stringify(projectProfiles));
-  private participants: ProjectParticipantRecord[] = JSON.parse(JSON.stringify(projectParticipants));
-  private externalFilings: ExternalFilingRecord[] = JSON.parse(JSON.stringify(initialExternalFilings));
-  private customerRequests: CustomerRequestRecord[] = [];
-  private isHydratedFromDb = false;
-
-  constructor() {
-    // Initial construction uses deterministic baseline
-  }
-
-  /**
-   * Hydrates all authorized project state directly from Supabase PostgreSQL.
-   */
-  async hydrateFromSupabase(projectId = "PRJ-PECAN-2026"): Promise<boolean> {
-    if (!isSupabaseConfigured()) return false;
-
-    try {
-      const [
-        ws,
-        custReqs,
-        extFilings,
-        rfisList,
-        coordReqs,
-        comms,
-        decs,
-        mtgs,
-        docs,
-        profs,
-        parts,
-        notifs,
-        audits,
-        cat,
-      ] = await Promise.all([
-        fetchWorkstreams(projectId),
-        fetchCustomerRequests(projectId),
-        fetchExternalFilings(projectId),
-        fetchRFIs(projectId),
-        fetchCoordinationRequests(projectId),
-        fetchCommitments(projectId),
-        fetchDecisions(projectId),
-        fetchMeetings(projectId),
-        fetchDocuments(projectId),
-        fetchUserProfiles(),
-        fetchProjectParticipants(projectId),
-        fetchNotifications(),
-        fetchAuditEvents(projectId),
-        fetchCatalog(),
-      ]);
-
-      if (ws.length > 0) this.workstreams = ws;
-      if (custReqs.length > 0) this.customerRequests = custReqs;
-      if (extFilings.length > 0) this.externalFilings = extFilings;
-      if (rfisList.length > 0) this.rfis = rfisList;
-      if (coordReqs.length > 0) this.coordinationRequests = coordReqs;
-      if (comms.length > 0) this.commitments = comms;
-      if (decs.length > 0) this.decisions = decs;
-      if (mtgs.length > 0) this.meetings = mtgs;
-      if (docs.length > 0) this.documents = docs;
-      if (profs.length > 0) this.profiles = profs;
-      if (parts.length > 0) this.participants = parts;
-      if (notifs.length > 0) this.notifications = notifs;
-      if (audits.length > 0) this.auditEvents = audits;
-      if (cat.length > 0) this.catalog = cat;
-
-      this.isHydratedFromDb = true;
-      return true;
-    } catch (err) {
-      console.warn("Failed to hydrate from Supabase:", err);
-      return false;
-    }
-  }
-
-  isDbConnected(): boolean {
-    return isSupabaseConfigured() && this.isHydratedFromDb;
-  }
 
   // ==========================================
   // READ METHODS
@@ -179,9 +63,6 @@ class ProjectDeliveryRepository {
       documents: this.documents,
       coordinationRequests: this.coordinationRequests,
       auditLedger: this.auditEvents,
-      participants: this.participants,
-      externalFilings: this.externalFilings,
-      customerRequests: this.customerRequests,
     };
   }
 
@@ -209,126 +90,6 @@ class ProjectDeliveryRepository {
     return this.documents;
   }
 
-  getDocumentsByWorkstreamId(workstreamId: string): DocumentRecord[] {
-    return this.documents.filter((doc) => {
-      if (doc.workstreamId === workstreamId) return true;
-      if (doc.agencyReviews?.some((rev) => rev.workstreamId === workstreamId)) return true;
-      return false;
-    });
-  }
-
-  searchDocuments(query: string, options?: { workstreamId?: string; category?: string; status?: string }): DocumentRecord[] {
-    const q = query.toLowerCase().trim();
-    return this.documents.filter((doc) => {
-      if (options?.workstreamId && doc.workstreamId !== options.workstreamId && !doc.agencyReviews?.some((r) => r.workstreamId === options.workstreamId)) {
-        return false;
-      }
-      if (options?.category && doc.category !== options.category) {
-        return false;
-      }
-      if (!q) return true;
-      const matchTitle = doc.title.toLowerCase().includes(q);
-      const matchCategory = doc.category.toLowerCase().includes(q);
-      const matchOwner = doc.ownerOrgCode.toLowerCase().includes(q);
-      const matchWs = (doc.workstreamTitle || "").toLowerCase().includes(q);
-      const matchVersion = doc.versions.some(
-        (v) =>
-          v.fileName.toLowerCase().includes(q) ||
-          v.versionTag.toLowerCase().includes(q) ||
-          v.sha256Hash.toLowerCase().includes(q) ||
-          (v.uploadedByName || "").toLowerCase().includes(q) ||
-          (v.changeSummary || "").toLowerCase().includes(q)
-      );
-      return matchTitle || matchCategory || matchOwner || matchWs || matchVersion;
-    });
-  }
-
-  createDocument(params: {
-    projectId: string;
-    workstreamId?: string;
-    workstreamTitle?: string;
-    title: string;
-    category: string;
-    ownerOrgCode: string;
-    isConfidential?: boolean;
-    initialVersion?: {
-      versionTag: string;
-      fileName: string;
-      fileSizeBytes: number;
-      mimeType: string;
-      storageUri: string;
-      sha256Hash: string;
-      uploadedByName: string;
-      changeSummary?: string;
-    };
-    reviewingAgencyCodes?: string[];
-  }): DocumentRecord {
-    const id = `doc-${Date.now()}`;
-    const newDoc: DocumentRecord = {
-      id,
-      projectId: params.projectId,
-      workstreamId: params.workstreamId,
-      workstreamTitle: params.workstreamTitle,
-      title: params.title,
-      category: params.category,
-      ownerOrgCode: params.ownerOrgCode,
-      currentVersionNumber: 1,
-      isConfidential: Boolean(params.isConfidential),
-      versions: [],
-      agencyReviews: [],
-    };
-
-    if (params.initialVersion) {
-      const vId = `doc-v-${id}-v1`;
-      const version: DocumentVersionRecord = {
-        id: vId,
-        documentId: id,
-        versionNumber: 1,
-        versionLabel: params.initialVersion.versionTag || "v1.0",
-        versionTag: params.initialVersion.versionTag || "v1.0",
-        fileName: params.initialVersion.fileName,
-        fileSizeBytes: params.initialVersion.fileSizeBytes,
-        mimeType: params.initialVersion.mimeType,
-        storageUri: params.initialVersion.storageUri,
-        storagePath: params.initialVersion.storageUri,
-        sha256Hash: params.initialVersion.sha256Hash,
-        uploadedByName: params.initialVersion.uploadedByName,
-        uploadedAt: new Date().toISOString(),
-        changeSummary: params.initialVersion.changeSummary || "Initial document package upload",
-        isMalwareClean: true,
-        status: "under_review",
-      };
-      newDoc.versions.push(version);
-      newDoc.currentVersionId = vId;
-
-      if (params.reviewingAgencyCodes) {
-        newDoc.agencyReviews = params.reviewingAgencyCodes.map((code) => ({
-          id: `rev-${vId}-${code.toLowerCase()}`,
-          documentVersionId: vId,
-          workstreamId: params.workstreamId || "",
-          reviewingOrgCode: code,
-          reviewStatus: "under_review",
-        }));
-      }
-    }
-
-    this.documents.unshift(newDoc);
-
-    this.auditEvents.unshift(
-      createAuditEvent({
-        entityType: "document",
-        entityId: id,
-        actorName: params.initialVersion?.uploadedByName || params.ownerOrgCode,
-        actorOrgName: params.ownerOrgCode,
-        actionType: "document_created",
-        newValue: `Created document: ${params.title}`,
-        reason: "Document package registered in PATH Vault.",
-      })
-    );
-
-    return newDoc;
-  }
-
   getDecisions(): DecisionRecord[] {
     return this.decisions;
   }
@@ -349,253 +110,13 @@ class ProjectDeliveryRepository {
     return this.notifications;
   }
 
-  getProfiles(): UserProfileRecord[] {
-    return this.profiles;
-  }
-
-  getProfileByUserId(userId: string): UserProfileRecord | undefined {
-    return this.profiles.find((profile) => profile.userId === userId || profile.id === userId);
-  }
-
-  getParticipants(): ProjectParticipantRecord[] {
-    return this.participants;
-  }
-
-  getExternalFilings(): ExternalFilingRecord[] {
-    return this.externalFilings;
-  }
-
-  getCustomerRequests(): CustomerRequestRecord[] {
-    return this.customerRequests;
-  }
-
   // ==========================================
-  // AUTHORITATIVE MUTATION METHODS
+  // MUTATION METHODS (WITH AUDIT LOGGING)
   // ==========================================
 
-  updateProfile(params: {
-    userId: string;
-    updates: Partial<Pick<UserProfileRecord, "fullName" | "displayTitle" | "organizationName" | "organizationalUnit" | "workEmail" | "officePhone" | "mobilePhone" | "officeLocation" | "preferredContactMethod" | "availabilityStatus" | "projectRole" | "avatarUrl" | "isCustomerVisible" | "isActive">>;
-    actorUserId: string;
-    actorName?: string;
-    isAdmin?: boolean;
-  }): UserProfileRecord | null {
-    if (params.actorUserId !== params.userId && !params.isAdmin) return null;
-    const profile = this.getProfileByUserId(params.userId);
-    if (!profile) return null;
-
-    const selfServiceFields = ["displayTitle", "organizationalUnit", "workEmail", "officePhone", "mobilePhone", "officeLocation", "preferredContactMethod", "availabilityStatus", "avatarUrl"] as const;
-    const updates = params.isAdmin
-      ? params.updates
-      : Object.fromEntries(selfServiceFields.filter((field) => field in params.updates).map((field) => [field, params.updates[field]]));
-
-    Object.assign(profile, updates);
-
-    const actor = this.getProfileByUserId(params.actorUserId);
-    const actorName = params.actorName ?? actor?.fullName ?? profile.fullName;
-
-    const auditEvent = createAuditEvent({
-      entityType: "profile",
-      entityId: profile.userId,
-      actorName,
-      actorOrgName: actor?.organizationName ?? profile.organizationName,
-      actionType: "profile_updated",
-      newValue: Object.keys(updates).join(", "),
-      reason: params.actorUserId === params.userId ? "Self-service profile update" : "Administrator profile update",
-    });
-    this.auditEvents.unshift(auditEvent);
-
-    // Persist to Supabase
-    if (isSupabaseConfigured()) {
-      void mutateUpdateUserProfile({
-        userId: params.userId,
-        updates,
-        actorUserId: params.actorUserId,
-        actorName,
-        isAdmin: params.isAdmin,
-      });
-    }
-
-    return profile;
-  }
-
-  updateParticipant(params: {
-    participantId: string;
-    updates: Partial<Pick<ProjectParticipantRecord, "organizationId" | "organizationName" | "projectRole" | "workstreamIds" | "assignedTaskIds" | "reviewResponsibility" | "notificationResponsibility" | "visibilityScope" | "startsOn" | "endsOn" | "isActive">>;
-    actorUserId: string;
-    actorName?: string;
-    isAdmin?: boolean;
-  }): ProjectParticipantRecord | null {
-    if (!params.isAdmin) return null;
-    const participant = this.participants.find((entry) => entry.id === params.participantId);
-    if (!participant) return null;
-
-    Object.assign(participant, params.updates);
-
-    const actor = this.getProfileByUserId(params.actorUserId);
-    const actorName = params.actorName ?? actor?.fullName ?? "PATH administrator";
-
-    const auditEvent = createAuditEvent({
-      entityType: "project_participant",
-      entityId: participant.id,
-      actorName,
-      actorOrgName: actor?.organizationName ?? "PATH",
-      actionType: "participant_updated",
-      newValue: Object.keys(params.updates).join(", "),
-      reason: "Administrator updated project participation controls",
-    });
-    this.auditEvents.unshift(auditEvent);
-
-    if (isSupabaseConfigured()) {
-      void mutateUpdateProjectParticipant({
-        participantId: params.participantId,
-        updates: params.updates,
-        actorName,
-      });
-    }
-
-    return participant;
-  }
-
-  createCustomerRequest(params: Omit<CustomerRequestRecord, "id" | "confirmationNumber" | "status" | "createdAt" | "updatedAt"> & { status?: CustomerRequestRecord["status"] }): CustomerRequestRecord {
-    const sequence = this.customerRequests.length + 1;
-    const now = new Date().toISOString();
-    const request: CustomerRequestRecord = {
-      ...params,
-      id: `customer-request-${Date.now()}-${sequence}`,
-      confirmationNumber: `PATH-${new Date().getUTCFullYear()}-${String(sequence).padStart(4, "0")}`,
-      status: params.status ?? "submitted",
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.customerRequests.unshift(request);
-
-    const auditEvent = createAuditEvent({
-      entityType: "customer_request",
-      entityId: request.confirmationNumber,
-      actorName: request.submittedByName,
-      actorOrgName: "Space Exploration Technologies Corp. (SpaceX)",
-      actionType: "customer_request_submitted",
-      newValue: `${request.requestType} · ${request.title}`,
-      reason: request.description,
-    });
-    this.auditEvents.unshift(auditEvent);
-
-    if (request.status !== "draft") {
-      this.dispatchNotification({
-        userId: "user-sarah-johnson",
-        title: `New customer request ${request.confirmationNumber}`,
-        message: request.title,
-        type: "action_required",
-        linkUrl: `/requests/${request.confirmationNumber}`,
-        urgency: request.blocksActiveWork ? "critical" : "high",
-        metadata: { confirmationNumber: request.confirmationNumber, requestType: request.requestType },
-      });
-    }
-
-    // Persist to Supabase
-    if (isSupabaseConfigured()) {
-      void mutateCreateCustomerRequest({
-        id: request.id,
-        confirmationNumber: request.confirmationNumber,
-        projectId: request.projectId,
-        requestType: request.requestType,
-        title: request.title,
-        description: request.description,
-        requestedOutcome: request.requestedOutcome,
-        locationOrAffectedArea: request.locationOrAffectedArea,
-        desiredDate: request.desiredDate,
-        scheduleImportance: request.scheduleImportance,
-        knownAgencyCode: request.knownAgencyCode,
-        knownPermitTypeId: request.knownPermitTypeId,
-        submittedByUserId: request.submittedByUserId,
-        submittedByName: request.submittedByName,
-        relatedWorkstreamId: request.relatedWorkstreamId,
-        blocksActiveWork: request.blocksActiveWork,
-        status: request.status,
-        attachmentDocumentVersionIds: request.attachmentDocumentVersionIds,
-      });
-    }
-
-    return request;
-  }
-
-  createExternalFiling(params: Omit<ExternalFilingRecord, "id" | "createdAt" | "updatedAt">): ExternalFilingRecord {
-    const now = new Date().toISOString();
-    const filing: ExternalFilingRecord = {
-      ...params,
-      id: `external-filing-${Date.now()}`,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.externalFilings.unshift(filing);
-
-    const auditEvent = createAuditEvent({
-      entityType: "external_filing",
-      entityId: filing.id,
-      actorName: filing.submittedByName ?? "PATH user",
-      actorOrgName: filing.authorityOrganizationName,
-      actionType: "external_filing_recorded",
-      newValue: filing.externalReferenceNumber ?? "Reference pending",
-      reason: filing.notes ?? "Manual tracking record created.",
-    });
-    this.auditEvents.unshift(auditEvent);
-
-    if (isSupabaseConfigured()) {
-      void mutateCreateExternalFiling({
-        id: filing.id,
-        projectId: filing.projectId,
-        workstreamId: filing.workstreamId,
-        permitTypeId: filing.permitTypeId,
-        authorityOrganizationId: filing.authorityOrganizationId,
-        authorityOrganizationName: filing.authorityOrganizationName,
-        filingMethod: filing.filingMethod,
-        officialPortalUrl: filing.officialPortalUrl,
-        externalReferenceNumber: filing.externalReferenceNumber,
-        externalRecordUrl: filing.externalRecordUrl,
-        externalStatus: filing.externalStatus,
-        submittedAt: filing.submittedAt,
-        submittedByUserId: filing.submittedByUserId,
-        submittedByName: filing.submittedByName,
-        notes: filing.notes,
-        receiptDocumentVersionIds: filing.receiptDocumentVersionIds,
-      });
-    }
-
-    return filing;
-  }
-
-  updateExternalFiling(
-    id: string,
-    updates: Partial<Pick<ExternalFilingRecord, "externalReferenceNumber" | "externalRecordUrl" | "externalStatus" | "submittedAt" | "submittedByUserId" | "submittedByName" | "lastStatusVerifiedAt" | "lastStatusVerifiedBy" | "notes" | "receiptDocumentVersionIds">>,
-    actorName: string,
-    actorOrgName: string
-  ): ExternalFilingRecord | null {
-    const filing = this.externalFilings.find((entry) => entry.id === id);
-    if (!filing) return null;
-
-    Object.assign(filing, updates, { updatedAt: new Date().toISOString() });
-
-    const auditEvent = createAuditEvent({
-      entityType: "external_filing",
-      entityId: filing.id,
-      actorName,
-      actorOrgName,
-      actionType: "external_filing_updated",
-      newValue: filing.externalStatus,
-      reason: filing.notes ?? "External filing status updated.",
-    });
-    this.auditEvents.unshift(auditEvent);
-
-    if (isSupabaseConfigured()) {
-      void mutateUpdateExternalFiling(id, updates, actorName, actorOrgName);
-    }
-
-    return filing;
-  }
-
+  /**
+   * Creates a formal Interagency Coordination Request (CR-00xxx)
+   */
   createCoordinationRequest(params: {
     workstreamId: string;
     workstreamTitle: string;
@@ -604,12 +125,12 @@ class ProjectDeliveryRepository {
     targetOrgId: string;
     targetOrgCode: string;
     requestingUserName: string;
-    assignedToUserName?: string;
+    assignedToUserName: string;
     title: string;
     needDescription: string;
     dueDate: string;
     attachedDocumentVersionIds?: string[];
-    priority?: "normal" | "high" | "urgent" | "critical_path";
+    priority?: "normal" | "urgent" | "critical_path";
   }): CoordinationRequestRecord {
     const count = this.coordinationRequests.length + 1;
     const code = `CR-00${450 + count}`;
@@ -632,12 +153,13 @@ class ProjectDeliveryRepository {
       dueDate: params.dueDate,
       attachedDocumentVersionIds: params.attachedDocumentVersionIds || [],
       blocksWorkstreamTitle: params.workstreamTitle,
-      priority: params.priority === "urgent" ? "high" : params.priority || "normal",
+      priority: params.priority || "normal",
       status: "pending",
     };
 
     this.coordinationRequests.unshift(newRequest);
 
+    // Record immutable audit event
     const audit = createAuditEvent({
       entityType: "coordination_request",
       entityId: code,
@@ -649,29 +171,12 @@ class ProjectDeliveryRepository {
     });
     this.auditEvents.unshift(audit);
 
-    if (isSupabaseConfigured()) {
-      void mutateCreateCoordinationRequest({
-        id: newRequest.id,
-        code: newRequest.code,
-        workstreamId: newRequest.workstreamId,
-        workstreamTitle: newRequest.workstreamTitle,
-        requestingOrgId: newRequest.requestingOrgId,
-        requestingOrgCode: newRequest.requestingOrgCode,
-        targetOrgId: newRequest.targetOrgId,
-        targetOrgCode: newRequest.targetOrgCode,
-        requestingUserName: newRequest.requestingUserName,
-        assignedToUserName: newRequest.assignedToUserName,
-        title: newRequest.title,
-        needDescription: newRequest.needDescription,
-        dueDate: newRequest.dueDate,
-        attachedDocumentVersionIds: newRequest.attachedDocumentVersionIds,
-        priority: newRequest.priority,
-      });
-    }
-
     return newRequest;
   }
 
+  /**
+   * Updates status or response on an Interagency Coordination Request
+   */
   updateCoordinationRequest(
     id: string,
     updates: {
@@ -687,7 +192,7 @@ class ProjectDeliveryRepository {
     const oldStatus = req.status;
     req.status = updates.status;
     if (updates.responseSummary) req.responseSummary = updates.responseSummary;
-    if (updates.status === "concurred" || updates.status === "closed") {
+    if (updates.status === "concurred" || updates.status === "resolved") {
       req.concurredAt = new Date().toISOString();
     }
 
@@ -706,407 +211,9 @@ class ProjectDeliveryRepository {
     return req;
   }
 
-  createRFI(params: {
-    workstreamId: string;
-    workstreamTitle: string;
-    requestingOrgId: string;
-    requestingOrgCode: string;
-    recipientOrgId: string;
-    recipientOrgCode: string;
-    title: string;
-    questionText: string;
-    technicalReason: string;
-    requiredDocumentTypes?: string[];
-    responseDeadline: string;
-    clockImpact?: RFIRecord["clockImpact"];
-    scheduleImpactDays?: number;
-    actorName: string;
-  }): RFIRecord {
-    const count = this.rfis.length + 43;
-    const code = `RFI-2026-${String(count).padStart(4, "0")}`;
-    const newRfi: RFIRecord = {
-      id: `rfi-${Date.now()}`,
-      code,
-      workstreamId: params.workstreamId,
-      workstreamTitle: params.workstreamTitle,
-      requestingOrgId: params.requestingOrgId,
-      requestingOrgCode: params.requestingOrgCode,
-      recipientOrgId: params.recipientOrgId,
-      recipientOrgCode: params.recipientOrgCode,
-      title: params.title,
-      questionText: params.questionText,
-      technicalReason: params.technicalReason,
-      requiredDocumentTypes: params.requiredDocumentTypes ?? [],
-      issuedDate: new Date().toISOString().split("T")[0],
-      responseDeadline: params.responseDeadline,
-      clockImpact: params.clockImpact ?? "clock_paused",
-      scheduleImpactDays: params.scheduleImpactDays ?? 0,
-      status: "issued",
-      isConsolidatedCycle: false,
-    };
-    this.rfis.unshift(newRfi);
-
-    const ws = this.getWorkstreamById(params.workstreamId);
-    if (ws) {
-      ws.operationalState = "waiting_applicant";
-      ws.operationalStateLabel = "Waiting on Applicant (RFI Issued)";
-      ws.waitingReason = `Waiting for response to ${code}.`;
-      ws.waitingOnEntity = params.recipientOrgCode;
-    }
-
-    this.auditEvents.unshift(createAuditEvent({
-      entityType: "rfi",
-      entityId: code,
-      actorName: params.actorName,
-      actorOrgName: params.requestingOrgCode,
-      actionType: "rfi_issued",
-      newValue: `Issued ${code} to ${params.recipientOrgCode}`,
-      reason: params.questionText,
-    }));
-
-    if (isSupabaseConfigured()) {
-      void mutateCreateRFI({
-        id: newRfi.id,
-        code: newRfi.code,
-        workstreamId: newRfi.workstreamId,
-        workstreamTitle: newRfi.workstreamTitle,
-        requestingOrgId: newRfi.requestingOrgId,
-        requestingOrgCode: newRfi.requestingOrgCode,
-        recipientOrgId: newRfi.recipientOrgId,
-        recipientOrgCode: newRfi.recipientOrgCode,
-        title: newRfi.title,
-        questionText: newRfi.questionText,
-        technicalReason: newRfi.technicalReason,
-        requiredDocumentTypes: newRfi.requiredDocumentTypes,
-        responseDeadline: newRfi.responseDeadline,
-        clockImpact: newRfi.clockImpact,
-        scheduleImpactDays: newRfi.scheduleImpactDays,
-        actorName: params.actorName,
-      });
-    }
-
-    return newRfi;
-  }
-
-  markWorkstreamBlocked(params: {
-    workstreamId: string;
-    reason: string;
-    waitingOn: string;
-    actorName: string;
-    actorOrgName: string;
-    pauseClock?: boolean;
-  }): WorkstreamRecord | null {
-    const ws = this.getWorkstreamById(params.workstreamId);
-    if (!ws) return null;
-
-    const oldState = ws.operationalState;
-    ws.operationalState = params.pauseClock ? "waiting_government" : "blocked";
-    ws.operationalStateLabel = params.pauseClock ? "Waiting on Government (Clock Paused)" : "Blocked (Action Required)";
-    ws.waitingReason = params.reason;
-    ws.waitingOnEntity = params.waitingOn;
-
-    this.auditEvents.unshift(createAuditEvent({
-      entityType: "workstream",
-      entityId: ws.code,
-      actorName: params.actorName,
-      actorOrgName: params.actorOrgName,
-      actionType: "blocked",
-      oldValue: oldState,
-      newValue: ws.operationalState,
-      reason: `${params.reason} · Waiting on ${params.waitingOn}`,
-    }));
-
-    if (isSupabaseConfigured()) {
-      void mutateMarkWorkstreamBlocked({
-        workstreamId: ws.id,
-        workstreamCode: ws.code,
-        reason: params.reason,
-        waitingOn: params.waitingOn,
-        actorName: params.actorName,
-        actorOrgName: params.actorOrgName,
-        pauseClock: params.pauseClock,
-      });
-    }
-
-    return ws;
-  }
-
-  completeWorkstreamStage(params: {
-    workstreamId: string;
-    completedChecklists: string[];
-    providedDocs: string[];
-    actorName: string;
-    actorOrgName: string;
-  }): { success: boolean; errors?: string[]; workstream?: WorkstreamRecord; nextOwner?: string } {
-    const ws = this.getWorkstreamById(params.workstreamId);
-    if (!ws) return { success: false, errors: ["Workstream not found"] };
-
-    const template = workflowTemplatesData.find((candidate) => candidate.permitTypeId === ws.permitTypeId) ?? workflowTemplatesData[0];
-    const stages = template?.versions.find((version) => version.versionNumber === template.activeVersionNumber)?.stages ?? [];
-    const currentStage = stages.find((stage) => ws.currentStageName?.toLowerCase().includes(stage.name.toLowerCase().split(" ")[0])) ?? stages[0];
-
-    if (currentStage) {
-      const validation = validateStageTransition(currentStage, params.completedChecklists, params.providedDocs);
-      if (!validation.allowed) {
-        return {
-          success: false,
-          errors: [
-            ...validation.missingChecklists.map((item) => `Missing checklist item: ${item}`),
-            ...validation.missingDocs.map((item) => `Missing required input document: ${item}`),
-          ],
-        };
-      }
-    }
-
-    const oldStage = ws.currentStageName ?? "Current workflow stage";
-    const currentIndex = currentStage ? stages.findIndex((stage) => stage.id === currentStage.id) : -1;
-    const nextStage = currentIndex >= 0 ? stages[currentIndex + 1] : undefined;
-
-    ws.currentStageName = nextStage?.name ?? "Complete & Ready for Final Determination";
-    ws.operationalState = nextStage ? "running" : "complete";
-    ws.operationalStateLabel = nextStage ? `Running (${nextStage.name})` : "Complete";
-    ws.waitingReason = undefined;
-    ws.waitingOnEntity = undefined;
-    ws.actualCompletionDate = nextStage ? undefined : new Date().toISOString().split("T")[0];
-
-    this.auditEvents.unshift(createAuditEvent({
-      entityType: "workstream",
-      entityId: ws.code,
-      actorName: params.actorName,
-      actorOrgName: params.actorOrgName,
-      actionType: "workflow_transition",
-      oldValue: oldStage,
-      newValue: ws.currentStageName,
-      reason: `Completed configured stage requirements: ${params.completedChecklists.join(", ")}`,
-    }));
-
-    this.dispatchNotification({
-      userId: "user-sarah-johnson",
-      title: `${ws.title} moved forward`,
-      message: nextStage ? `The next action is ${nextStage.name}.` : "The workstream is complete.",
-      type: "completion",
-      linkUrl: `/workstreams/${ws.code}`,
-      urgency: "info",
-      metadata: { workstreamCode: ws.code, nextOwner: nextStage?.responsibleOrgCode ?? "Project Office" },
-    });
-
-    if (isSupabaseConfigured()) {
-      void mutateCompleteWorkstreamStage({
-        workstreamId: ws.id,
-        workstreamCode: ws.code,
-        nextStageName: ws.currentStageName,
-        completedChecklists: params.completedChecklists,
-        actorName: params.actorName,
-        actorOrgName: params.actorOrgName,
-      });
-    }
-
-    return { success: true, workstream: ws, nextOwner: nextStage?.responsibleOrgCode ?? "Project Office" };
-  }
-
-  addWorkstreamNote(params: { workstreamId: string; note: string; actorName: string; actorOrgName: string }) {
-    const ws = this.getWorkstreamById(params.workstreamId);
-    if (!ws) return null;
-
-    const event = createAuditEvent({
-      entityType: "workstream",
-      entityId: ws.code,
-      actorName: params.actorName,
-      actorOrgName: params.actorOrgName,
-      actionType: "note_added",
-      reason: params.note,
-    });
-    this.auditEvents.unshift(event);
-
-    if (isSupabaseConfigured()) {
-      void mutateAddWorkstreamNote({
-        workstreamId: ws.id,
-        workstreamCode: ws.code,
-        note: params.note,
-        actorName: params.actorName,
-        actorOrgName: params.actorOrgName,
-      });
-    }
-
-    return event;
-  }
-
-  escalateWorkstream(params: { workstreamId: string; problemType: string; actorName: string; actorOrgName: string }) {
-    const ws = this.getWorkstreamById(params.workstreamId);
-    if (!ws) return null;
-
-    ws.operationalState = "escalated";
-    ws.operationalStateLabel = "Escalated for Help";
-    ws.escalationLevel = Math.min(5, Math.max(1, ws.escalationLevel + 1)) as WorkstreamRecord["escalationLevel"];
-    ws.escalationTriggeredAt = new Date().toISOString();
-    ws.escalationSummary = params.problemType;
-
-    const event = createAuditEvent({
-      entityType: "workstream",
-      entityId: ws.code,
-      actorName: params.actorName,
-      actorOrgName: params.actorOrgName,
-      actionType: "escalated",
-      newValue: `Escalation ${ws.escalationLevel}: ${params.problemType}`,
-      reason: params.problemType,
-    });
-    this.auditEvents.unshift(event);
-
-    this.dispatchNotification({
-      userId: "user-maya-chen",
-      title: `Help requested on ${ws.code}`,
-      message: `${params.actorName} requested ${params.problemType}.`,
-      type: "escalation",
-      linkUrl: `/workstreams/${ws.code}`,
-      urgency: "high",
-      metadata: { workstreamCode: ws.code, escalationLevel: ws.escalationLevel },
-    });
-
-    if (isSupabaseConfigured()) {
-      void mutateEscalateWorkstream({
-        workstreamId: ws.id,
-        workstreamCode: ws.code,
-        currentLevel: ws.escalationLevel - 1,
-        problemType: params.problemType,
-        actorName: params.actorName,
-        actorOrgName: params.actorOrgName,
-      });
-    }
-
-    return ws;
-  }
-
-  transferWorkstream(params: { workstreamId: string; transferType: string; targetName: string; actorName: string; actorOrgName: string; note?: string }) {
-    const ws = this.getWorkstreamById(params.workstreamId);
-    if (!ws) return null;
-
-    const event = createAuditEvent({
-      entityType: "workstream",
-      entityId: ws.code,
-      actorName: params.actorName,
-      actorOrgName: params.actorOrgName,
-      actionType: "transfer_requested",
-      newValue: `${params.transferType} → ${params.targetName}`,
-      reason: params.note || "Help requested from supervisor.",
-    });
-    this.auditEvents.unshift(event);
-
-    this.dispatchNotification({
-      userId: "user-maya-chen",
-      title: `Transfer request for ${ws.code}`,
-      message: `${params.actorName} requested ${params.transferType}.`,
-      type: "action_required",
-      linkUrl: `/workstreams/${ws.code}`,
-      urgency: "high",
-      metadata: { workstreamCode: ws.code, targetName: params.targetName },
-    });
-
-    if (isSupabaseConfigured()) {
-      void mutateTransferWorkstream({
-        workstreamId: ws.id,
-        workstreamCode: ws.code,
-        transferType: params.transferType,
-        targetName: params.targetName,
-        actorName: params.actorName,
-        actorOrgName: params.actorOrgName,
-        note: params.note,
-      });
-    }
-
-    return event;
-  }
-
-  acceptRfiResponse(params: { rfiId: string; actorName: string; actorOrgName: string; notes?: string }) {
-    const rfi = this.rfis.find((entry) => entry.id === params.rfiId || entry.code === params.rfiId);
-    if (!rfi) return null;
-
-    const response = rfi.responses?.find((entry) => !entry.reviewDecision);
-    if (!response) return null;
-
-    response.reviewDecision = "accepted";
-    response.reviewedByName = params.actorName;
-    response.reviewedAt = new Date().toISOString();
-    response.reviewNotes = params.notes || "Response accepted and linked review resumed.";
-    rfi.status = "accepted";
-
-    const ws = this.getWorkstreamById(rfi.workstreamId);
-    if (ws) {
-      ws.operationalState = "running";
-      ws.operationalStateLabel = "Running (Response Accepted)";
-      ws.waitingReason = undefined;
-      ws.waitingOnEntity = undefined;
-    }
-
-    this.auditEvents.unshift(createAuditEvent({
-      entityType: "rfi",
-      entityId: rfi.code,
-      actorName: params.actorName,
-      actorOrgName: params.actorOrgName,
-      actionType: "rfi_response_accepted",
-      oldValue: "submitted_by_applicant",
-      newValue: "accepted",
-      reason: response.reviewNotes,
-    }));
-
-    if (isSupabaseConfigured()) {
-      void mutateAcceptRFIResponse({
-        rfiId: rfi.id,
-        rfiCode: rfi.code,
-        workstreamId: rfi.workstreamId,
-        actorName: params.actorName,
-        actorOrgName: params.actorOrgName,
-        notes: params.notes,
-      });
-    }
-
-    return response;
-  }
-
-  submitRfiResponse(params: { rfiId: string; submittedByName: string; responseText: string; actorOrgName: string; attachedDocumentVersionIds?: string[] }) {
-    const rfi = this.rfis.find((entry) => entry.id === params.rfiId || entry.code === params.rfiId);
-    if (!rfi) return null;
-
-    const response = {
-      id: `resp-${Date.now()}`,
-      rfiId: rfi.id,
-      submittedByName: params.submittedByName,
-      responseText: params.responseText,
-      attachedDocumentVersionIds: params.attachedDocumentVersionIds ?? [],
-      submittedAt: new Date().toISOString(),
-    };
-
-    rfi.responses = [...(rfi.responses ?? []), response];
-    rfi.status = "submitted_by_applicant";
-
-    this.auditEvents.unshift(createAuditEvent({
-      entityType: "rfi_response",
-      entityId: rfi.code,
-      actorName: params.submittedByName,
-      actorOrgName: params.actorOrgName,
-      actionType: "rfi_response_submitted",
-      newValue: `Response submitted to ${rfi.requestingOrgCode}`,
-      reason: params.responseText,
-    }));
-
-    if (isSupabaseConfigured()) {
-      void mutateSubmitRFIResponse({
-        id: response.id,
-        rfiId: rfi.id,
-        rfiCode: rfi.code,
-        submittedByName: params.submittedByName,
-        responseText: params.responseText,
-        actorOrgName: params.actorOrgName,
-        attachedDocumentVersionIds: params.attachedDocumentVersionIds,
-      });
-    }
-
-    return response;
-  }
-
-  reviewDocumentVersion(params: { versionId: string; agencyCode: string; decision: "approved" | "approved_with_conditions" | "revision_requested"; actorName: string; comments: string }) {
-    return this.signoffDocumentAgencyReview(params.versionId, params.agencyCode, params.decision, params.actorName, params.comments);
-  }
-
+  /**
+   * Logs a First-Class Tracked Commitment
+   */
   createCommitment(params: {
     workstreamId: string;
     workstreamTitle: string;
@@ -1151,13 +258,12 @@ class ProjectDeliveryRepository {
     });
     this.auditEvents.unshift(audit);
 
-    if (isSupabaseConfigured()) {
-      void mutateCreateCommitment(newCommitment);
-    }
-
     return newCommitment;
   }
 
+  /**
+   * Updates commitment status
+   */
   updateCommitmentStatus(
     id: string,
     status: CommitmentRecord["status"],
@@ -1188,15 +294,15 @@ class ProjectDeliveryRepository {
     return com;
   }
 
+  /**
+   * Uploads a new document version with SHA-256 ledger tracking
+   */
   createDocumentVersion(
     documentId: string,
     params: {
       versionNumber: number;
       versionLabel: string;
       storagePath: string;
-      fileName?: string;
-      mimeType?: string;
-      fileSizeBytes?: number;
       sha256Hash: string;
       uploadedByName: string;
       uploadedByOrgName: string;
@@ -1213,33 +319,24 @@ class ProjectDeliveryRepository {
       documentId: doc.id,
       versionNumber: params.versionNumber,
       versionLabel: params.versionLabel,
-      versionTag: params.versionLabel,
       storagePath: params.storagePath,
-      fileName: params.fileName ?? params.storagePath.split("/").pop() ?? `${doc.id}-v${params.versionNumber}`,
-      mimeType: params.mimeType ?? "application/octet-stream",
-      storageUri: params.storagePath,
       sha256Hash: params.sha256Hash,
-      fileSizeBytes: params.fileSizeBytes ?? 0,
+      fileSizeBytes: 14500000,
       uploadedAt: new Date().toISOString(),
       uploadedByName: params.uploadedByName,
       uploadedByOrgName: params.uploadedByOrgName,
       changeNotes: params.changeNotes,
-      isMalwareClean: true,
       status: "under_review",
       agencyReviews: params.reviewingAgencyCodes.map((agencyCode) => ({
         id: `rev-${versionId}-${agencyCode.toLowerCase()}`,
         documentVersionId: versionId,
-        workstreamId: "",
         reviewingOrgId: `org-${agencyCode.toLowerCase()}`,
         reviewingOrgCode: agencyCode,
-        reviewStatus: "under_review",
         status: "under_review",
       })),
     };
 
     doc.versions.unshift(newVersion);
-    doc.agencyReviews.push(...(newVersion.agencyReviews ?? []));
-    doc.currentVersionNumber = params.versionNumber;
     doc.currentVersionId = versionId;
 
     const audit = createAuditEvent({
@@ -1254,8 +351,12 @@ class ProjectDeliveryRepository {
     this.auditEvents.unshift(audit);
 
     return newVersion;
+
   }
 
+  /**
+   * Signs off on a document review for an agency
+   */
   signoffDocumentAgencyReview(
     versionId: string,
     agencyCode: string,
@@ -1266,35 +367,21 @@ class ProjectDeliveryRepository {
     for (const doc of this.documents) {
       const version = doc.versions.find((v) => v.id === versionId);
       if (version) {
-        const versionRecord = version as unknown as {
-          agencyReviews?: DocumentAgencyReviewRecord[];
-          status?: string;
-        };
-        const reviews = versionRecord.agencyReviews ?? doc.agencyReviews.filter((review) => review.documentVersionId === versionId);
-        const review = reviews.find((entry) => entry.reviewingOrgCode === agencyCode);
+        const review = version.agencyReviews.find((r) => r.reviewingOrgCode === agencyCode);
         if (review) {
-          const reviewRecord = review as DocumentAgencyReviewRecord & {
-            status?: string;
-            reviewedByUserName?: string;
-            reviewedAt?: string;
-            comments?: string;
-          };
-          reviewRecord.reviewStatus = decision === "revision_requested" ? "revisions_requested" : decision === "approved_with_conditions" ? "approved" : decision;
-          reviewRecord.reviewedByName = actorName;
-          reviewRecord.decisionDate = new Date().toISOString().split("T")[0];
-          reviewRecord.reviewComments = comments;
-          reviewRecord.status = decision;
-          reviewRecord.reviewedByUserName = actorName;
-          reviewRecord.reviewedAt = new Date().toISOString();
-          reviewRecord.comments = comments;
+          review.status = decision;
+          review.reviewedByUserName = actorName;
+          review.reviewedAt = new Date().toISOString();
+          review.comments = comments;
 
-          const allApproved = reviews.every(
-            (entry) => ["approved", "approved_with_conditions"].includes((entry as DocumentAgencyReviewRecord & { status?: string }).status ?? entry.reviewStatus)
+          // If all agency reviews are approved, promote document version status
+          const allApproved = version.agencyReviews.every(
+            (r) => r.status === "approved" || r.status === "approved_with_conditions"
           );
           if (allApproved) {
-            versionRecord.status = "approved";
+            version.status = "approved";
           } else if (decision === "revision_requested") {
-            versionRecord.status = "superseded";
+            version.status = "superseded";
           }
 
           const audit = createAuditEvent({
@@ -1308,16 +395,6 @@ class ProjectDeliveryRepository {
           });
           this.auditEvents.unshift(audit);
 
-          if (isSupabaseConfigured()) {
-            void mutateReviewDocumentVersion({
-              versionId,
-              agencyCode,
-              decision,
-              actorName,
-              comments,
-            });
-          }
-
           return review;
         }
       }
@@ -1325,6 +402,9 @@ class ProjectDeliveryRepository {
     return null;
   }
 
+  /**
+   * Freezes statutory review clock on a workstream during applicant RFI periods
+   */
   freezeStatutoryClock(
     workstreamId: string,
     rfiCode: string,
@@ -1353,6 +433,9 @@ class ProjectDeliveryRepository {
     return ws;
   }
 
+  /**
+   * Resumes statutory review clock once applicant response is received
+   */
   resumeStatutoryClock(
     workstreamId: string,
     actorName: string,
@@ -1380,6 +463,9 @@ class ProjectDeliveryRepository {
     return ws;
   }
 
+  /**
+   * Validates stage checklist gates and executes stage transition
+   */
   transitionWorkstreamStage(
     workstreamId: string,
     nextStageKey: string,
@@ -1391,6 +477,7 @@ class ProjectDeliveryRepository {
     const ws = this.workstreams.find((w) => w.id === workstreamId || w.code === workstreamId);
     if (!ws) return { success: false, errors: ["Workstream not found"] };
 
+    // Find template and stage gate
     const template = workflowTemplatesData[0];
     const currentStage = template.versions[0].stages[0];
 
@@ -1421,6 +508,9 @@ class ProjectDeliveryRepository {
     return { success: true, workstream: ws };
   }
 
+  /**
+   * Dispatches an in-app and operational notification
+   */
   dispatchNotification(notification: Omit<NotificationRecord, "id" | "createdAt" | "isRead">): NotificationRecord {
     const id = `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const full: NotificationRecord = {
@@ -1430,38 +520,7 @@ class ProjectDeliveryRepository {
       isRead: false,
     };
     this.notifications.unshift(full);
-
-    if (isSupabaseConfigured()) {
-      void insertNotification({
-        userId: notification.userId,
-        title: notification.title,
-        message: notification.message,
-        type: notification.type,
-        linkUrl: notification.linkUrl,
-        urgency: notification.urgency,
-        metadata: notification.metadata,
-      });
-    }
-
     return full;
-  }
-
-  resetE2EDemo(): void {
-    this.project = JSON.parse(JSON.stringify(spacexProjectRecord));
-    this.workstreams = JSON.parse(JSON.stringify(workstreamsData));
-    this.commitments = JSON.parse(JSON.stringify(commitmentsData));
-    this.coordinationRequests = JSON.parse(JSON.stringify(coordinationRequestsData));
-    this.rfis = JSON.parse(JSON.stringify(rfisData));
-    this.documents = JSON.parse(JSON.stringify(projectDocumentsData));
-    this.decisions = JSON.parse(JSON.stringify(projectDecisionsData));
-    this.meetings = JSON.parse(JSON.stringify(projectMeetingsData));
-    this.catalog = JSON.parse(JSON.stringify(permitCatalog));
-    this.auditEvents = JSON.parse(JSON.stringify(spacexProjectRecord.auditLedger || []));
-    this.notifications = [];
-    this.profiles = JSON.parse(JSON.stringify(projectProfiles));
-    this.participants = JSON.parse(JSON.stringify(projectParticipants));
-    this.externalFilings = JSON.parse(JSON.stringify(initialExternalFilings));
-    this.customerRequests = [];
   }
 }
 

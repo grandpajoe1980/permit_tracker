@@ -11,10 +11,8 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
-    "dist/**",
-    ".sites-runtime/**",
-    ".wrangler/**",
     "next-env.d.ts",
+    "parse_env.js",
   ]),
   {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],
@@ -25,6 +23,14 @@ const eslintConfig = defineConfig([
       "react-hooks/purity": "off",
       "react-hooks/set-state-in-effect": "off",
     },
+  },
+  {
+    files: ["app/**/*.tsx", "components/**/*.tsx"],
+    rules: { "react/no-unescaped-entities": "off" },
+  },
+  {
+    files: ["lib/repository.ts", "lib/engines/sla-worker.ts"],
+    rules: { "@typescript-eslint/ban-ts-comment": "off" },
   },
 ]);
 

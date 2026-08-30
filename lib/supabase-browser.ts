@@ -27,6 +27,12 @@ export function supabaseConfigured() {
   return Boolean(supabaseUrl && supabaseKey);
 }
 
+/** Fixtures are deliberately opt-in; an authenticated production session never
+ * substitutes demo records for an empty result or a database error. */
+export function demoDataMode() {
+  return process.env.NEXT_PUBLIC_PATH_DATA_MODE === "demo";
+}
+
 export async function signInWithPassword(email: string, password: string) {
   const client = getSupabaseBrowserClient();
   if (!client) return { user: null, error: new Error("Supabase is not configured.") };
@@ -103,7 +109,7 @@ export function requestRowToPermit(row: RequestRow): ServiceRequest {
   const ownerAgency = text(row, "owning_organization_name", "lead_agency") || "Louisiana Inter-Agency Task Force";
 
   return {
-    id: text(row, "confirmation_number", "case_number", "permit_number", "id"),
+    id: text(row, "confirmation_number", "case_number", "permit_number", "number", "id"),
     title: text(row, "title", "request_type") || "SpaceX Louisiana Service Request",
     type: text(row, "request_type", "permit_type", "type", "title") || "Government Service Request",
     category: reqCategory,
@@ -112,6 +118,7 @@ export function requestRowToPermit(row: RequestRow): ServiceRequest {
     organization: "Space Exploration Technologies Corp.",
     leadAgency: ownerAgency,
     leadAgencyCode: text(row, "lead_agency_code", "org_code") || "STATE",
+    agencyLevel: "State",
     submitted: dateLabel(submitted),
     targetDate: dateLabel(text(row, "due_date", "target_date")),
     currentDay,
@@ -179,7 +186,7 @@ export function requestRowToPermit(row: RequestRow): ServiceRequest {
 export async function loadRequestsForUser() {
   const client = getSupabaseBrowserClient();
   if (!client) return { permits: [] as PermitRecord[], error: new Error("Supabase is not configured.") };
-  const { data, error } = await client.from("requests").select("*").order("created_at", { ascending: false });
+  const { data, error } = await client.from("customer_requests").select("*").order("created_at", { ascending: false });
   const rows = (data ?? []) as unknown as RequestRow[];
   return { permits: rows.map((row: RequestRow) => requestRowToPermit(row)), error };
 }
@@ -187,28 +194,14 @@ export async function loadRequestsForUser() {
 export async function createRequestForUser(input: { title: string; requestType: string; description: string }) {
   const client = getSupabaseBrowserClient();
   if (!client) return { error: new Error("Supabase is not configured.") };
-  const { data: userData } = await client.auth.getUser();
-  const user = userData.user;
-  if (!user) return { error: new Error("Sign in before submitting a request.") };
-  const { data: project, error: projectError } = await client.from("projects").select("id").eq("number", "PRJ-PECAN-2026").single();
-  if (projectError || !project) return { error: projectError ?? new Error("SpaceX project is not configured.") };
-  const { data: team, error: teamError } = await client.from("organizations").select("id").eq("code", "SPACEPORT").single();
-  if (teamError || !team) return { error: teamError ?? new Error("Workspace routing is not configured.") };
-  const { error } = await client.from("requests").insert({
-    project_id: project.id,
-    submitter_id: user.id,
-    owning_organization_id: team.id,
-    request_type: input.requestType,
-    category: input.requestType,
-    title: input.title.trim(),
-    description: input.description.trim(),
-    status: "submitted",
-    current_stage: "intake",
-    priority: "normal",
-    applicant_name: String(user.user_metadata?.full_name ?? user.email ?? "SpaceX employee"),
-    organization_name: "Space Exploration Technologies Corp.",
-    status_label: "Submitted · Triage Queue",
-    total_days: 180,
+  const { data, error } = await client.rpc("rpc_create_customer_request", {
+    p_id: "",
+    p_confirmation_number: "",
+    p_project_id: "",
+    p_title: input.title.trim(),
+    p_request_type: input.requestType,
+    p_description: input.description.trim(),
   });
-  return { error };
+  const row = Array.isArray(data) ? data[0] : data;
+  return { permit: row ? requestRowToPermit(row as RequestRow) : null, error };
 }
