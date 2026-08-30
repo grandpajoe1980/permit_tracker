@@ -1,4 +1,3 @@
-// @ts-nocheck -- legacy fixture simulation; production escalation is persisted.
 import type { WorkstreamRecord } from "../domain-models";
 import { repository } from "../repository";
 import { evaluateWorkstreamEscalation } from "./escalation-engine";

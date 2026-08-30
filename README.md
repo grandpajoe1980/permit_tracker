@@ -1,5 +1,13 @@
 # Critical Path — SpaceX Louisiana Project Operations
 
+## Operational UX
+
+PATH now opens authenticated users into a role-aware workspace instead of a cockpit selector. Reviewers land on **My Work**, where prioritized cards explain why a work item is assigned, what action is required, the due date, wait time, schedule impact, and what removes it from the queue. The reusable Work Action Bar keeps **Complete Step**, **Request Information**, **Mark Blocked**, **Ask for Help / Transfer**, **Escalate**, and **Add Note** visible at the point of work.
+
+Completion and blocked flows use the existing audited workflow/repository layer. Completion shows configured requirements and the next handoff. A blocked reviewer selects a plain-language reason; PATH creates an RFI for SpaceX, a Coordination Request for another agency, an internal blocker, or a structured statutory wait, then previews recipients and the customer-safe status message.
+
+Supervisors see an operational exception queue. The State Project Office sees cross-agency exceptions. SpaceX sees a sanitized **Needs SpaceX / Needs Government / Blocked / Upcoming decisions** workspace without internal government controls. See [docs/operational-ux.md](docs/operational-ux.md) for the reviewer, supervisor, State Project Office, and SpaceX journeys.
+
 **Critical Path** is an accessible, multi-agency operational coordination and permit tracking platform for the **SpaceX Louisiana Pecan Island Launch Complex** project. It brings together state infrastructure requests, statutory permit tracking, critical path milestones, agency workload distribution, role-based access control, workflow flow editing, and executive escalation across Federal, State, and Local Louisiana departments.
 
 ---
@@ -45,20 +53,31 @@ Every project request notes the Reviewing Agency and its Jurisdiction Level:
 - **Expandable Inline Summaries**: Quick expansion of milestone steps, active blockers, assigned state owners, quick workflow actions, and next steps right within the list.
 - **Dedicated Detail Drilldown**: Complete 5-phase timeline, 3-tier escalation hierarchy (`engaged`, `escalated`, `idle`), contact channels, workflow editor toolbar, and statutory docket notices.
 
+## Customer Portal and E2E Boundary
+
+The SpaceX customer workspace opens with a project command center for the Pecan Island Launch Complex. Its primary navigation includes Project Home, My Actions, Requests & Permits, Schedule, Documents, Contacts, Help & Escalation, and Notifications. Customer-safe Schedule exposes baseline/forecast dates, dependencies, agency-owned milestones, and workstream detail without internal reviewer notes or what-if controls.
+
+Requests & Permits provides six guided intents: permit/authorization, government help/service, project question, blocker/coordination, escalation, and concierge (“I’m not sure what I need”). Permit records show prerequisites, statutory timing, official resources, agency contacts, and whether filing is PATH-supported or remains in an external authoritative system. Customer requests receive a `PATH-YYYY-NNNN` confirmation and are visible to the state project office.
+
+The customer document center creates immutable revisions with file metadata and SHA-256 tracking, exact-version downloads, and agency review assignments. Contacts and My Profile separate editable contact fields from administrator-controlled organization, role, capability, and visibility. The deterministic local demo state persists through browser refresh using `localStorage`; run `node scripts/reset-e2e-demo.mjs` before a clean E2E process.
+
+See [docs/testing/manual-e2e-guide.md](docs/testing/manual-e2e-guide.md), [docs/testing/playwright-handoff.md](docs/testing/playwright-handoff.md), and [docs/testing/playwright-scenarios.json](docs/testing/playwright-scenarios.json) for acceptance flows and stable scenario IDs.
+
 ---
 
 ## Demo Personas & Sign-In
 
-Critical Path provides direct sign-in on the main page along with an account menu in the top right and a **Quick Demo Sign-In** selector with 8 pre-configured personas:
+Critical Path provides direct sign-in on the main page along with an account menu in the top right and a **Quick Demo Sign-In** selector with 9 pre-configured personas:
 
 ### SpaceX Louisiana Program Team
 | Persona | Role | Scenario | Email |
 |---|---|---|---|
-| **Alex Martin** | Customer / Submitter | SpaceX Louisiana project lead submitting requests | `alex.martin@spacex.test` |
-| **Maya Chen** | Program Supervisor | Spaceport program supervisor managing approvals & roles | `maya.chen@spacex.test` |
-| **Jordan Lee** | Environmental Reviewer | LDEQ / environmental quality technical reviewer | `jordan.lee@spacex.test` |
-| **Sam Rivera** | Infrastructure Lead | DOTD / civil engineering and utility coordinator | `sam.rivera@spacex.test` |
-| **Riley Brooks** | Community Coordinator | Public hearings & local government liaison | `riley.brooks@spacex.test` |
+| **Alex Martin** | Customer / Submitter | SpaceX Louisiana project lead submitting requests | `alex.martin@spacex.com` |
+| **Maya Chen** | Program Supervisor | SpaceX regulatory program supervisor | `maya.chen@spacex.com` |
+| **Jordan Lee** | Environmental Reviewer | LDEQ / environmental quality technical reviewer | `jordan.lee@la.gov` |
+| **Sam Rivera** | Infrastructure Lead | DOTD / civil engineering and utility coordinator | `sam.rivera@la.gov` |
+| **Riley Brooks** | Community Coordinator | Vermilion Parish / local government liaison | `riley.brooks@vermilionparish.org` |
+| **Joe Skaggs** | PATH Administrator | LED administrator / Space Czar | `joe.skaggs@la.gov` |
 
 ### Applicant Scenarios (Password: `demo1234`)
 | Persona | Role | Scenario | Email / Username |
@@ -69,12 +88,6 @@ Critical Path provides direct sign-in on the main page along with an account men
 
 ---
 
-## Production Persistence Architecture
-
-PATH’s canonical operational store is **Supabase PostgreSQL** with Supabase Auth, RLS, and the private `path-documents` Storage bucket. The command-system migration is checked in under `supabase/migrations/`; the former D1/SQLite experiment is retired. `lib/repository.ts` is a deprecated fixture adapter for current UI/engine tests, not production persistence.
-
-The visual cockpits remain available while their data integrations are progressively moved to the persisted command service. PATH does not replace legally authoritative filing portals.
-
 ## Technical Stack & Architecture
 
 - **Framework**: Next.js (App Router) powered by Vinext (Vite 8) + React 19 + TypeScript
@@ -82,8 +95,7 @@ The visual cockpits remain available while their data integrations are progressi
 - **Data & Utilities**:
   - `lib/demo-data.ts`: Typed request entities, RAG classifications, escalation tiers, Gantt data, role definitions, and Pecan Island demo dataset.
   - `lib/permit-utils.ts`: Progress calculations, RAG aggregators, workload distribution, and plain-English intake triage.
-  - `lib/supabase-browser.ts`: Browser authentication and RLS-safe request access.
-  - `lib/command-repository.ts`: Actor-scoped persisted command queries/RPC boundary.
+  - `lib/supabase-browser.ts`: Optional Supabase integration for authenticated live workloads.
 - **Testing**: Node.js built-in test runner (`node --test tests/*.test.mjs`) covering 100% of data invariants, source contracts, UI components, and SSR output.
 
 ---
@@ -99,12 +111,3 @@ npx vinext build
 ```bash
 node --test tests/*.test.mjs
 ```
-
-### 3. Initialize and seed a development database
-
-```bash
-supabase db push
-PATH_ALLOW_DEMO_SEED=true npm run supabase:seed:command-demo
-```
-
-The seed needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, is idempotent, and refuses production execution.

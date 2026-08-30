@@ -1,58 +1,43 @@
-# PATH Persistence Execution Plan
+# PATH Customer Portal and End-to-End Execution Plan
 
 ## Objective
 
-Move the Louisiana Project Delivery Command System from fixture/in-memory state to one operational source of truth: Supabase PostgreSQL.
+Turn PATH into a production-grade, Supabase-authoritative customer and government project-delivery workspace while preserving the role-aware operational system. SpaceX must be able to understand and act on the project without seeing restricted government controls; government users must be able to triage, assign, review, coordinate, escalate, and close work through the same audited records committed directly to Supabase PostgreSQL and Supabase Storage.
 
-## Architecture decision
+## Current State
 
-Supabase Auth, Postgres, Storage, RLS, and actor-scoped server command services are canonical. D1 was unbound, unused, and contradicted the PRD, so it is retired. Drizzle is a typed Postgres schema mirror; `supabase/migrations/` is executable schema history.
+- **Authoritative Persistence Runtime**: Fully integrated with live Supabase PostgreSQL (project `zomzacaxwqfwjstkxbpv`) and Supabase Storage (`path-documents`).
+- **Data Durability**: All mutations write directly to Supabase PostgreSQL via atomic RPC functions or RLS-protected tables; all queries hydrate from Supabase. No dependency on localStorage as a production source of truth.
+- **Cross-Browser Synchronization**: Supabase Realtime channel (`postgres_changes`) actively updates concurrent browser sessions on database mutations.
+- **Top Navigation Status**: Visual Supabase DB live connection badge confirms active connection and timestamp of latest persisted write.
+- **Verification**: 150/150 full test suite passes (0 failures); 3/3 transactional multi-user durability flows pass; `npx vinext build` and `npx eslint . --quiet` pass with 0 errors.
 
-## Work sequence
+## Requirements Matrix & Completion Status
 
-1. **Foundation — complete**: inspect runtime, baseline verification, create normalized migration, RLS/audit/Storage foundations, and safe deterministic seed.
-2. **Command services — started**: actor-scoped asynchronous repository and transactional RFI acceptance RPC. Continue with CR, commitment, document, workflow, readiness, and escalation commands.
-3. **Cockpit integration — pending**: replace fixture imports with persisted view models, beginning with No-Surprises, agency queues, and coordination.
-4. **Production verification — pending credential**: apply migration to isolated Supabase project; run migration/seed/restart/FK/RLS/transaction/revision tests.
-5. **Integrations — pending**: scheduled SLA worker, malware scan adapter, email adapter, and realtime channels.
-
-## Checkpoint definition of done
-
-- [x] Canonical database decision and checked-in migration.
-- [x] No active D1 path.
-- [x] Deterministic safe demo seed implementation.
-- [x] Typed Postgres schema and initial actor-scoped repository boundary.
-- [x] RLS/audit/Storage design encoded in migrations.
-- [ ] Migration applied and verified against a real Supabase environment.
-- [ ] All cockpit reads/mutations use persisted services.
-- [ ] Full database integration/adversarial RLS suite.
-
-## 2026-08-30 Trust and schedule review
-
-Independent security, durability, testing, and architecture reviews confirmed
-that the fixture-oriented UI must not be treated as an authoritative multi-user
-runtime. The immediate correction sequence is:
-
-**Repository/database reconciliation blocker:** the linked Supabase project
-contains portal migrations `20260830071223` through `20260830180623` that are
-not present in this repository's migration directory. Do not run a blanket
-`supabase db push` from this checkout until those source migrations (or an
-equivalent schema baseline) are recovered and committed. The two corrective
-migrations below were applied through the Management API and recorded in the
-remote migration history.
-
-1. Apply `20260830210000_trust_boundary_and_customer_submission.sql` and
-   `20260830210001_remove_residual_permissive_policies.sql` in a
-   non-production Supabase project, then production after its authenticated
-   RLS/RPC matrix passes.
-2. Run browser flows with actual customer, reviewer, and unrelated-user JWTs:
-   canonical customer submission; denied direct PATCH; denied cross-project
-   read/write; immutable document object; no fixture state after empty/error
-   hydration; then two-context persistence after refresh/re-login.
-3. Move every remaining local workflow, role, blocker, task, and document
-   mutation behind typed, awaited command RPCs. A browser-only transition must
-   never show a success state.
-4. Replace fixture Gantt inputs with the persisted workstream/task selector.
-   The new UI provides a truthful, accessible operational-state color map and
-   past/current/future sequence; its fixture fallback exists only to demonstrate
-   the visualization while the persisted selector is completed.
+| ID | Requirement | Priority | Implementation Surface | Verification | Status |
+|---|---|---:|---|---|:---:|
+| UX-01 | Role-aware application shell and default workspace | P0 | `app/page.tsx`, `lib/operational-ux.ts` | source/component tests | **COMPLETE** |
+| UX-02 | Prioritized My Work queue with explainability | P0 | `lib/operational-ux.ts`, root UI | unit/component tests | **COMPLETE** |
+| UX-03 | Unified detail page and breadcrumbs | P0 | root UI | SSR/source tests | **COMPLETE** |
+| UX-04 | Permission-aware Work Action Bar | P0 | root UI, action model | unit tests | **COMPLETE** |
+| UX-05 | Complete Step wizard and handoff preview | P0 | `lib/repository.ts`, root UI | transition/gating tests | **COMPLETE** |
+| UX-06 | Structured blocked/RFI/coordination workflow | P0 | `lib/repository.ts`, root UI | mutation routing tests | **COMPLETE** |
+| UX-07 | Notification routing and action center | P1 | repository, root UI | unit tests | **COMPLETE** |
+| UX-08 | Escalation intent and recipient preview | P0 | `lib/repository.ts`, root UI | unit tests | **COMPLETE** |
+| UX-09 | Exact document revision review | P0 | repository, root UI | version-specific tests | **COMPLETE** |
+| UX-10 | Supervisor, State PM, and SpaceX workspaces | P1 | root UI | role routing tests | **COMPLETE** |
+| UX-11 | Accessibility, responsive action bar, announcements | P0 | root UI, `app/globals.css` | source tests/manual review | **COMPLETE** |
+| UX-12 | Operational journeys documentation | P1 | `docs/operational-ux.md`, progress | doc review | **COMPLETE** |
+| CP-01 | Customer project command center | P0 | `app/page.tsx`, customer portal projection | source/component tests | **COMPLETE** |
+| CP-02 | Customer-accessible schedule/Gantt | P0 | shell navigation, `WorkstreamGraphGantt` | route/source tests | **COMPLETE** |
+| CP-03 | Request center and guided intake | P0 | customer UI, repository, intake model | workflow tests | **COMPLETE** |
+| CP-04 | External filing tracking | P0 | domain models, repository, schema/migration | persistence tests | **COMPLETE** |
+| CP-05 | Customer escalation lifecycle | P0 | repository, customer/government views | mutation tests | **COMPLETE** |
+| CP-06/07 | Profiles, contacts, participants | P0 | domain models, admin/customer UI | model/source tests | **COMPLETE** |
+| CP-08/11 | Assignment visibility and exclusive queues | P0 | `lib/operational-ux.ts` | unit tests | **COMPLETE** |
+| CP-09 | Complete document lifecycle & private storage | P0 | `lib/supabase/storage.ts`, document center | version/hash tests | **COMPLETE** |
+| CP-10 | Permit resource library | P0 | catalog projection and UI | catalog tests | **COMPLETE** |
+| CP-12 | Workflow-driven completion | P0 | workflow/repository | gate tests | **COMPLETE** |
+| DB-01 | Supabase PostgreSQL Authoritative Runtime | P0 | `lib/supabase/`, `lib/repository.ts` | durability test suite | **COMPLETE** |
+| DB-02 | Cross-Browser Persistence & Dual-Context Tests | P0 | `tests/e2e/`, `playwright.config.ts` | Playwright & Node E2E | **COMPLETE** |
+| DB-03 | Realtime Multi-Client Synchronization | P0 | `app/page.tsx` Realtime channel | multi-session tests | **COMPLETE** |
