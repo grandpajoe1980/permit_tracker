@@ -117,9 +117,32 @@ import {
   signOutBrowser,
   supabaseConfigured,
 } from "@/lib/supabase-browser";
-import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
+import { SpaceXNoSurprises } from "@/components/cockpits/SpaceXNoSurprises";
+import { DailyCommandCenter } from "@/components/cockpits/DailyCommandCenter";
+import { WorkstreamGraphGantt } from "@/components/cockpits/WorkstreamGraphGantt";
+import { InteragencyCoordinationPanel } from "@/components/cockpits/InteragencyCoordinationPanel";
+import { DocumentVaultPanel } from "@/components/cockpits/DocumentVaultPanel";
+import { CommitmentsDecisionsPanel } from "@/components/cockpits/CommitmentsDecisionsPanel";
+import { WorkflowDesignerPanel } from "@/components/cockpits/WorkflowDesignerPanel";
+import { PreApplicationReadinessPanel } from "@/components/cockpits/PreApplicationReadinessPanel";
+import { ExecutiveBriefingReport } from "@/components/cockpits/ExecutiveBriefingReport";
+import { PublicTransparencyPortal } from "@/components/cockpits/PublicTransparencyPortal";
 
 type View = "portal" | "detail" | "admin";
+type CockpitMode =
+  | "nosurprises"
+  | "daily"
+  | "gantt"
+  | "coordination"
+  | "vault"
+  | "commitments"
+  | "workflow"
+  | "readiness"
+  | "governor"
+  | "public"
+  | "workspace";
+
+
 
 function categoryIcon(category: RequestCategory) {
   switch (category) {
@@ -206,9 +229,11 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 export default function Home() {
   const [view, setView] = useState<View>("portal");
+  const [activeCockpit, setActiveCockpit] = useState<CockpitMode>("nosurprises");
   const [currentUser, setCurrentUser] = useState<DemoAccount | null>(null);
   const [selectedPermitId, setSelectedPermitId] = useState<string | null>(null);
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({ "TASK-T001": true });
+
 
   // Filter States
   const [statusFilter, setStatusFilter] = useState<"all" | "green" | "yellow" | "red" | "critical">("all");
@@ -384,6 +409,21 @@ export default function Home() {
     setSelectedPermitId(permitId);
     setIsEditingFlow(false);
     setView("detail");
+  }
+
+  function handleSelectWorkstream(wsId: string) {
+    const workstreamMapping: Record<string, string> = {
+      "WS-LA82-HEAVYHAUL": "TASK-T001",
+      "WS-SUBSTATION-230KV": "TASK-T002",
+      "WS-WASTEWATER-DELUGE": "TASK-T003",
+      "WS-HIGHBAY-OSFM": "TASK-T004",
+      "WS-PUBLIC-SAFETY-AIRSPACE": "TASK-T005",
+      "WS-WETLANDS-PAD-A": "TASK-T006",
+      "WS-GAS-LNG-PIPELINE": "TASK-T002",
+      "WS-WORKFORCE-CONSORTIUM": "TASK-T004",
+    };
+    const targetPermitId = workstreamMapping[wsId] || (wsId.startsWith("TASK-") ? wsId : "TASK-T001");
+    openPermit(targetPermitId);
   }
 
   function toggleCardExpanded(permitId: string) {
@@ -985,6 +1025,160 @@ export default function Home() {
                 <span>{userPermits.length} Total Requests</span>
               </button>
             </div>
+
+            {/* =================================================================== */}
+            {/* LOUISIANA PROJECT DELIVERY COMMAND SYSTEM COCKPIT SELECTOR          */}
+            {/* =================================================================== */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm">
+              <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-1">
+                <Button
+                  variant={activeCockpit === "nosurprises" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setActiveCockpit("nosurprises")}
+                  className={`text-xs font-bold gap-1.5 ${
+                    activeCockpit === "nosurprises"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  🚀 SpaceX No-Surprises
+                </Button>
+                <Button
+                  variant={activeCockpit === "daily" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setActiveCockpit("daily")}
+                  className={`text-xs font-bold gap-1.5 ${
+                    activeCockpit === "daily"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  ⚡ Daily Command Center
+                </Button>
+                <Button
+                  variant={activeCockpit === "gantt" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setActiveCockpit("gantt")}
+                  className={`text-xs font-bold gap-1.5 ${
+                    activeCockpit === "gantt"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  📊 Schedule & Variance
+                </Button>
+                <Button
+                  variant={activeCockpit === "coordination" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setActiveCockpit("coordination")}
+                  className={`text-xs font-bold gap-1.5 ${
+                    activeCockpit === "coordination"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  🤝 Interagency CRs & RFIs
+                </Button>
+                <Button
+                  variant={activeCockpit === "vault" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setActiveCockpit("vault")}
+                  className={`text-xs font-bold gap-1.5 ${
+                    activeCockpit === "vault"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  🗄️ Document Vault
+                </Button>
+                <Button
+                  variant={activeCockpit === "commitments" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setActiveCockpit("commitments")}
+                  className={`text-xs font-bold gap-1.5 ${
+                    activeCockpit === "commitments"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  ⚖️ Commitments & Decisions
+                </Button>
+                <Button
+                  variant={activeCockpit === "workflow" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setActiveCockpit("workflow")}
+                  className={`text-xs font-bold gap-1.5 ${
+                    activeCockpit === "workflow"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  🛠️ Workflow Designer & Catalog
+                </Button>
+                <Button
+                  variant={activeCockpit === "readiness" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setActiveCockpit("readiness")}
+                  className={`text-xs font-bold gap-1.5 ${
+                    activeCockpit === "readiness"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  📋 Pre-App Readiness
+                </Button>
+                <Button
+                  variant={activeCockpit === "governor" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setActiveCockpit("governor")}
+                  className={`text-xs font-bold gap-1.5 ${
+                    activeCockpit === "governor"
+                      ? "bg-amber-600 text-white shadow-sm"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  🏛️ Governor's Briefing
+                </Button>
+                <Button
+                  variant={activeCockpit === "public" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setActiveCockpit("public")}
+                  className={`text-xs font-bold gap-1.5 ${
+                    activeCockpit === "public"
+                      ? "bg-teal-700 text-white shadow-sm"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  🌐 Vermilion Parish Portal
+                </Button>
+                <Button
+                  variant={activeCockpit === "workspace" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setActiveCockpit("workspace")}
+                  className={`text-xs font-bold gap-1.5 ${
+                    activeCockpit === "workspace"
+                      ? "bg-[#00284d] text-white shadow-sm"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  📑 Detailed Requests & Triage
+                </Button>
+              </div>
+            </div>
+
+            {/* Render Selected Cockpit */}
+            {activeCockpit === "nosurprises" && <SpaceXNoSurprises onSelectWorkstream={handleSelectWorkstream} />}
+            {activeCockpit === "daily" && <DailyCommandCenter />}
+            {activeCockpit === "gantt" && <WorkstreamGraphGantt />}
+            {activeCockpit === "coordination" && <InteragencyCoordinationPanel />}
+            {activeCockpit === "vault" && <DocumentVaultPanel />}
+            {activeCockpit === "commitments" && <CommitmentsDecisionsPanel />}
+            {activeCockpit === "workflow" && <WorkflowDesignerPanel />}
+            {activeCockpit === "readiness" && <PreApplicationReadinessPanel />}
+            {activeCockpit === "governor" && <ExecutiveBriefingReport />}
+            {activeCockpit === "public" && <PublicTransparencyPortal />}
+
+
 
             {/* =================================================================== */}
             {/* INLINE SIGN-IN BOX (Directly on first page when not logged in)      */}

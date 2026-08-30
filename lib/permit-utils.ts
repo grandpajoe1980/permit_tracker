@@ -351,3 +351,120 @@ export function parsePlainEnglishIntake(text: string): IntakeTriageResult {
     statutoryNotice,
   };
 }
+
+// ==========================================
+// LOUISIANA PROJECT DELIVERY COMMAND SYSTEM HELPERS
+// ==========================================
+
+import {
+  registeredOrganizations,
+  permitCatalog,
+  workflowTemplatesData,
+  commitmentsData,
+  coordinationRequestsData,
+  rfisData,
+  projectDocumentsData,
+  projectDecisionsData,
+  projectMeetingsData,
+  workstreamsData,
+  spacexProjectRecord,
+} from "./spacex-megaproject-fixture";
+import { generateSixQuestionsSummary } from "./engines/workflow-engine";
+import { evaluateProjectSchedule } from "./engines/schedule-engine";
+import { evaluateWorkstreamEscalation } from "./engines/escalation-engine";
+import { getAgencyCoordinationViews, groupIntoConsolidatedBatch } from "./engines/coordination-engine";
+
+export function getFullProjectRecord() {
+  return spacexProjectRecord;
+}
+
+export function getRegisteredOrganizations() {
+  return registeredOrganizations;
+}
+
+export function getPermitCatalog() {
+  return permitCatalog;
+}
+
+export function getWorkflowTemplates() {
+  return workflowTemplatesData;
+}
+
+export function getSpaceXNoSurprisesData() {
+  const wsList = spacexProjectRecord.workstreams;
+
+  // 1. Needs SpaceX (items waiting on applicant / RFIs)
+  const needsSpaceX = wsList
+    .filter((ws) => ws.operationalState === "waiting_applicant" || ws.customerActionRequired !== "None")
+    .map((ws) => ({
+      workstream: ws,
+      actionRequired: ws.customerActionRequired,
+      dueDate: ws.forecastTargetDate,
+      context: generateSixQuestionsSummary(ws),
+    }));
+
+  // 2. Needs Government (items SpaceX has delivered, owned by government)
+  const needsGovernment = wsList
+    .filter((ws) => ws.operationalState === "running" || ws.operationalState === "statutory_waiting_period")
+    .map((ws) => ({
+      workstream: ws,
+      ownerOrg: ws.regulatoryLead.orgName,
+      ownerPerson: ws.regulatoryLead.assignedReviewerName,
+      targetDate: ws.forecastTargetDate,
+      context: generateSixQuestionsSummary(ws),
+    }));
+
+  // 3. Blocked (actual impediments with variance / critical path)
+  const blocked = wsList
+    .filter((ws) => ws.operationalState === "blocked" || ws.scheduleVarianceDays > 5)
+    .map((ws) => ({
+      workstream: ws,
+      blockerTitle: ws.waitingReason || "Interagency Dependency",
+      scheduleImpactDays: ws.scheduleVarianceDays,
+      unblockingAction: ws.customerActionRequired || ws.currentActionSummary,
+      context: generateSixQuestionsSummary(ws),
+    }));
+
+  // 4. Upcoming Decisions & Milestones
+  const upcomingMilestones = wsList.map((ws) => ({
+    workstream: ws,
+    milestoneTitle: ws.nextExpectedEvent,
+    targetDate: ws.forecastTargetDate,
+    isCriticalPath: ws.isCriticalPath,
+    ragHealth: ws.ragHealth,
+    context: generateSixQuestionsSummary(ws),
+  }));
+
+  return {
+    needsSpaceX,
+    needsGovernment,
+    blocked,
+    upcomingMilestones,
+    commitments: commitmentsData,
+    schedule: evaluateProjectSchedule(wsList),
+  };
+}
+
+export function getDailyCommandCenterExceptions() {
+  const wsList = spacexProjectRecord.workstreams;
+  const newBlockers = wsList.filter((ws) => ws.operationalState === "blocked");
+  const overdueCommitments = commitmentsData.filter((c) => c.status === "at_risk" || c.status === "missed");
+  const escalatedItems = wsList
+    .map((ws) => ({ ws, esc: evaluateWorkstreamEscalation(ws) }))
+    .filter((item) => item.esc.isEscalated);
+  const nearDeadlines = wsList.filter((ws) => ws.scheduleVarianceDays > 0 || ws.isCriticalPath);
+
+  return {
+    blockerCount: newBlockers.length,
+    overdueCommitmentCount: overdueCommitments.length,
+    escalationCount: escalatedItems.length,
+    nearDeadlineCount: nearDeadlines.length,
+    newBlockers,
+    overdueCommitments,
+    escalatedItems,
+    nearDeadlines,
+    coordinationRequests: coordinationRequestsData,
+    consolidatedRfiBatch: groupIntoConsolidatedBatch(rfisData),
+  };
+}
+
