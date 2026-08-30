@@ -27,7 +27,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getDailyCommandCenterExceptions } from "@/lib/permit-utils";
 import { runDailySlaEscalationScan, type SlaScanResult } from "@/lib/engines/sla-worker";
 
-export function DailyCommandCenter() {
+interface DailyCommandCenterProps {
+  onSelectProject?: (workstreamId?: string) => void;
+  onSelectWorkstream?: (wsId: string) => void;
+}
+
+export function DailyCommandCenter({ onSelectProject, onSelectWorkstream }: DailyCommandCenterProps = {}) {
   const exceptions = getDailyCommandCenterExceptions();
   const [reviewActive, setReviewActive] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -49,6 +54,7 @@ export function DailyCommandCenter() {
   const reviewQueue = [
     {
       id: "item-1",
+      workstreamId: "WS-LA82-HEAVYHAUL",
       category: "Blocker Intervention",
       badgeClass: "bg-rose-100 text-rose-800 border-rose-200",
       title: "LA-82 Heavy-Haul: CPRA Drainage Concurrence (CR-00451)",
@@ -59,6 +65,7 @@ export function DailyCommandCenter() {
     },
     {
       id: "item-2",
+      workstreamId: "WS-WETLANDS-PAD-A",
       category: "Overdue Commitment",
       badgeClass: "bg-amber-100 text-amber-800 border-amber-200",
       title: "USACE Section 404 Completeness Letter (COM-003)",
@@ -69,6 +76,7 @@ export function DailyCommandCenter() {
     },
     {
       id: "item-3",
+      workstreamId: "WS-LA82-HEAVYHAUL",
       category: "Applicant RFI Response",
       badgeClass: "bg-indigo-100 text-indigo-800 border-indigo-200",
       title: "SpaceX Rev 9 Axle Load Distribution Drawings (RFI-2026-0042)",
@@ -79,6 +87,7 @@ export function DailyCommandCenter() {
     },
     {
       id: "item-4",
+      workstreamId: "WS-WASTEWATER-DELUGE",
       category: "Escalation Tier 2",
       badgeClass: "bg-purple-100 text-purple-800 border-purple-200",
       title: "LDEQ Deluge Basin Public Hearing Comments (WS-WASTEWATER-DELUGE)",
@@ -315,7 +324,14 @@ export function DailyCommandCenter() {
                   )}
                 </div>
                 <CardTitle className="text-base font-bold text-slate-900 mt-2">
-                  {item.title}
+                  <button
+                    type="button"
+                    onClick={() => (onSelectWorkstream ?? onSelectProject)?.(item.workstreamId)}
+                    className="text-left hover:text-indigo-600 hover:underline cursor-pointer transition-colors"
+                    title="View workstream on project page"
+                  >
+                    {item.title}
+                  </button>
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-500">
                   {item.owner}
@@ -326,9 +342,13 @@ export function DailyCommandCenter() {
                   {item.description}
                 </p>
                 <div className="pt-2 flex items-center justify-between border-t border-slate-100">
-                  <span className="text-[11px] font-semibold text-indigo-600">
-                    Target: Action required today
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => (onSelectWorkstream ?? onSelectProject)?.(item.workstreamId)}
+                    className="text-[11px] font-semibold text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    View on project page →
+                  </button>
                   <Button
                     variant="ghost"
                     size="sm"

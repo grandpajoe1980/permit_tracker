@@ -30,6 +30,7 @@ import type { WorkstreamRecord } from "@/lib/domain-models";
 
 interface Props {
   onSelectWorkstream?: (wsId: string) => void;
+  onSelectProject?: (workstreamId?: string) => void;
 }
 
 function formatDateUtc(dateStr: string): string {
@@ -56,7 +57,7 @@ function formatDateUtc(dateStr: string): string {
       });
 }
 
-export function SpaceXNoSurprises({ onSelectWorkstream }: Props) {
+export function SpaceXNoSurprises({ onSelectWorkstream, onSelectProject }: Props) {
   const data = getSpaceXNoSurprisesData();
   const [selectedQuad, setSelectedQuad] = useState<"all" | "needsSpaceX" | "needsGov" | "blocked" | "milestones">("all");
 
@@ -77,7 +78,18 @@ export function SpaceXNoSurprises({ onSelectWorkstream }: Props) {
               <Badge className="bg-indigo-500/20 text-indigo-200 border-indigo-500/30">
                 SpaceX Executive Delivery Cockpit
               </Badge>
-              <span className="text-xs text-slate-400">Pecan Island Launch Complex Operations</span>
+              {(onSelectProject || onSelectWorkstream) ? (
+                <button
+                  type="button"
+                  onClick={() => (onSelectProject ?? onSelectWorkstream)?.("")}
+                  className="text-xs text-slate-300 hover:text-white hover:underline cursor-pointer transition-colors"
+                  title="Go to SpaceX Pecan Island project page"
+                >
+                  Pecan Island Launch Complex Operations →
+                </button>
+              ) : (
+                <span className="text-xs text-slate-400">Pecan Island Launch Complex Operations</span>
+              )}
             </div>
             <h1 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">
               No-Surprises Delivery Dashboard

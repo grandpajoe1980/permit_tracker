@@ -282,9 +282,17 @@ export function DocumentVaultPanel({
                   <h3 className="text-sm font-bold text-slate-900 mt-1.5 line-clamp-1">{doc.title}</h3>
 
                   {doc.workstreamTitle && (
-                    <div className="text-[11px] font-semibold text-teal-800 mt-0.5 truncate">
-                      {doc.workstreamTitle}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectWorkstream?.(doc.workstreamId);
+                      }}
+                      className="text-[11px] font-semibold text-teal-800 hover:underline mt-0.5 truncate text-left cursor-pointer transition-colors"
+                      title="Open workstream in project page"
+                    >
+                      {doc.workstreamTitle} →
+                    </button>
                   )}
 
                   <div className="mt-2.5 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 pt-2">

@@ -162,10 +162,12 @@ export const STATE_COLOR_MAP: Record<OperationalState, StateStyleConfig> = {
 export function WorkstreamGraphGantt({
   customerSafe = false,
   onSelectWorkstream,
+  onSelectProject,
   project: projectOverride,
 }: {
   customerSafe?: boolean;
   onSelectWorkstream?: (workstreamId: string) => void;
+  onSelectProject?: (workstreamId?: string) => void;
   project?: ProjectRecord;
 }) {
   const project = projectOverride ?? getFullProjectRecord();
@@ -263,7 +265,18 @@ export function WorkstreamGraphGantt({
               <Badge className="bg-purple-100 text-purple-800 border-purple-200">
                 {customerSafe ? "Customer-safe project schedule" : "Critical Path Execution Graph & Intelligence"}
               </Badge>
-              <span className="text-xs font-mono text-slate-500">{project.code}</span>
+              {(onSelectProject || onSelectWorkstream) ? (
+                <button
+                  type="button"
+                  onClick={() => (onSelectProject ?? onSelectWorkstream)?.("")}
+                  className="text-xs font-mono text-slate-500 hover:text-indigo-600 hover:underline cursor-pointer transition-colors"
+                  title="Go to project page"
+                >
+                  {project.code}
+                </button>
+              ) : (
+                <span className="text-xs font-mono text-slate-500">{project.code}</span>
+              )}
             </div>
             <h1 className="mt-2 text-2xl font-black text-slate-900">
               {customerSafe ? "SpaceX project schedule" : "Project Delivery Schedule & Variance Engine"}

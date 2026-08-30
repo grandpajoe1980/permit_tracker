@@ -32,7 +32,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getFullProjectRecord } from "@/lib/permit-utils";
 import { generateGovernorWeeklyBriefing } from "@/lib/engines/report-engine";
 
-export function ExecutiveBriefingReport() {
+interface ExecutiveBriefingReportProps {
+  onSelectProject?: () => void;
+  onSelectWorkstream?: (wsId: string) => void;
+}
+
+export function ExecutiveBriefingReport({ onSelectProject, onSelectWorkstream }: ExecutiveBriefingReportProps = {}) {
   const project = getFullProjectRecord();
   const briefing = generateGovernorWeeklyBriefing(
     project,
@@ -120,7 +125,18 @@ export function ExecutiveBriefingReport() {
                     State of Louisiana · Executive Project Office
                   </div>
                   <CardTitle className="text-xl font-black text-slate-900 mt-0.5">
-                    {briefing.projectTitle}
+                    {onSelectProject ? (
+                      <button
+                        type="button"
+                        onClick={onSelectProject}
+                        className="text-left hover:text-amber-700 hover:underline cursor-pointer transition-colors"
+                        title="Go to project page"
+                      >
+                        {briefing.projectTitle}
+                      </button>
+                    ) : (
+                      briefing.projectTitle
+                    )}
                   </CardTitle>
                   <CardDescription className="text-xs text-slate-500">
                     Applicant: {briefing.applicantName} · Location: {briefing.parish} · Period: {briefing.reportPeriod}

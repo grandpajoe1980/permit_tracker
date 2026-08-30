@@ -223,7 +223,7 @@ export type ProjectOverview = {
   nextMilestone: { title: string; date: string; owner: string };
   scheduleDrivers: string[];
   customerActions: Array<{ label: string; detail: string; count: number }>;
-  governmentActions: Array<{ title: string; agency: string; stage: string; targetDate: string; customerAction: string }>;
+  governmentActions: Array<{ id: string; title: string; agency: string; stage: string; targetDate: string; customerAction: string }>;
   blockers: Array<{ title: string; owner: string; impact: string; expectedResolution: string }>;
   upcomingEvents: Array<{ title: string; date: string; type: string; detail: string }>;
 };
@@ -251,7 +251,7 @@ export function getProjectOverview(project: ProjectRecord, workstreams: Workstre
       { label: "External filings being tracked", detail: "Manual status updates from agency systems", count: filingsInProgress },
       { label: "Documents requested", detail: "Supporting versions and receipts", count: project.documents.reduce((count, document) => count + document.versions.length, 0) },
     ],
-    governmentActions: active.slice(0, 6).map((workstream) => ({ title: workstream.title, agency: workstream.regulatoryLead.orgName, stage: workstream.currentStageName ?? workstream.operationalStateLabel, targetDate: workstream.forecastTargetDate, customerAction: workstream.customerActionRequired })),
+    governmentActions: active.slice(0, 6).map((workstream) => ({ id: workstream.id, title: workstream.title, agency: workstream.regulatoryLead.orgName, stage: workstream.currentStageName ?? workstream.operationalStateLabel, targetDate: workstream.forecastTargetDate, customerAction: workstream.customerActionRequired })),
     blockers: blockers.slice(0, 5).map((workstream) => ({ title: workstream.waitingReason ?? workstream.currentActionSummary, owner: workstream.waitingOnEntity ?? workstream.regulatoryLead.orgName, impact: workstream.isCriticalPath ? "Critical path impact" : `${workstream.scheduleVarianceDays} day schedule variance`, expectedResolution: workstream.nextExpectedEvent })),
     upcomingEvents: project.meetings.map((meeting) => ({ title: meeting.title, date: meeting.meetingDate, type: "Meeting", detail: meeting.locationOrLink })).concat(project.decisions.map((decision) => ({ title: decision.title, date: decision.decisionDate, type: "Decision", detail: decision.decisionSummary }))).slice(0, 8),
   };
