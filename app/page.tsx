@@ -15,11 +15,12 @@ import {
   ChevronDown,
   ClipboardCheck,
   Clock3,
-  FileCheck2,
-  FileText,
   Download,
   ExternalLink,
+  Eye,
+  FileCheck2,
   FilePlus2,
+  FileText,
   Gauge,
   HelpCircle,
   Info,
@@ -38,6 +39,7 @@ import {
   Send,
   Settings2,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
   User,
   UserCog,
@@ -50,6 +52,8 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { AdminDirectory } from "@/components/admin/AdminDirectory";
+import { DocumentViewerModal } from "@/components/documents/DocumentViewerModal";
+import type { DocumentRecord, DocumentVersionRecord } from "@/lib/domain-models";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -228,7 +232,7 @@ export default function Home() {
     }
   });
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [showDemoPeople, setShowDemoPeople] = useState(false);
+  const [showDemoPeople, setShowDemoPeople] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -267,6 +271,8 @@ export default function Home() {
   const [profileDraft, setProfileDraft] = useState({ displayTitle: "", organizationalUnit: "", workEmail: "", officePhone: "", mobilePhone: "", officeLocation: "", preferredContactMethod: "email" as "email" | "phone" | "text" | "teams", availabilityStatus: "available" as "available" | "limited" | "out_of_office" });
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("saved");
   const [lastSavedTime, setLastSavedTime] = useState<string>("");
+  const [viewerModalDoc, setViewerModalDoc] = useState<DocumentRecord | null>(null);
+  const [viewerModalVer, setViewerModalVer] = useState<DocumentVersionRecord | undefined>(undefined);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const usernameRef = useRef<HTMLInputElement>(null);
 
@@ -331,8 +337,8 @@ export default function Home() {
       setUserPermits(permits);
       setRoute("my-work");
     });
-    const { data: listener } = client.auth.onAuthStateChange((_event: string, session: { user?: { email?: string | null; user_metadata?: Record<string, unknown> } } | null) => {
-      if (!session?.user) {
+    const { data: listener } = client.auth.onAuthStateChange((event: string, session: { user?: { email?: string | null; user_metadata?: Record<string, unknown> } } | null) => {
+      if (event === "SIGNED_OUT") {
         setCurrentUser(null);
         setCurrentPersona(null);
         setUserPermits(pecanIslandRequests);
@@ -1033,7 +1039,115 @@ export default function Home() {
 
   function renderCustomerDocuments() {
     const documents = repository.getDocuments();
-    return <div className="space-y-6"><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer document center</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">Documents</h1><p className="mt-2 text-sm text-slate-600">Upload a new immutable revision, download exact versions, and see whether an authorized agency review is pending.</p></div><label htmlFor="customer-document-upload" className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-[#00284d] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#003c70]"><UploadCloud className="size-4" /> Upload new revision<input id="customer-document-upload" type="file" className="sr-only" onChange={(event) => void uploadCustomerRevision(event)} /></label></div>{documents.map((document) => <Card key={document.id}><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">{document.title}</CardTitle><p className="mt-1 text-sm text-slate-600">{document.category.replaceAll("_", " ")} · {document.ownerOrgCode} · {document.versions.length} immutable version(s)</p></div><span className="rounded-full bg-teal-50 px-2 py-1 text-[10px] font-black uppercase text-teal-800">Current v{document.currentVersionNumber}.0</span></div></CardHeader><CardContent className="space-y-3">{document.versions.map((version) => <div key={version.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{version.versionTag} · {version.fileName}</p><p className="mt-1 text-xs text-slate-500">Uploaded {formatDate(version.uploadedAt)} by {version.uploadedByName} · SHA-256 {version.sha256Hash.slice(0, 12)}…</p><p className="mt-1 text-xs font-bold uppercase text-slate-600">{version.status ?? "recorded"}</p></div><Button type="button" variant="outline" onClick={() => downloadVersion(document.id, version.id)} className="text-xs font-bold"><Download className="size-3.5" /> Download exact version</Button></div>)}</CardContent></Card>)}</div>;
+    return <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer document center</p>
+          <h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">Documents & Engineering Packages</h1>
+          <p className="mt-2 text-sm text-slate-600">Upload new immutable revisions, download verified packages, inspect cryptographic SHA-256 hashes, and track interagency certifications.</p>
+        </div>
+        <label htmlFor="customer-document-upload" className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-[#00284d] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#003c70]">
+          <UploadCloud className="size-4" /> Upload new revision
+          <input id="customer-document-upload" type="file" className="sr-only" onChange={(event) => void uploadCustomerRevision(event)} />
+        </label>
+      </div>
+
+      <div className="space-y-4">
+        {documents.map((document) => {
+          const latestVer = document.versions[0];
+          const approvedReviews = document.agencyReviews.filter((r) => r.reviewStatus === "approved");
+          return (
+            <Card key={document.id}>
+              <CardHeader>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-lg font-black text-[#00284d]">{document.title}</CardTitle>
+                      <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-black uppercase text-teal-800 border border-teal-200">
+                        v{document.currentVersionNumber}.0
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-600">
+                      {document.category.replaceAll("_", " ")} · {document.ownerOrgCode} · {document.versions.length} immutable version(s)
+                      {document.workstreamTitle && ` · ${document.workstreamTitle}`}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        setViewerModalDoc(document);
+                        setViewerModalVer(latestVer);
+                      }}
+                      className="bg-[#00284d] hover:bg-[#003c70] text-white text-xs font-bold gap-1.5"
+                    >
+                      <Eye className="size-3.5" /> View & Inspect
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void downloadVersion(document.id, latestVer?.id || "")}
+                      className="text-xs font-bold gap-1.5"
+                    >
+                      <Download className="size-3.5" /> Download
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2 font-mono">
+                    <ShieldCheck className="size-4 text-emerald-600" />
+                    <span className="text-slate-700">SHA-256: {latestVer?.sha256Hash?.slice(0, 20)}…</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500">{approvedReviews.length}/{document.agencyReviews.length} Agency Certifications</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {document.versions.map((version) => (
+                    <div key={version.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3 bg-white">
+                      <div>
+                        <p className="text-sm font-black text-[#00284d]">{version.versionTag} · {version.fileName}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Uploaded {formatDate(version.uploadedAt)} by {version.uploadedByName} · {(version.fileSizeBytes / (1024 * 1024)).toFixed(1)} MB
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setViewerModalDoc(document);
+                            setViewerModalVer(version);
+                          }}
+                          className="text-xs font-bold text-teal-800 hover:bg-teal-50"
+                        >
+                          <Eye className="size-3.5 mr-1" /> View
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void downloadVersion(document.id, version.id)}
+                          className="text-xs font-bold"
+                        >
+                          <Download className="size-3.5 mr-1" /> Download
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </div>;
   }
 
   function renderContacts() {
@@ -1058,7 +1172,7 @@ export default function Home() {
   }
 
   function renderSecondary() {
-    return <div className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Government tools</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">{secondaryTool === "schedule" ? "Schedule" : secondaryTool === "vault" ? "Document Vault" : "Permit Catalog"}</h1></div><div className="flex flex-wrap gap-2">{([["schedule", "Schedule"], ["vault", "Document Vault"], ["catalog", "Permit Catalog"]] as Array<[SecondaryTool, string]>).map(([tool, label]) => <Button key={tool} type="button" variant={secondaryTool === tool ? "default" : "outline"} onClick={() => setSecondaryTool(tool)} className="text-xs font-bold">{label}</Button>)}</div></div>{secondaryTool === "schedule" && <WorkstreamGraphGantt onSelectWorkstream={(workstreamId) => { const item = workItems.find((entry) => entry.workstreamId === workstreamId || entry.sourceId === workstreamId); if (item) openItem(item); }} />}{secondaryTool === "vault" && <DocumentVaultPanel onUploadRevision={(event) => void uploadProjectRevision(event, activePersona.organization)} />}{secondaryTool === "catalog" && <WorkflowDesignerPanel />}</div>;
+    return <div className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Government tools</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 text-3xl font-black text-[#00284d] outline-none">{secondaryTool === "schedule" ? "Schedule" : secondaryTool === "vault" ? "Document Vault" : "Permit Catalog"}</h1></div><div className="flex flex-wrap gap-2">{([["schedule", "Schedule"], ["vault", "Document Vault"], ["catalog", "Permit Catalog"]] as Array<[SecondaryTool, string]>).map(([tool, label]) => <Button key={tool} type="button" variant={secondaryTool === tool ? "default" : "outline"} onClick={() => setSecondaryTool(tool)} className="text-xs font-bold">{label}</Button>)}</div></div>{secondaryTool === "schedule" && <WorkstreamGraphGantt onSelectWorkstream={(workstreamId) => { const item = workItems.find((entry) => entry.workstreamId === workstreamId || entry.sourceId === workstreamId); if (item) openItem(item); }} />}{secondaryTool === "vault" && <DocumentVaultPanel onUploadRevision={(event) => void uploadProjectRevision(event, activePersona.organization)} onDownloadDocument={(docId, verId) => void downloadVersion(docId, verId)} onSelectWorkstream={(workstreamId) => { const item = workItems.find((entry) => entry.workstreamId === workstreamId || entry.sourceId === workstreamId); if (item) openItem(item); }} />}{secondaryTool === "catalog" && <WorkflowDesignerPanel />}</div>;
   }
 
   function renderAdmin() {
@@ -1075,11 +1189,39 @@ export default function Home() {
     const request = selectedItem.sourceRequest;
     const escalationPath = request?.escalationPath ?? [];
     const audit = repository.getAuditEvents().filter((event) => event.entityId === selectedItem.workstreamId || event.entityId === selectedItem.sourceId).slice(0, 6);
+
+    const wsDocs = selectedItem.workstreamId ? repository.getDocumentsByWorkstreamId(selectedItem.workstreamId) : [];
+    const docsToDisplay = wsDocs.length > 0 ? wsDocs : selectedItem.documents.length > 0 ? selectedItem.documents.map((d) => ({
+      id: d.id,
+      projectId: projectRecord.id,
+      workstreamId: selectedItem.workstreamId,
+      workstreamTitle: selectedItem.workstreamTitle,
+      title: d.label,
+      category: "engineering_drawing",
+      ownerOrgCode: "SPACEX",
+      currentVersionNumber: 1,
+      isConfidential: false,
+      versions: [{
+        id: `v-${d.id}`,
+        documentId: d.id,
+        versionTag: d.version ?? "v1.0",
+        fileName: `${d.label}.pdf`,
+        fileSizeBytes: 24500000,
+        mimeType: "application/pdf",
+        storageUri: `vault/${d.id}`,
+        sha256Hash: "8a4f9b8c2e1d0f5a7b6c3e9d8f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a",
+        uploadedByName: "SpaceX Engineering",
+        isMalwareClean: true,
+        uploadedAt: new Date().toISOString(),
+      }],
+      agencyReviews: [],
+    })) : [];
+
     return <div className="space-y-5"><nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500"><button type="button" onClick={() => navigate("my-work")} className="text-teal-800 underline-offset-2 hover:underline">My Work</button><span aria-hidden="true">›</span><span>SpaceX Pecan Island</span><span aria-hidden="true">›</span><span>{selectedItem.workstreamTitle}</span><span aria-hidden="true">›</span><span className="text-slate-800">{selectedItem.title}</span></nav>
       <section className="rounded-2xl border border-teal-300 bg-white p-5 shadow-md sm:p-7"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-teal-800">{customer ? "PROJECT STATUS" : "YOUR ASSIGNMENT"}</p><h1 ref={headingRef} tabIndex={-1} className="mt-2 max-w-3xl text-2xl font-black tracking-tight text-[#00284d] outline-none sm:text-4xl">{customer ? sanitizeCustomerItem(selectedItem).title : selectedItem.title}</h1><p className="mt-2 text-sm font-semibold text-slate-600">{selectedItem.workstreamTitle}</p></div><span className={`rounded-full border px-3 py-1.5 text-xs font-black uppercase ${toneClasses(selectedItem.statusTone).badge}`}>{selectedItem.statusLabel}</span></div><div className="mt-6 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-4"><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Assignment</p><p className="mt-1 font-black text-[#00284d]">{customer ? "Shared project status" : "You own this step"}</p></div><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Due</p><p className="mt-1 font-black text-[#00284d]">{formatDate(selectedItem.dueDate)}</p></div><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Critical path</p><p className="mt-1 font-black text-[#00284d]">{selectedItem.isCriticalPath ? "Yes" : "No"}</p></div><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Float remaining</p><p className="mt-1 font-black text-[#00284d]">{selectedItem.isCriticalPath ? "3 days" : "Within float"}</p></div></div>{!customer && actions.length > 0 && <div className="sticky bottom-3 z-10 mt-6 flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur" aria-label="Work actions"><span className="mr-1 self-center text-xs font-black uppercase tracking-wider text-slate-500">Actions</span>{actions.map((action, index) => <Button key={action} type="button" variant={index === 0 ? "default" : "outline"} onClick={() => openAction(selectedItem, action)} className={`text-xs font-bold ${index === 0 ? "bg-[#00284d] hover:bg-[#003c70]" : ""}`}>{actionIcon(action)}{actionLabel(action)}</Button>)}</div>}{customer && actions.length > 0 && <div className="sticky bottom-3 z-10 mt-6 flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur" aria-label="Customer actions">{actions.map((action) => <Button key={action} type="button" onClick={() => openAction(selectedItem, action)} className="bg-[#00284d] text-xs font-bold">{actionIcon(action)}{actionLabel(action)}</Button>)}</div>}</section>
       <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]"><div className="space-y-5"><Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">{customer ? "What this means for SpaceX" : "What you need to do"}</CardTitle></CardHeader><CardContent><p className="text-sm leading-6 text-slate-700">{customer ? selectedItem.customerVisibleSummary : selectedItem.whatToDo}</p>{!customer && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600"><strong className="text-slate-800">Why you’re seeing this:</strong> {selectedItem.whyHere}<br /><strong className="text-slate-800">What removes it from your queue:</strong> {selectedItem.removesFromQueue}</p>}</CardContent></Card>
         {!customer && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ListChecks className="size-5 text-teal-700" /> Required inputs</CardTitle></CardHeader><CardContent><ul className="space-y-2">{selectedItem.requiredInputs.map((input) => <li key={input} className="flex items-start gap-2 text-sm text-slate-700"><Check className="mt-0.5 size-4 shrink-0 text-emerald-700" aria-hidden="true" />{input}</li>)}</ul></CardContent></Card>}
-        {selectedItem.documents.length > 0 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Paperclip className="size-5 text-teal-700" /> Documents</CardTitle></CardHeader><CardContent className="space-y-3">{selectedItem.documents.map((doc) => <div key={doc.id} className="rounded-lg border border-slate-200 p-3"><p className="text-sm font-black text-[#00284d]">{doc.label}</p><p className="mt-1 text-xs font-bold text-slate-500">{doc.version ?? "Linked supporting version"} · {doc.id}</p>{selectedItem.kind === "document" && <p className="mt-2 rounded bg-amber-50 p-2 text-xs font-black text-amber-950">YOU ARE REVIEWING {selectedItem.exactDocumentVersionLabel}</p>}</div>)}</CardContent></Card>}
+        {docsToDisplay.length > 0 && <Card><CardHeader><div className="flex items-center justify-between"><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Paperclip className="size-5 text-teal-700" /> Project Documents & Packages ({docsToDisplay.length})</CardTitle></div></CardHeader><CardContent className="space-y-3">{docsToDisplay.map((doc) => { const latestVer = doc.versions[0]; return <div key={doc.id} className="rounded-xl border border-slate-200 p-4 bg-white space-y-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex items-center gap-2"><p className="text-sm font-black text-[#00284d]">{doc.title}</p><span className="rounded bg-teal-50 border border-teal-200 px-1.5 py-0.5 text-[10px] font-mono font-bold text-teal-800">{latestVer?.versionTag || `v${doc.currentVersionNumber}.0`}</span></div><p className="mt-1 text-xs text-slate-500">{doc.category.replace(/_/g, " ")} · {doc.ownerOrgCode} · {doc.versions.length} revision(s)</p></div><div className="flex items-center gap-2"><Button type="button" size="sm" onClick={() => { setViewerModalDoc(doc as DocumentRecord); setViewerModalVer(latestVer); }} className="bg-[#00284d] hover:bg-[#003c70] text-white text-xs font-bold gap-1 shadow-xs"><Eye className="size-3.5" /> View Document</Button><Button type="button" variant="outline" size="sm" onClick={() => void downloadVersion(doc.id, latestVer?.id || "")} className="text-xs font-bold gap-1"><Download className="size-3.5" /> Download</Button></div></div>{latestVer && <div className="rounded-lg bg-slate-50 p-2.5 flex flex-wrap items-center justify-between text-xs text-slate-600 gap-2 font-mono"><span className="text-[11px] truncate max-w-sm">SHA-256: {latestVer.sha256Hash.slice(0, 16)}…</span><span className="text-[11px] text-slate-500 font-sans">Uploaded by {latestVer.uploadedByName}</span></div>}</div>; })}</CardContent></Card>}
         {selectedItem.kind === "document" && selectedItem.sourceDocument && <Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Version history</CardTitle></CardHeader><CardContent><p className="text-sm font-black text-[#00284d]">You are reviewing {selectedItem.exactDocumentVersionLabel}</p>{selectedItem.sourceDocument.versions.filter((version) => version.id !== selectedItem.exactDocumentVersionId).map((version) => <p key={version.id} className="mt-2 text-sm text-slate-600">Previously: {version.versionTag} uploaded {formatDate(version.uploadedAt)}.</p>)}</CardContent></Card>}
         {!customer && escalationPath.length > 0 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-teal-700" /> Inter-Agency Escalation Path</CardTitle></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2">{escalationPath.map((tier) => <div key={tier.level} className="rounded-lg border border-slate-200 p-3"><div className="flex items-center justify-between"><p className="text-xs font-black uppercase text-slate-500">Tier {tier.level}</p><span className="text-[10px] font-black uppercase text-teal-800">{tier.status}</span></div><p className="mt-2 text-sm font-black text-[#00284d]">{tier.title}</p><p className="mt-1 text-xs text-slate-600">{tier.contactName} · {tier.agency}</p></div>)}</CardContent></Card>}</div><div className="space-y-5"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ArrowRight className="size-5 text-teal-700" /> Downstream impact</CardTitle></CardHeader><CardContent><p className="text-sm font-black text-[#00284d]">{selectedItem.nextHandoff ?? "Next configured handoff"}</p><p className="mt-2 text-sm leading-6 text-slate-600">{selectedItem.scheduleImpact}. The next owner and notification recipients are previewed before an important action is confirmed.</p></CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Clock3 className="size-5 text-teal-700" /> Activity / audit history</CardTitle></CardHeader><CardContent className="space-y-3">{customer ? <p className="text-sm text-slate-600">Internal activity is not shown in the customer workspace.</p> : audit.length > 0 ? audit.map((event) => <div key={event.id} className="border-b border-slate-100 pb-3 last:border-0"><p className="text-xs font-black uppercase text-slate-500">{event.actionType.replaceAll("_", " ")}</p><p className="mt-1 text-sm text-slate-700">{event.reason ?? event.newValue ?? "Activity recorded"}</p><p className="mt-1 text-[11px] text-slate-400">{event.actorName} · {formatDate(event.occurredAt)}</p></div>) : <p className="text-sm text-slate-500">No activity recorded yet.</p>}</CardContent></Card></div></div>
       {!customer && selectedItem.kind === "workflow" && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Route className="size-5 text-teal-700" /> Upstream and downstream dependencies</CardTitle></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2"><div className="rounded-lg bg-slate-50 p-4"><p className="text-xs font-black uppercase text-slate-500">Upstream</p><p className="mt-2 text-sm text-slate-700">{selectedItem.waitingOn ?? "No unresolved upstream dependency"}</p></div><div className="rounded-lg bg-teal-50 p-4"><p className="text-xs font-black uppercase text-teal-800">Downstream</p><p className="mt-2 text-sm font-bold text-teal-950">{completionPreview.nextOwner} receives the next handoff after completion.</p></div></CardContent></Card>}
@@ -1120,5 +1262,5 @@ export default function Home() {
     return renderAdmin();
   }
 
-  return <div className="min-h-screen bg-[#f3f6f7] text-[#172033]"><a className="skip-link" href="#main-content">Skip to main content</a><div className="road-stripe" /><header className="site-header sticky top-0 z-30"><div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-3 sm:px-6"><Button type="button" variant="ghost" size="icon" onClick={() => setMobileNavOpen((value) => !value)} className="text-white hover:bg-white/10 lg:hidden" aria-label="Toggle navigation"><Menu className="size-5" /></Button><span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d]"><Zap className="size-5 fill-current" aria-hidden="true" /></span><div className="min-w-0"><p className="text-sm font-black text-white">PATH</p><p className="truncate text-[11px] font-semibold text-slate-300">{workspaceTitle(activePersona.workspace)} · SpaceX Pecan Island</p></div><div className="ml-auto hidden items-center gap-2 text-xs text-slate-200 md:flex"><span className="flex items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-950/60 px-3 py-1 font-bold text-emerald-200" title="State committed directly to Supabase PostgreSQL & Storage"><span className="size-2 rounded-full bg-emerald-400" />Supabase DB {lastSavedTime ? `· ${lastSavedTime}` : "· Connected"}</span><span className="rounded-full border border-white/20 px-3 py-1.5">{activePersona.name}</span><span className="rounded-full border border-teal-300/40 bg-teal-900/40 px-3 py-1.5 font-bold text-teal-100">{activePersona.roleLabel}</span></div><Button type="button" variant="ghost" size="icon" onClick={() => navigate("notifications")} className="relative text-white hover:bg-white/10" aria-label="Open notifications"><Bell className="size-5" /><span className="absolute right-1 top-1 size-2 rounded-full bg-[#f4a100]" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => void signOut()} className="text-white hover:bg-white/10"><LogOut className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Sign out</span></Button></div></header><div className="mx-auto flex max-w-[1600px] items-start"><aside className={`${mobileNavOpen ? "block" : "hidden"} fixed inset-x-0 top-[69px] z-20 max-h-[calc(100vh-69px)] overflow-y-auto border-b border-slate-200 bg-white p-3 shadow-xl lg:sticky lg:top-[69px] lg:block lg:min-h-[calc(100vh-69px)] lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}><div className="mb-4 rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Current context</p><p className="mt-1 text-sm font-black text-[#00284d]">SpaceX Pecan Island</p><p className="mt-1 text-xs text-slate-500">Vermilion Parish · Louisiana</p></div><nav aria-label="Primary navigation" className="space-y-1"><p className="px-3 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Work</p>{primaryNav.map((item) => <button key={item.id} type="button" onClick={() => navigate(item.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${route === item.id ? "bg-[#00284d] text-white shadow-sm" : "text-slate-700 hover:bg-teal-50 hover:text-teal-950"}`}>{item.icon}<span className="flex-1">{item.label}</span>{typeof item.count === "number" && <span className={`rounded-full px-2 py-0.5 text-[10px] ${route === item.id ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700"}`}>{item.count}</span>}</button>)}<p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Secondary tools</p>{!activePersona.isCustomer && <><button type="button" onClick={() => { setSecondaryTool("schedule"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "schedule" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><CalendarClock className="size-4" />Schedule</button><button type="button" onClick={() => { setSecondaryTool("vault"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "vault" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><BookOpen className="size-4" />Document Vault</button><button type="button" onClick={() => { setSecondaryTool("catalog"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "catalog" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><Landmark className="size-4" />Permit Catalog</button></>}{canAdmin && <><p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Administration</p><button type="button" onClick={() => navigate("admin")} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "admin" ? "bg-[#00284d] text-white" : "text-slate-700 hover:bg-teal-50"}`}><Settings2 className="size-4" />Administration</button></>}</nav><div className="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-xs font-black text-amber-950">Official filing notice</p><p className="mt-1 text-xs leading-5 text-amber-900">PATH coordinates work. Formal statutory filings remain in agency systems.</p></div></aside><main id="main-content" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">{toast && <div role="status" aria-live="polite" className="mb-5 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-950"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" aria-hidden="true" />{toast}</div>}{renderMain()}</main></div>{renderDialog()}</div>;
+  return <div className="min-h-screen bg-[#f3f6f7] text-[#172033]"><a className="skip-link" href="#main-content">Skip to main content</a><div className="road-stripe" /><header className="site-header sticky top-0 z-30"><div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-3 sm:px-6"><Button type="button" variant="ghost" size="icon" onClick={() => setMobileNavOpen((value) => !value)} className="text-white hover:bg-white/10 lg:hidden" aria-label="Toggle navigation"><Menu className="size-5" /></Button><span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d]"><Zap className="size-5 fill-current" aria-hidden="true" /></span><div className="min-w-0"><p className="text-sm font-black text-white">PATH</p><p className="truncate text-[11px] font-semibold text-slate-300">{workspaceTitle(activePersona.workspace)} · SpaceX Pecan Island</p></div><div className="ml-auto hidden items-center gap-2 text-xs text-slate-200 md:flex"><span className="flex items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-950/60 px-3 py-1 font-bold text-emerald-200" title="State committed directly to Supabase PostgreSQL & Storage"><span className="size-2 rounded-full bg-emerald-400" />Supabase DB {lastSavedTime ? `· ${lastSavedTime}` : "· Connected"}</span><span className="rounded-full border border-white/20 px-3 py-1.5">{activePersona.name}</span><span className="rounded-full border border-teal-300/40 bg-teal-900/40 px-3 py-1.5 font-bold text-teal-100">{activePersona.roleLabel}</span></div><Button type="button" variant="ghost" size="icon" onClick={() => navigate("notifications")} className="relative text-white hover:bg-white/10" aria-label="Open notifications"><Bell className="size-5" /><span className="absolute right-1 top-1 size-2 rounded-full bg-[#f4a100]" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => void signOut()} className="text-white hover:bg-white/10"><LogOut className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Sign out</span></Button></div></header><div className="mx-auto flex max-w-[1600px] items-start"><aside className={`${mobileNavOpen ? "block" : "hidden"} fixed inset-x-0 top-[69px] z-20 max-h-[calc(100vh-69px)] overflow-y-auto border-b border-slate-200 bg-white p-3 shadow-xl lg:sticky lg:top-[69px] lg:block lg:min-h-[calc(100vh-69px)] lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}><div className="mb-4 rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Current context</p><p className="mt-1 text-sm font-black text-[#00284d]">SpaceX Pecan Island</p><p className="mt-1 text-xs text-slate-500">Vermilion Parish · Louisiana</p></div><nav aria-label="Primary navigation" className="space-y-1"><p className="px-3 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Work</p>{primaryNav.map((item) => <button key={item.id} type="button" onClick={() => navigate(item.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${route === item.id ? "bg-[#00284d] text-white shadow-sm" : "text-slate-700 hover:bg-teal-50 hover:text-teal-950"}`}>{item.icon}<span className="flex-1">{item.label}</span>{typeof item.count === "number" && <span className={`rounded-full px-2 py-0.5 text-[10px] ${route === item.id ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700"}`}>{item.count}</span>}</button>)}<p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Secondary tools</p>{!activePersona.isCustomer && <><button type="button" onClick={() => { setSecondaryTool("schedule"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "schedule" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><CalendarClock className="size-4" />Schedule</button><button type="button" onClick={() => { setSecondaryTool("vault"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "vault" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><BookOpen className="size-4" />Document Vault</button><button type="button" onClick={() => { setSecondaryTool("catalog"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "catalog" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><Landmark className="size-4" />Permit Catalog</button></>}{canAdmin && <><p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Administration</p><button type="button" onClick={() => navigate("admin")} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "admin" ? "bg-[#00284d] text-white" : "text-slate-700 hover:bg-teal-50"}`}><Settings2 className="size-4" />Administration</button></>}</nav><div className="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-xs font-black text-amber-950">Official filing notice</p><p className="mt-1 text-xs leading-5 text-amber-900">PATH coordinates work. Formal statutory filings remain in agency systems.</p></div></aside><main id="main-content" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">{toast && <div role="status" aria-live="polite" className="mb-5 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-950"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" aria-hidden="true" />{toast}</div>}{renderMain()}</main></div>{renderDialog()}{viewerModalDoc && <DocumentViewerModal document={viewerModalDoc} version={viewerModalVer} isOpen={Boolean(viewerModalDoc)} onClose={() => { setViewerModalDoc(null); setViewerModalVer(undefined); }} onDownload={(docId, verId) => void downloadVersion(docId, verId)} />}</div>;
 }

@@ -209,6 +209,126 @@ class ProjectDeliveryRepository {
     return this.documents;
   }
 
+  getDocumentsByWorkstreamId(workstreamId: string): DocumentRecord[] {
+    return this.documents.filter((doc) => {
+      if (doc.workstreamId === workstreamId) return true;
+      if (doc.agencyReviews?.some((rev) => rev.workstreamId === workstreamId)) return true;
+      return false;
+    });
+  }
+
+  searchDocuments(query: string, options?: { workstreamId?: string; category?: string; status?: string }): DocumentRecord[] {
+    const q = query.toLowerCase().trim();
+    return this.documents.filter((doc) => {
+      if (options?.workstreamId && doc.workstreamId !== options.workstreamId && !doc.agencyReviews?.some((r) => r.workstreamId === options.workstreamId)) {
+        return false;
+      }
+      if (options?.category && doc.category !== options.category) {
+        return false;
+      }
+      if (!q) return true;
+      const matchTitle = doc.title.toLowerCase().includes(q);
+      const matchCategory = doc.category.toLowerCase().includes(q);
+      const matchOwner = doc.ownerOrgCode.toLowerCase().includes(q);
+      const matchWs = (doc.workstreamTitle || "").toLowerCase().includes(q);
+      const matchVersion = doc.versions.some(
+        (v) =>
+          v.fileName.toLowerCase().includes(q) ||
+          v.versionTag.toLowerCase().includes(q) ||
+          v.sha256Hash.toLowerCase().includes(q) ||
+          (v.uploadedByName || "").toLowerCase().includes(q) ||
+          (v.changeSummary || "").toLowerCase().includes(q)
+      );
+      return matchTitle || matchCategory || matchOwner || matchWs || matchVersion;
+    });
+  }
+
+  createDocument(params: {
+    projectId: string;
+    workstreamId?: string;
+    workstreamTitle?: string;
+    title: string;
+    category: string;
+    ownerOrgCode: string;
+    isConfidential?: boolean;
+    initialVersion?: {
+      versionTag: string;
+      fileName: string;
+      fileSizeBytes: number;
+      mimeType: string;
+      storageUri: string;
+      sha256Hash: string;
+      uploadedByName: string;
+      changeSummary?: string;
+    };
+    reviewingAgencyCodes?: string[];
+  }): DocumentRecord {
+    const id = `doc-${Date.now()}`;
+    const newDoc: DocumentRecord = {
+      id,
+      projectId: params.projectId,
+      workstreamId: params.workstreamId,
+      workstreamTitle: params.workstreamTitle,
+      title: params.title,
+      category: params.category,
+      ownerOrgCode: params.ownerOrgCode,
+      currentVersionNumber: 1,
+      isConfidential: Boolean(params.isConfidential),
+      versions: [],
+      agencyReviews: [],
+    };
+
+    if (params.initialVersion) {
+      const vId = `doc-v-${id}-v1`;
+      const version: DocumentVersionRecord = {
+        id: vId,
+        documentId: id,
+        versionNumber: 1,
+        versionLabel: params.initialVersion.versionTag || "v1.0",
+        versionTag: params.initialVersion.versionTag || "v1.0",
+        fileName: params.initialVersion.fileName,
+        fileSizeBytes: params.initialVersion.fileSizeBytes,
+        mimeType: params.initialVersion.mimeType,
+        storageUri: params.initialVersion.storageUri,
+        storagePath: params.initialVersion.storageUri,
+        sha256Hash: params.initialVersion.sha256Hash,
+        uploadedByName: params.initialVersion.uploadedByName,
+        uploadedAt: new Date().toISOString(),
+        changeSummary: params.initialVersion.changeSummary || "Initial document package upload",
+        isMalwareClean: true,
+        status: "under_review",
+      };
+      newDoc.versions.push(version);
+      newDoc.currentVersionId = vId;
+
+      if (params.reviewingAgencyCodes) {
+        newDoc.agencyReviews = params.reviewingAgencyCodes.map((code) => ({
+          id: `rev-${vId}-${code.toLowerCase()}`,
+          documentVersionId: vId,
+          workstreamId: params.workstreamId || "",
+          reviewingOrgCode: code,
+          reviewStatus: "under_review",
+        }));
+      }
+    }
+
+    this.documents.unshift(newDoc);
+
+    this.auditEvents.unshift(
+      createAuditEvent({
+        entityType: "document",
+        entityId: id,
+        actorName: params.initialVersion?.uploadedByName || params.ownerOrgCode,
+        actorOrgName: params.ownerOrgCode,
+        actionType: "document_created",
+        newValue: `Created document: ${params.title}`,
+        reason: "Document package registered in PATH Vault.",
+      })
+    );
+
+    return newDoc;
+  }
+
   getDecisions(): DecisionRecord[] {
     return this.decisions;
   }

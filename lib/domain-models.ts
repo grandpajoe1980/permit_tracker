@@ -450,6 +450,8 @@ export interface DocumentAgencyReviewRecord {
 export interface DocumentRecord {
   id: string;
   projectId: string;
+  workstreamId?: string;
+  workstreamTitle?: string;
   title: string;
   category: string;
   ownerOrgCode: string;
