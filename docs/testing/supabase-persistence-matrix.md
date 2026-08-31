@@ -84,6 +84,8 @@ Every mutation must satisfy the **Non-Negotiable Supabase Durability Gate**:
 | **SCEN-19** | Customer First-File Intake Attachment | Customer intake with optional file | Private Storage then one database transaction | Uploaded bytes are linked to a new document parent/version and customer request; failed RPC removes the object; request-key retries return the canonical request without creating another document; source contract verified, live migration verification pending | **SOURCE VERIFIED; LIVE UNVERIFIED** |
 | **SCEN-20** | Organization-Scoped Workflow Administration | Organization administrator | Workflow definition/version/stage metadata | Organization admin can operate only their organization’s workflow metadata; system admin retains global access; source contract verified, live migration verification pending | **SOURCE VERIFIED; LIVE UNVERIFIED** |
 
+| **SCEN-21** | Mandatory Task Dependency Completion Guard | Workstream stage completion | Database trigger over task dependency DAG | A workstream cannot enter `complete` while any `statutory_mandatory` predecessor task is unfinished; source contract verified, live migration verification pending | **SOURCE VERIFIED; LIVE UNVERIFIED** |
+
 The older table claimed all scenarios passed; those claims were not reproducible
 from the current test suite and have been replaced with evidence-based status.
 
