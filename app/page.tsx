@@ -84,6 +84,7 @@ import {
 } from "@/lib/supabase-browser";
 import { repository } from "@/lib/repository";
 import { allowsFixtureData } from "@/lib/data-mode";
+import { membershipRoleForRoleId, teamUsersFromMemberships } from "@/lib/admin-users";
 import { downloadDocumentFile, mutateUploadDocumentVersion } from "@/lib/supabase/storage";
 import { downloadDocumentVersion } from "@/lib/document-download-utils";
 import {
@@ -119,9 +120,37 @@ type Route = "my-work" | "agency-queue" | "rfis" | "coordination" | "documents" 
 type SecondaryTool = "schedule" | "vault" | "catalog";
 type DialogState = { action: WorkActionId; itemId: string } | null;
 
-function makeAuthenticatedPersona(email: string, name: string): DemoPersona {
+function makeAuthenticatedPersona(email: string, name: string, userId?: string): DemoPersona {
+  const membership = userId ? repository.getOrganizationMemberships().find((entry) => entry.userId === userId && entry.status === "active") : undefined;
+  const profile = userId ? repository.getProfileByUserId(userId) : undefined;
+  if (membership?.role === "organization_admin" || membership?.role === "system_admin") {
+    return {
+      id: userId ?? "authenticated-user",
+      name: profile?.fullName ?? name,
+      role: "Program Administrator",
+      roleDescription: "Organization-scoped PATH administrator",
+      email,
+      badge: "Administrator",
+      scenario: "Organization administration",
+      group: "Louisiana Governor's Office of Major Projects & Delivery",
+      organization: profile?.organizationName,
+    };
+  }
+  if (membership?.role === "supervisor") {
+    return {
+      id: userId ?? "authenticated-user",
+      name: profile?.fullName ?? name,
+      role: "Agency Supervisor",
+      roleDescription: "Authenticated PATH supervisor",
+      email,
+      badge: "Supervisor",
+      scenario: "Agency operations",
+      group: "Louisiana Governor's Office of Major Projects & Delivery",
+      organization: profile?.organizationName,
+    };
+  }
   return getPersonaFromEmail(email) ?? {
-    id: "authenticated-user",
+    id: userId ?? "authenticated-user",
     name,
     role: "Project Participant",
     roleDescription: "Authenticated PATH project participant",
@@ -195,6 +224,10 @@ function workspaceTitle(workspace: WorkspaceMode) {
   if (workspace === "agency") return "Agency Queue";
   if (workspace === "admin") return "PATH Administration";
   return "Reviewer Workspace";
+}
+
+function persistedTeamUsers() {
+  return teamUsersFromMemberships(repository.getProfiles(), repository.getOrganizationMemberships(), repository.getOrganizations());
 }
 
 function demoPersonaDomId(persona: DemoPersona) {
@@ -351,8 +384,9 @@ export default function Home() {
     void getBrowserUser().then(async (user) => {
       if (!active || !user) return;
       await repository.hydrateFromSupabase();
+      if (!allowsFixtureData()) setTeamUsers(persistedTeamUsers());
       const loaded = await loadRequestsForUser();
-      const persona = makeAuthenticatedPersona(user.email ?? "authenticated@path.local", String(user.user_metadata?.full_name ?? user.email ?? "Authenticated User"));
+      const persona = makeAuthenticatedPersona(user.email ?? "authenticated@path.local", String(user.user_metadata?.full_name ?? user.email ?? "Authenticated User"), user.id);
       const permits = loaded.permits.length > 0 || !allowsFixtureData() ? loaded.permits : pecanIslandRequests;
       setCurrentPersona(persona);
       setProfileDraft(profileDraftForPersona(persona));
@@ -387,6 +421,7 @@ export default function Home() {
         { event: "*", schema: "public" },
         async () => {
           await repository.hydrateFromSupabase();
+          if (!allowsFixtureData()) setTeamUsers(persistedTeamUsers());
           setMutationVersion((v) => v + 1);
           setLastSavedTime(new Date().toLocaleTimeString());
         }
@@ -397,6 +432,11 @@ export default function Home() {
       void client.removeChannel(channel);
     };
   }, [loggedIn]);
+
+  useEffect(() => {
+    if (!allowsFixtureData() || typeof window === "undefined") return;
+    window.localStorage.setItem("path-admin-team-users-v1", JSON.stringify(teamUsers));
+  }, [teamUsers]);
 
   useEffect(() => {
     if (!loggedIn) return;
@@ -467,8 +507,9 @@ export default function Home() {
       return;
     }
     await repository.hydrateFromSupabase();
+    if (!allowsFixtureData()) setTeamUsers(persistedTeamUsers());
     const loaded = await loadRequestsForUser();
-    const persona = makeAuthenticatedPersona(user.email ?? username, String(user.user_metadata?.full_name ?? user.email ?? "Authenticated User"));
+    const persona = makeAuthenticatedPersona(user.email ?? username, String(user.user_metadata?.full_name ?? user.email ?? "Authenticated User"), user.id);
     const permits = loaded.permits.length > 0 || !allowsFixtureData() ? loaded.permits : pecanIslandRequests;
     setLoadingData(false);
     setLoginError(loaded.error ? `Signed in, but the project queue could not be loaded: ${loaded.error.message}` : "");
@@ -1349,7 +1390,7 @@ export default function Home() {
   function renderAdmin() {
     const [firstUser] = teamUsers;
     if (activePersona.workspace === "state_office") return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">State project office</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Customer intake queue</h1><p className="mt-2 max-w-3xl text-sm text-slate-600">Review persisted customer requests, confirm the request details, and create the appropriate linked workstream(s) from the authorized project office queue.</p></div><CustomerRequestTriageQueue requests={repository.getCustomerRequests()} onTriage={(request) => void triageCustomerRequest(request)} /></div>;
-    if (activePersona.workspace === "admin") return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Participants, profiles, and roles</h1><p className="mt-2 text-sm text-slate-600">Manage role assignment, participant activation, customer visibility, workstream responsibility, and profile fields from one audited directory.</p></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent><AdminDirectory teamUsers={teamUsers} roleDefinitions={roleDefinitions} repository={repository} actorUserId={actorUserId()} onRoleChange={(userId, roleId) => { setTeamUsers((current) => current.map((member) => member.id === userId ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${teamUsers.find((member) => member.id === userId)?.name ?? "user"} to ${roleDefinitions[roleId].name}.`); }} onMutation={(message) => { setToast(message); setMutationVersion((value) => value + 1); }} /></CardContent></Card>{repository.getCustomerRequests().length > 0 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-amber-700" /> Customer request triage</CardTitle><p className="text-sm text-slate-600">Submitted customer requests are visible for government-side follow-up.</p></CardHeader><CardContent className="space-y-3">{repository.getCustomerRequests().slice(0, 8).map((request) => <div key={request.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3"><p className="text-sm font-black text-amber-950">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-amber-900">{request.requestType.replaceAll("_", " ")} · {request.description}</p><span className="mt-2 inline-block rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-900">{request.status}</span></div>)}</CardContent></Card>}<p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Admin profile and participant changes persist in this browser demo and are audit logged.</p></div>;
+    if (activePersona.workspace === "admin") return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Participants, profiles, and roles</h1><p className="mt-2 text-sm text-slate-600">Manage role assignment, participant activation, customer visibility, workstream responsibility, and profile fields from one audited directory.</p></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent><AdminDirectory teamUsers={teamUsers} roleDefinitions={roleDefinitions} repository={repository} actorUserId={actorUserId()} onRoleChange={async (userId, roleId) => { const user = teamUsers.find((member) => member.id === userId); if (!user?.organizationId) { if (!allowsFixtureData()) { setToast("This team member has no organization membership to update."); return; } setTeamUsers((current) => current.map((member) => member.id === userId ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user?.name ?? "user"} to ${roleDefinitions[roleId].name}.`); return; } const result = await repository.setOrganizationMemberRolePersisted({ userId, organizationId: user.organizationId, role: membershipRoleForRoleId(roleId) }); if (result.error) { setToast(`Role update failed: ${result.error.message}`); return; } setTeamUsers((current) => current.map((member) => member.id === userId ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user.name} to ${roleDefinitions[roleId].name}.`); }} onMutation={(message) => { setToast(message); setMutationVersion((value) => value + 1); }} /></CardContent></Card>{repository.getCustomerRequests().length > 0 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-amber-700" /> Customer request triage</CardTitle><p className="text-sm text-slate-600">Submitted customer requests are visible for government-side follow-up.</p></CardHeader><CardContent className="space-y-3">{repository.getCustomerRequests().slice(0, 8).map((request) => <div key={request.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3"><p className="text-sm font-black text-amber-950">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-amber-900">{request.requestType.replaceAll("_", " ")} · {request.description}</p><span className="mt-2 inline-block rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-900">{request.status}</span></div>)}</CardContent></Card>}<p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Admin profile and participant changes persist in this browser demo and are audit logged.</p></div>;
     return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Participants, profiles, and roles</h1><p className="mt-2 text-sm text-slate-600">Administrators can manage project participation, profile visibility, roles, workstream responsibility, and access. Ordinary users can edit only their own contact fields.</p></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent className="space-y-3">{teamUsers.map((user) => { const profile = repository.getProfileByUserId(user.id); const participant = repository.getParticipants().find((entry) => entry.userId === user.id); return <div key={user.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{user.name} {user.name === "Joe Skaggs" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] uppercase text-amber-900">Space Czar</span>}</p><p className="text-xs font-bold text-teal-800">{profile?.displayTitle ?? user.displayTitle ?? roleDefinitions[user.roleId].name}</p><p className="text-xs text-slate-500">{profile?.workEmail ?? user.workEmail ?? user.email} · {profile?.organizationName ?? user.organization}</p><p className="mt-1 max-w-xl text-xs text-slate-500">{profile?.organizationalUnit ?? user.organizationalUnit ?? user.agency} · {participant?.workstreamIds.length ?? 0} assigned workstream(s)</p></div><select aria-label={`Role for ${user.name}`} value={user.roleId} onChange={(event) => { const roleId = event.target.value as RoleId; setTeamUsers((current) => current.map((member) => member.id === user.id ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user.name} to ${roleDefinitions[roleId].name}.`); }} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800">{(Object.keys(roleDefinitions) as RoleId[]).map((role) => <option key={role} value={role}>{roleDefinitions[role].name}</option>)}</select></div>; })}<p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Joe Skaggs · joe.skaggs@la.gov · Louisiana Economic Development (LED) · Space Czar.</p></CardContent></Card>{repository.getCustomerRequests().length > 0 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-amber-700" /> Customer request triage</CardTitle><p className="text-sm text-slate-600">Escalations, blockers, service requests, and permit tracking records submitted by SpaceX appear here for government-side follow-up.</p></CardHeader><CardContent className="space-y-3">{repository.getCustomerRequests().slice(0, 8).map((request) => <div key={request.id} className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3"><div><p className="text-sm font-black text-amber-950">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-amber-900">{request.requestType.replaceAll("_", " ")} · {request.description}</p><p className="mt-1 text-xs text-amber-800">{request.submittedByName} · {request.locationOrAffectedArea ?? "Project-wide"}</p></div><span className="rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-900">{request.status}</span></div>)}</CardContent></Card>}</div>;
   }
 

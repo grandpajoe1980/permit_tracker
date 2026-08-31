@@ -15,6 +15,7 @@ import type {
   RFIRecord,
   RFIResponseRecord,
   UserProfileRecord,
+  OrganizationMembershipRecord,
   WorkstreamRecord,
 } from "../domain-models";
 import { allowsFixtureData, requiresSupabase } from "../data-mode";
@@ -1537,6 +1538,34 @@ export async function mutateUpdateUserProfile(params: {
   });
 
   return { data: { success: true }, error: null };
+}
+
+export async function mutateSetOrganizationMemberRole(params: {
+  userId: string;
+  organizationId: string;
+  role: OrganizationMembershipRecord["role"];
+}): Promise<MutationResult<OrganizationMembershipRecord>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data, error } = await client.rpc("rpc_set_organization_member_role", {
+    p_user_id: params.userId,
+    p_organization_id: params.organizationId,
+    p_role: params.role,
+  });
+  if (error || !data) return { data: null, error: new Error(error?.message ?? "Organization role change was not confirmed by the database.") };
+  const row = data as Record<string, unknown>;
+  return {
+    data: {
+      id: String(row.id),
+      userId: String(row.user_id),
+      organizationId: String(row.organization_id),
+      role: String(row.role) as OrganizationMembershipRecord["role"],
+      status: String(row.status) as OrganizationMembershipRecord["status"],
+      effectiveFrom: String(row.effective_from),
+      effectiveTo: row.effective_to ? String(row.effective_to) : undefined,
+    },
+    error: null,
+  };
 }
 
 export async function mutateUpdateProjectParticipant(params: {

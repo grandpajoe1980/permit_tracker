@@ -86,3 +86,8 @@ Every mutation must satisfy the **Non-Negotiable Supabase Durability Gate**:
 
 The older table claimed all scenarios passed; those claims were not reproducible
 from the current test suite and have been replaced with evidence-based status.
+
+SCEN-20 also covers the persisted administration roster: active memberships are
+hydrated from Supabase, role changes use an authorization-checked RPC, and the
+role-change audit event is written by that transaction. Live verification of
+the newest migration remains pending ledger reconciliation.

@@ -5,13 +5,13 @@ import {
   documentRowToDomain, documentVersionRowToDomain, externalFilingRowToDomain,
   meetingRowToDomain, notificationRowToDomain, organizationRowToDomain, permitTypeRowToDomain, workflowStageRowToDomain,
   projectParticipantRowToDomain, requirementResourceRowToDomain, rfiResponseRowToDomain,
-  rfiRowToDomain, taskRowToDomain, userProfileRowToDomain, workstreamRowToDomain,
+  rfiRowToDomain, taskRowToDomain, userProfileRowToDomain, workstreamRowToDomain, organizationMembershipRowToDomain,
 } from "./mappings";
 import type {
   AuditEventRecord, CommitmentRecord, CoordinationRequestRecord, CustomerRequestRecord,
   DecisionRecord, DocumentRecord, ExternalFilingRecord, MeetingRecord, NotificationRecord,
   OrganizationRecord, PermitTypeRecord, ProjectParticipantRecord, ProjectRecord, RFIRecord, UserProfileRecord,
-  WorkstreamRecord, WorkflowTemplateRecord,
+  WorkstreamRecord, WorkflowTemplateRecord, OrganizationMembershipRecord,
 } from "../domain-models";
 import { legacyProjectReferences } from "../project-identifiers";
 
@@ -151,6 +151,13 @@ export async function fetchUserProfiles(): Promise<UserProfileRecord[]> {
   if (!client) return noClient();
   const { data, error } = await client.from("user_profiles").select("*").order("full_name", { ascending: true });
   return error || !data ? noClient() : data.map(userProfileRowToDomain);
+}
+
+export async function fetchOrganizationMemberships(): Promise<OrganizationMembershipRecord[]> {
+  const client = getSupabaseBrowser();
+  if (!client) return noClient();
+  const { data, error } = await client.from("organization_memberships").select("id, user_id, organization_id, role, status, effective_from, effective_to").order("created_at", { ascending: true });
+  return error || !data ? noClient() : data.map((row) => organizationMembershipRowToDomain(row));
 }
 
 export async function fetchProjectParticipants(projectId: string): Promise<ProjectParticipantRecord[]> {

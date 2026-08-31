@@ -161,6 +161,11 @@ findings below.
   global access, while organization registration remains system-admin-only.
   Migration `20260830234000_scope_workflow_admin_by_organization.sql` owns the
   forward capability boundary.
+- Hydrated the production administration roster from active organization
+  memberships and user profiles. Role changes now go through
+  `rpc_set_organization_member_role`, which enforces organization ownership,
+  protects `system_admin`, audits the change, and returns the persisted
+  membership before the UI updates.
 
 ## Known blockers and risks
 

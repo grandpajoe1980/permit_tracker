@@ -146,6 +146,16 @@ export interface UserProfileRecord {
   isActive: boolean;
 }
 
+export interface OrganizationMembershipRecord {
+  id: string;
+  userId: string;
+  organizationId: string;
+  role: "contributor" | "supervisor" | "organization_admin" | "system_admin";
+  status: "active" | "pending" | "suspended" | "expired";
+  effectiveFrom: string;
+  effectiveTo?: string;
+}
+
 export interface ProjectParticipantRecord {
   id: string;
   projectId: string;

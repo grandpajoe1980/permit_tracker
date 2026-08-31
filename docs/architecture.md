@@ -46,6 +46,12 @@ Workflow and permit-catalog administration is scoped by the owning
 organization’s workflow versions and permit types; a `system_admin` may manage
 all tenants. Registering a new organization remains system-admin-only.
 
+The administration roster is read from active `organization_memberships` and
+`user_profiles`. Role changes use
+`rpc_set_organization_member_role(uuid, uuid, text)`, which authorizes the
+caller against the target organization, prevents non-system admins from
+granting `system_admin`, and writes the role-change audit event atomically.
+
 ## Workflow execution
 
 Published workflow versions are immutable. A workstream pins the published

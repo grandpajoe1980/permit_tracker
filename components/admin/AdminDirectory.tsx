@@ -38,7 +38,7 @@ export function AdminDirectory({
   roleDefinitions: Record<RoleId, RoleDefinition>;
   repository: AdminRepository;
   actorUserId: string;
-  onRoleChange: (userId: string, roleId: RoleId) => void;
+  onRoleChange: (userId: string, roleId: RoleId) => void | Promise<void>;
   onMutation: (message: string) => void;
 }) {
   async function updateProfile(user: TeamUser, updates: Partial<Pick<UserProfileRecord, "organizationName" | "displayTitle" | "organizationalUnit" | "projectRole" | "workEmail" | "isCustomerVisible" | "isActive">>) {

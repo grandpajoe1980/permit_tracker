@@ -10,6 +10,7 @@ import type {
   ExternalFilingRecord,
   MeetingRecord,
   OrganizationRecord,
+  OrganizationMembershipRecord,
   NotificationRecord,
   PermitTypeRecord,
   ProjectParticipantRecord,
@@ -24,6 +25,18 @@ import type {
 } from "../domain-models";
 
 type Row = Record<string, unknown>;
+
+export function organizationMembershipRowToDomain(row: Row): OrganizationMembershipRecord {
+  return {
+    id: str(row.id),
+    userId: str(row.user_id),
+    organizationId: str(row.organization_id),
+    role: str(row.role, "contributor") as OrganizationMembershipRecord["role"],
+    status: str(row.status, "active") as OrganizationMembershipRecord["status"],
+    effectiveFrom: str(row.effective_from),
+    effectiveTo: str(row.effective_to) || undefined,
+  };
+}
 
 export function organizationRowToDomain(row: Row): OrganizationRecord {
   const contacts = obj<Record<string, string>>(row.contacts, {});

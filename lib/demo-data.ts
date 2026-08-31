@@ -292,6 +292,7 @@ export type TeamUser = {
   organization: string;
   agency: string;
   permissions: PermissionKey[];
+  organizationId?: string;
   displayTitle?: string;
   organizationalUnit?: string;
   workEmail?: string;

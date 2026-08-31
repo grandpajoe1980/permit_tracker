@@ -19,6 +19,7 @@ import type {
   WorkflowTemplateRecord,
   WorkstreamRecord,
   UserProfileRecord,
+  OrganizationMembershipRecord,
 } from "./domain-models";
 import {
   commitmentsData,
@@ -49,6 +50,7 @@ import {
   fetchNotifications,
   fetchOrganizations,
   fetchProjectParticipants,
+  fetchOrganizationMemberships,
   fetchRFIs,
   fetchUserProfiles,
   fetchWorkflowTemplates,
@@ -75,6 +77,7 @@ import {
   mutateUpdateExternalFiling,
   mutateUpdateProjectParticipant,
   mutateUpdateUserProfile,
+  mutateSetOrganizationMemberRole,
 } from "./supabase/mutations";
 import { mutateReviewDocumentVersion, mutateUploadDocumentVersion } from "./supabase/storage";
 import { isSupabaseConfigured } from "./supabase/client";
@@ -99,6 +102,7 @@ class ProjectDeliveryRepository {
   private notifications: NotificationRecord[] = [];
   private organizations: OrganizationRecord[] = JSON.parse(JSON.stringify(registeredOrganizations));
   private profiles: UserProfileRecord[] = JSON.parse(JSON.stringify(projectProfiles));
+  private memberships: OrganizationMembershipRecord[] = [];
   private participants: ProjectParticipantRecord[] = JSON.parse(JSON.stringify(projectParticipants));
   private externalFilings: ExternalFilingRecord[] = JSON.parse(JSON.stringify(initialExternalFilings));
   private customerRequests: CustomerRequestRecord[] = [];
@@ -127,6 +131,7 @@ class ProjectDeliveryRepository {
         mtgs,
         docs,
         profs,
+        memberships,
         parts,
         notifs,
         audits,
@@ -144,6 +149,7 @@ class ProjectDeliveryRepository {
         fetchMeetings(projectId),
         fetchDocuments(projectId),
         fetchUserProfiles(),
+        fetchOrganizationMemberships(),
         fetchProjectParticipants(projectId),
         fetchNotifications(),
         fetchAuditEvents(projectId),
@@ -163,6 +169,7 @@ class ProjectDeliveryRepository {
       if (!keepFixtures || mtgs.length > 0) this.meetings = mtgs;
       if (!keepFixtures || docs.length > 0) this.documents = docs;
       if (!keepFixtures || profs.length > 0) this.profiles = profs;
+      if (!keepFixtures || memberships.length > 0) this.memberships = memberships;
       if (!keepFixtures || parts.length > 0) this.participants = parts;
       if (!keepFixtures || notifs.length > 0) this.notifications = notifs;
       if (!keepFixtures || audits.length > 0) this.auditEvents = audits;
@@ -378,6 +385,10 @@ class ProjectDeliveryRepository {
     return this.profiles;
   }
 
+  getOrganizationMemberships(): OrganizationMembershipRecord[] {
+    return this.memberships;
+  }
+
   getProfileByUserId(userId: string): UserProfileRecord | undefined {
     return this.profiles.find((profile) => profile.userId === userId || profile.id === userId);
   }
@@ -392,6 +403,19 @@ class ProjectDeliveryRepository {
 
   getCustomerRequests(): CustomerRequestRecord[] {
     return this.customerRequests;
+  }
+
+  async setOrganizationMemberRolePersisted(params: {
+    userId: string;
+    organizationId: string;
+    role: OrganizationMembershipRecord["role"];
+  }): Promise<{ data: OrganizationMembershipRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) return { data: null, error: new Error("Supabase is required for organization role changes.") };
+    const result = await mutateSetOrganizationMemberRole(params);
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Organization role change was not confirmed by the database.") };
+    const memberships = await fetchOrganizationMemberships();
+    this.memberships = memberships;
+    return { data: memberships.find((membership) => membership.id === result.data?.id) ?? result.data, error: null };
   }
 
   // ==========================================
