@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, relations } from "drizzle-orm";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 // ==========================================
@@ -72,6 +72,35 @@ export const organizationMemberships = sqliteTable("organization_memberships", {
   jurisdictionScope: text("jurisdiction_scope"), // e.g. "District 03 - Vermilion & Iberia"
   isPrimary: integer("is_primary", { mode: "boolean" }).default(true).notNull(),
   createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+// ==========================================
+// 1.1 ASSIGNMENT GROUPS & FULFILLER QUEUES (ITSM)
+// ==========================================
+
+export const assignmentGroups = sqliteTable("assignment_groups", {
+  id: text("id").primaryKey(),
+  orgCode: text("org_code").notNull(), // e.g. 'DOTD', 'LDEQ', 'CPRA', 'OSFM', 'LSP', 'VERMILION-PARISH', 'LA-PROJECTS', 'SPACEX'
+  organizationId: text("organization_id").references(() => organizations.id),
+  name: text("name").notNull(), // e.g. 'DOTD - Structures & Bridge Review'
+  description: text("description").notNull(),
+  leadUserId: text("lead_user_id").references(() => users.id),
+  active: integer("active", { mode: "boolean" }).default(true).notNull(),
+  createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+  updatedAt: text("updated_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
+export const assignmentGroupMemberships = sqliteTable("assignment_group_memberships", {
+  id: text("id").primaryKey(),
+  assignmentGroupId: text("assignment_group_id")
+    .notNull()
+    .references(() => assignmentGroups.id),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  role: text("role", { enum: ["member", "lead", "backup"] }).default("member").notNull(),
+  createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+  updatedAt: text("updated_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
 
 // ==========================================
@@ -300,6 +329,30 @@ export const workstreams = sqliteTable("workstreams", {
   escalationTriggeredAt: text("escalation_triggered_at"),
   escalationSummary: text("escalation_summary"),
 
+  // Milestone 1 ITSM & Assignment Group Extensions
+  assignmentGroupId: text("assignment_group_id").references(() => assignmentGroups.id),
+  assignedToUserId: text("assigned_to_user_id").references(() => users.id),
+  assignedOrgCode: text("assigned_org_code"),
+  itsmState: text("itsm_state", {
+    enum: [
+      "draft",
+      "submitted",
+      "triaged",
+      "in_progress",
+      "pending_customer",
+      "pending_agency",
+      "blocked",
+      "resolved",
+      "closed",
+    ],
+  }).default("in_progress").notNull(),
+  priority: text("priority", { enum: ["P1", "P2", "P3", "P4"] }).default("P3").notNull(),
+  statutoryDeadline: text("statutory_deadline"),
+  clockStatus: text("clock_status", { enum: ["active", "paused", "stopped", "extended"] }).default("active").notNull(),
+  clockPausedReason: text("clock_paused_reason"),
+  clockPausedAt: text("clock_paused_at"),
+  clockTotalPausedSeconds: integer("clock_total_paused_seconds").default(0).notNull(),
+
   createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
   updatedAt: text("updated_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
@@ -331,6 +384,31 @@ export const tasks = sqliteTable("tasks", {
   actualCompletionDate: text("actual_completion_date"),
   durationDays: integer("duration_days").default(5).notNull(),
   floatDays: integer("float_days").default(0).notNull(),
+
+  // Milestone 1 ITSM Extensions
+  assignmentGroupId: text("assignment_group_id").references(() => assignmentGroups.id),
+  assignedToUserId: text("assigned_to_user_id").references(() => users.id),
+  assignedOrgCode: text("assigned_org_code"),
+  itsmState: text("itsm_state", {
+    enum: [
+      "draft",
+      "submitted",
+      "triaged",
+      "in_progress",
+      "pending_customer",
+      "pending_agency",
+      "blocked",
+      "resolved",
+      "closed",
+    ],
+  }).default("submitted").notNull(),
+  priority: text("priority", { enum: ["P1", "P2", "P3", "P4"] }).default("P3").notNull(),
+  statutoryDeadline: text("statutory_deadline"),
+  clockStatus: text("clock_status", { enum: ["active", "paused", "stopped", "extended"] }).default("active").notNull(),
+  clockPausedReason: text("clock_paused_reason"),
+  clockPausedAt: text("clock_paused_at"),
+  clockTotalPausedSeconds: integer("clock_total_paused_seconds").default(0).notNull(),
+
   createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
 
@@ -684,7 +762,213 @@ export const customerRequests = sqliteTable("customer_requests", {
   blocksActiveWork: integer("blocks_active_work", { mode: "boolean" }).default(false).notNull(),
   status: text("status", { enum: ["draft", "submitted", "triage", "in_progress", "resolved", "closed"] }).default("submitted").notNull(),
   attachmentDocumentVersionIds: text("attachment_document_version_ids"),
+
+  // Milestone 1 ITSM & Assignment Group Extensions
+  assignmentGroupId: text("assignment_group_id").references(() => assignmentGroups.id),
+  assignedToUserId: text("assigned_to_user_id").references(() => users.id),
+  itsmState: text("itsm_state", {
+    enum: [
+      "draft",
+      "submitted",
+      "triaged",
+      "in_progress",
+      "pending_customer",
+      "pending_agency",
+      "blocked",
+      "resolved",
+      "closed",
+    ],
+  }).default("submitted").notNull(),
+  priority: text("priority", { enum: ["P1", "P2", "P3", "P4"] }).default("P3").notNull(),
+  urgency: text("urgency", { enum: ["low", "medium", "high", "critical"] }).default("medium").notNull(),
+  impact: text("impact", { enum: ["low", "medium", "high", "critical"] }).default("medium").notNull(),
+  statutoryDeadline: text("statutory_deadline"),
+  clockStatus: text("clock_status", { enum: ["active", "paused", "stopped", "extended"] }).default("active").notNull(),
+  clockPausedReason: text("clock_paused_reason"),
+  clockPausedAt: text("clock_paused_at"),
+  clockTotalPausedSeconds: integer("clock_total_paused_seconds").default(0).notNull(),
+
   createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
   updatedAt: text("updated_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
+
+// ==========================================
+// 11. DRIZZLE RELATIONS
+// ==========================================
+
+export const organizationsRelations = relations(organizations, ({ many }) => ({
+  users: many(users),
+  memberships: many(organizationMemberships),
+  units: many(organizationalUnits),
+  assignmentGroups: many(assignmentGroups),
+  permitTypes: many(permitTypes),
+  workstreams: many(workstreams),
+  projects: many(projects),
+}));
+
+export const organizationalUnitsRelations = relations(organizationalUnits, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [organizationalUnits.organizationId],
+    references: [organizations.id],
+  }),
+  users: many(users),
+}));
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [users.organizationId],
+    references: [organizations.id],
+  }),
+  unit: one(organizationalUnits, {
+    fields: [users.unitId],
+    references: [organizationalUnits.id],
+  }),
+  memberships: many(organizationMemberships),
+  groupMemberships: many(assignmentGroupMemberships),
+  assignedWorkstreams: many(workstreams),
+  assignedCustomerRequests: many(customerRequests),
+  assignedTasks: many(tasks),
+}));
+
+export const organizationMembershipsRelations = relations(organizationMemberships, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [organizationMemberships.organizationId],
+    references: [organizations.id],
+  }),
+  user: one(users, {
+    fields: [organizationMemberships.userId],
+    references: [users.id],
+  }),
+}));
+
+export const assignmentGroupsRelations = relations(assignmentGroups, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [assignmentGroups.organizationId],
+    references: [organizations.id],
+  }),
+  leadUser: one(users, {
+    fields: [assignmentGroups.leadUserId],
+    references: [users.id],
+  }),
+  memberships: many(assignmentGroupMemberships),
+  workstreams: many(workstreams),
+  customerRequests: many(customerRequests),
+  tasks: many(tasks),
+}));
+
+export const assignmentGroupMembershipsRelations = relations(assignmentGroupMemberships, ({ one }) => ({
+  assignmentGroup: one(assignmentGroups, {
+    fields: [assignmentGroupMemberships.assignmentGroupId],
+    references: [assignmentGroups.id],
+  }),
+  user: one(users, {
+    fields: [assignmentGroupMemberships.userId],
+    references: [users.id],
+  }),
+}));
+
+export const projectsRelations = relations(projects, ({ one, many }) => ({
+  applicantOrg: one(organizations, {
+    fields: [projects.applicantOrgId],
+    references: [organizations.id],
+  }),
+  leadStateAgency: one(organizations, {
+    fields: [projects.leadStateAgencyId],
+    references: [organizations.id],
+  }),
+  workstreams: many(workstreams),
+  customerRequests: many(customerRequests),
+  documents: many(documents),
+  decisions: many(decisions),
+  meetings: many(meetings),
+}));
+
+export const workstreamsRelations = relations(workstreams, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [workstreams.projectId],
+    references: [projects.id],
+  }),
+  permitType: one(permitTypes, {
+    fields: [workstreams.permitTypeId],
+    references: [permitTypes.id],
+  }),
+  assignmentGroup: one(assignmentGroups, {
+    fields: [workstreams.assignmentGroupId],
+    references: [assignmentGroups.id],
+  }),
+  assignedToUser: one(users, {
+    fields: [workstreams.assignedToUserId],
+    references: [users.id],
+  }),
+  tasks: many(tasks),
+  commitments: many(commitments),
+  coordinationRequests: many(coordinationRequests),
+  rfis: many(rfis),
+}));
+
+export const customerRequestsRelations = relations(customerRequests, ({ one }) => ({
+  project: one(projects, {
+    fields: [customerRequests.projectId],
+    references: [projects.id],
+  }),
+  permitType: one(permitTypes, {
+    fields: [customerRequests.knownPermitTypeId],
+    references: [permitTypes.id],
+  }),
+  relatedWorkstream: one(workstreams, {
+    fields: [customerRequests.relatedWorkstreamId],
+    references: [workstreams.id],
+  }),
+  submittedByUser: one(users, {
+    fields: [customerRequests.submittedByUserId],
+    references: [users.id],
+  }),
+  assignmentGroup: one(assignmentGroups, {
+    fields: [customerRequests.assignmentGroupId],
+    references: [assignmentGroups.id],
+  }),
+  assignedToUser: one(users, {
+    fields: [customerRequests.assignedToUserId],
+    references: [users.id],
+  }),
+}));
+
+export const tasksRelations = relations(tasks, ({ one, many }) => ({
+  workstream: one(workstreams, {
+    fields: [tasks.workstreamId],
+    references: [workstreams.id],
+  }),
+  stage: one(workflowStages, {
+    fields: [tasks.stageId],
+    references: [workflowStages.id],
+  }),
+  assignedOrg: one(organizations, {
+    fields: [tasks.assignedOrgId],
+    references: [organizations.id],
+  }),
+  assignedUser: one(users, {
+    fields: [tasks.assignedUserId],
+    references: [users.id],
+  }),
+  assignmentGroup: one(assignmentGroups, {
+    fields: [tasks.assignmentGroupId],
+    references: [assignmentGroups.id],
+  }),
+  dependenciesAsPredecessor: many(taskDependencies, { relationName: "predecessor" }),
+  dependenciesAsSuccessor: many(taskDependencies, { relationName: "successor" }),
+}));
+
+export const taskDependenciesRelations = relations(taskDependencies, ({ one }) => ({
+  predecessor: one(tasks, {
+    fields: [taskDependencies.predecessorTaskId],
+    references: [tasks.id],
+    relationName: "predecessor",
+  }),
+  successor: one(tasks, {
+    fields: [taskDependencies.successorTaskId],
+    references: [tasks.id],
+    relationName: "successor",
+  }),
+}));
+
 

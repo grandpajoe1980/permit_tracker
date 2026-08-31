@@ -87,6 +87,138 @@ export type PersonaRole =
   | "auditor_legal";
 
 // ==========================================
+// ITSM LIFECYCLE, PRIORITY & STATUTORY CLOCKS
+// ==========================================
+
+export type ITSMState =
+  | "draft"
+  | "submitted"
+  | "triaged"
+  | "in_progress"
+  | "pending_customer"
+  | "pending_agency"
+  | "blocked"
+  | "resolved"
+  | "closed";
+
+export type PriorityLevel = "P1" | "P2" | "P3" | "P4";
+export type TicketPriority = PriorityLevel;
+
+export type UrgencyLevel = "low" | "medium" | "high" | "critical";
+export type ImpactLevel = "low" | "medium" | "high" | "critical";
+
+export type ClockStatus = "active" | "paused" | "stopped" | "extended";
+
+export type AssignmentGroupRole = "member" | "lead" | "backup";
+
+// ==========================================
+// ASSIGNMENT GROUPS & FULFILLER QUEUES
+// ==========================================
+
+export interface AssignmentGroupRecord {
+  id: string;
+  orgCode: string;
+  organizationId?: string;
+  name: string;
+  description: string;
+  leadUserId?: string;
+  leadUserName?: string;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AssignmentGroupMembershipRecord {
+  id: string;
+  assignmentGroupId: string;
+  userId: string;
+  role: AssignmentGroupRole;
+  userName?: string;
+  userEmail?: string;
+  userTitle?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ==========================================
+// STATUTORY CLOCK & PRIORITY MATRIX MODELS
+// ==========================================
+
+export interface ClockPauseRecord {
+  pausedAt: string;
+  resumedAt?: string;
+  reason?: string;
+  pausedByUserId?: string;
+  pausedByName?: string;
+  rfiId?: string;
+  coordinationRequestId?: string;
+  pauseDurationDays?: number;
+}
+
+export interface StatutoryClockState {
+  clockStatus: ClockStatus;
+  statutoryDays: number;
+  elapsedDays: number;
+  remainingDays: number;
+  statutoryDeadline?: string;
+  isPaused: boolean;
+  pausedAt?: string;
+  pausedReason?: string;
+  resumedAt?: string;
+  totalPausedDays: number;
+  pauseHistory: ClockPauseRecord[];
+}
+
+export interface PriorityMatrixEntry {
+  urgency: UrgencyLevel;
+  impact: ImpactLevel;
+  priority: PriorityLevel;
+  targetResponseHours: number;
+  targetResolutionDays: number;
+}
+
+export interface TicketRecord {
+  id: string;
+  ticketNumber: string;
+  entityType: "customer_request" | "workstream" | "task";
+  projectId: string;
+  projectName: string;
+  title: string;
+  description: string;
+  category: RequestCategory;
+  categoryLabel: string;
+
+  applicantOrgCode: string;
+  applicantOrgName: string;
+  leadAgencyCode: string;
+  leadAgencyName: string;
+  assignmentGroupId?: string;
+  assignmentGroupName?: string;
+  assignedToUserId?: string;
+  assignedToUserName?: string;
+  assignedToUserEmail?: string;
+
+  itsmState: ITSMState;
+  statusLabel: string;
+  ragHealth: RAGHealth;
+  priority: PriorityLevel;
+  urgency: UrgencyLevel;
+  impact: ImpactLevel;
+  isCriticalPath: boolean;
+
+  targetDueDate?: string;
+  statutoryDeadline?: string;
+  clockStatus: ClockStatus;
+  clockPausedReason?: string;
+  statutoryClock?: StatutoryClockState;
+
+  createdAt: string;
+  updatedAt: string;
+  submittedByName?: string;
+  submittedByUserId?: string;
+}
+
+// ==========================================
 // CORE DOMAIN INTERFACES
 // ==========================================
 
@@ -257,10 +389,26 @@ export interface CustomerRequestRecord {
   submittedByName: string;
   relatedWorkstreamId?: string;
   blocksActiveWork: boolean;
-  status: "draft" | "submitted" | "triage" | "in_progress" | "resolved" | "closed";
+  status: "draft" | "submitted" | "triage" | "in_progress" | "resolved" | "closed" | ITSMState;
   attachmentDocumentVersionIds: string[];
   createdAt: string;
   updatedAt: string;
+
+  // Milestone 1 ITSM & Assignment Extensions
+  assignmentGroupId?: string;
+  assignmentGroupName?: string;
+  assignedToUserId?: string;
+  assignedToUserName?: string;
+  itsmState?: ITSMState;
+  priority?: PriorityLevel;
+  urgency?: UrgencyLevel;
+  impact?: ImpactLevel;
+  statutoryDeadline?: string;
+  clockStatus?: ClockStatus;
+  clockPausedReason?: string;
+  clockPausedAt?: string;
+  clockTotalPausedSeconds?: number;
+  statutoryClock?: StatutoryClockState;
 }
 
 export interface WorkflowStageRecord {
@@ -346,6 +494,17 @@ export interface TaskRecord {
   durationDays: number;
   floatDays: number;
   predecessorTaskIds: string[];
+
+  // Milestone 1 ITSM Extensions
+  assignmentGroupId?: string;
+  assignmentGroupName?: string;
+  itsmState?: ITSMState;
+  priority?: PriorityLevel;
+  statutoryDeadline?: string;
+  clockStatus?: ClockStatus;
+  clockPausedReason?: string;
+  clockPausedAt?: string;
+  clockTotalPausedSeconds?: number;
 }
 
 export interface TaskDependencyRecord {
@@ -618,6 +777,21 @@ export interface WorkstreamRecord {
   coordinationRequests: CoordinationRequestRecord[];
   rfis: RFIRecord[];
   readinessChecklist?: ReadinessChecklistRecord;
+
+  // Milestone 1 ITSM & Assignment Extensions
+  assignmentGroupId?: string;
+  assignmentGroupName?: string;
+  assignedToUserId?: string;
+  assignedToUserName?: string;
+  assignedOrgCode?: string;
+  itsmState?: ITSMState;
+  priority?: PriorityLevel;
+  statutoryDeadline?: string;
+  clockStatus?: ClockStatus;
+  clockPausedReason?: string;
+  clockPausedAt?: string;
+  clockTotalPausedSeconds?: number;
+  statutoryClock?: StatutoryClockState;
 }
 
 export interface ProjectRecord {
@@ -645,3 +819,209 @@ export interface ProjectRecord {
   externalFilings?: ExternalFilingRecord[];
   customerRequests?: CustomerRequestRecord[];
 }
+
+// ==========================================
+// VALIDATION, PARSING & CALCULATION HELPERS
+// ==========================================
+
+export const VALID_ITSM_STATES: readonly ITSMState[] = [
+  "draft",
+  "submitted",
+  "triaged",
+  "in_progress",
+  "pending_customer",
+  "pending_agency",
+  "blocked",
+  "resolved",
+  "closed",
+] as const;
+
+export const VALID_PRIORITIES: readonly PriorityLevel[] = ["P1", "P2", "P3", "P4"] as const;
+
+export const VALID_CLOCK_STATUSES: readonly ClockStatus[] = ["active", "paused", "stopped", "extended"] as const;
+
+export function isITSMState(value: unknown): value is ITSMState {
+  return typeof value === "string" && VALID_ITSM_STATES.includes(value as ITSMState);
+}
+
+export function isPriorityLevel(value: unknown): value is PriorityLevel {
+  return typeof value === "string" && VALID_PRIORITIES.includes(value as PriorityLevel);
+}
+
+export function isClockStatus(value: unknown): value is ClockStatus {
+  return typeof value === "string" && VALID_CLOCK_STATUSES.includes(value as ClockStatus);
+}
+
+export function parseITSMState(value: unknown, defaultState: ITSMState = "submitted"): ITSMState {
+  if (isITSMState(value)) return value;
+  if (typeof value === "string") {
+    const normalized = value.toLowerCase().replace(/[\s-]/g, "_");
+    if (isITSMState(normalized)) return normalized;
+    if (normalized === "triage") return "triaged";
+    if (normalized === "complete" || normalized === "completed") return "resolved";
+  }
+  return defaultState;
+}
+
+export function parsePriorityLevel(value: unknown, defaultPriority: PriorityLevel = "P3"): PriorityLevel {
+  if (isPriorityLevel(value)) return value;
+  if (typeof value === "string") {
+    const upper = value.toUpperCase().trim();
+    if (upper === "CRITICAL" || upper === "P1") return "P1";
+    if (upper === "HIGH" || upper === "P2") return "P2";
+    if (upper === "MEDIUM" || upper === "NORMAL" || upper === "P3") return "P3";
+    if (upper === "LOW" || upper === "P4") return "P4";
+  }
+  return defaultPriority;
+}
+
+export function calculatePriority(
+  urgency: UrgencyLevel = "medium",
+  impact: ImpactLevel = "medium",
+  fallback: PriorityLevel = "P3"
+): PriorityLevel {
+  const u = urgency.toLowerCase();
+  const i = impact.toLowerCase();
+
+  if (u === "critical" && (i === "critical" || i === "high")) return "P1";
+  if (u === "high" && i === "critical") return "P1";
+  if (u === "critical" && i === "medium") return "P2";
+  if (u === "high" && i === "high") return "P2";
+  if (u === "medium" && i === "critical") return "P2";
+  if (u === "low" && i === "critical") return "P3";
+  if (u === "medium" && i === "high") return "P3";
+  if (u === "high" && i === "medium") return "P3";
+  if (u === "medium" && i === "medium") return "P3";
+  if (u === "low" && (i === "high" || i === "medium")) return "P4";
+  if (u === "high" && i === "low") return "P4";
+  if (u === "medium" && i === "low") return "P4";
+  if (u === "low" && i === "low") return "P4";
+
+  return fallback;
+}
+
+export function calculateStatutoryClock(options: {
+  statutoryDays: number;
+  startDate: string;
+  asOfDate?: string;
+  clockStatus?: ClockStatus;
+  isPaused?: boolean;
+  pauseHistory?: ClockPauseRecord[];
+  currentPausedAt?: string;
+  currentPausedReason?: string;
+}): StatutoryClockState {
+  const {
+    statutoryDays,
+    startDate,
+    asOfDate = new Date().toISOString().split("T")[0],
+    clockStatus = options.isPaused ? "paused" : "active",
+    isPaused = clockStatus === "paused",
+    pauseHistory = [],
+    currentPausedAt,
+    currentPausedReason,
+  } = options;
+
+  let totalPausedDays = 0;
+  for (const record of pauseHistory) {
+    if (record.pauseDurationDays) {
+      totalPausedDays += record.pauseDurationDays;
+    } else if (record.pausedAt && record.resumedAt) {
+      const pStart = new Date(record.pausedAt).getTime();
+      const pEnd = new Date(record.resumedAt).getTime();
+      const days = Math.max(0, Math.round((pEnd - pStart) / (1000 * 60 * 60 * 24)));
+      totalPausedDays += days;
+    }
+  }
+
+  if (isPaused && currentPausedAt) {
+    const pStart = new Date(currentPausedAt).getTime();
+    const nowTime = new Date(asOfDate).getTime();
+    const currentPauseDays = Math.max(0, Math.round((nowTime - pStart) / (1000 * 60 * 60 * 24)));
+    totalPausedDays += currentPauseDays;
+  }
+
+  const start = new Date(startDate).getTime();
+  const current = new Date(asOfDate).getTime();
+  const rawElapsedDays = Math.max(0, Math.round((current - start) / (1000 * 60 * 60 * 24)));
+  const elapsedDays = Math.max(0, rawElapsedDays - totalPausedDays);
+  const remainingDays = Math.max(0, statutoryDays - elapsedDays);
+
+  const deadlineDate = new Date(start + (statutoryDays + totalPausedDays) * 24 * 60 * 60 * 1000);
+  const statutoryDeadline = deadlineDate.toISOString().split("T")[0];
+
+  return {
+    clockStatus,
+    statutoryDays,
+    elapsedDays,
+    remainingDays,
+    statutoryDeadline,
+    isPaused,
+    pausedAt: currentPausedAt,
+    pausedReason: currentPausedReason,
+    totalPausedDays,
+    pauseHistory,
+  };
+}
+
+export function mapOperationalStateToITSMState(opState: OperationalState, hasBlocker = false): ITSMState {
+  if (hasBlocker || opState === "blocked") return "blocked";
+  switch (opState) {
+    case "complete":
+      return "resolved";
+    case "cancelled":
+      return "closed";
+    case "waiting_applicant":
+      return "pending_customer";
+    case "waiting_government":
+    case "waiting_external":
+    case "statutory_waiting_period":
+    case "scheduled_hold":
+      return "pending_agency";
+    case "escalated":
+    case "running":
+    default:
+      return "in_progress";
+  }
+}
+
+export function mapITSMStateToOperationalState(itsmState: ITSMState): OperationalState {
+  switch (itsmState) {
+    case "draft":
+    case "submitted":
+    case "triaged":
+      return "waiting_government";
+    case "in_progress":
+      return "running";
+    case "pending_customer":
+      return "waiting_applicant";
+    case "pending_agency":
+      return "waiting_government";
+    case "blocked":
+      return "blocked";
+    case "resolved":
+    case "closed":
+      return "complete";
+    default:
+      return "running";
+  }
+}
+
+export function mapCustomerRequestStatusToITSMState(status: string): ITSMState {
+  switch (status) {
+    case "draft":
+      return "draft";
+    case "submitted":
+      return "submitted";
+    case "triage":
+      return "triaged";
+    case "in_progress":
+      return "in_progress";
+    case "resolved":
+      return "resolved";
+    case "closed":
+      return "closed";
+    default:
+      return "submitted";
+  }
+}
+

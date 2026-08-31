@@ -55,7 +55,7 @@ test("Gantt Schedule Bars [Feature]: Renders Traditional Schedule Timeline Bars 
   assert.match(html, /Interagency Wait/);
   assert.match(html, /Statutory Notice/);
   assert.match(html, /Baseline Target/);
-  assert.match(html, /Today \(Aug 30\)/);
+  assert.match(html, /Today \([A-Za-z]{3} \d{1,2}\)/);
 
   // 5. Verify Timeline Month Headers
   assert.match(html, /May 2026/);

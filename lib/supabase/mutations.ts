@@ -1,6 +1,8 @@
 import { getSupabaseBrowser } from "./client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  AssignmentGroupRecord,
+  AssignmentGroupMembershipRecord,
   AuditEventRecord,
   CommitmentRecord,
   CoordinationRequestRecord,
@@ -1576,3 +1578,138 @@ export async function mutateUpdateProjectParticipant(params: {
 
   return { data: { success: true }, error: null };
 }
+
+// ==========================================
+// ITSM TICKET & ASSIGNMENT MUTATIONS (RPC WRAPPERS)
+// ==========================================
+
+export async function mutateAssignTicket(params: {
+  ticketType: "workstream" | "customer_request" | "task";
+  ticketId: string;
+  assignmentGroupId?: string;
+  assignedToUserId?: string;
+  actorUserId?: string;
+  actorName?: string;
+  reason?: string;
+}): Promise<MutationResult<any>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data, error } = await client.rpc("rpc_assign_ticket", {
+    p_ticket_type: params.ticketType,
+    p_ticket_id: params.ticketId,
+    p_assignment_group_id: params.assignmentGroupId ?? null,
+    p_assigned_to_user_id: params.assignedToUserId ?? null,
+    p_actor_user_id: params.actorUserId ?? null,
+    p_actor_name: params.actorName ?? "System User",
+    p_reason: params.reason ?? null,
+  });
+  if (error || !data) {
+    return { data: null, error: new Error(error?.message ?? "Ticket assignment was not confirmed by the database.") };
+  }
+  return { data, error: null };
+}
+
+export async function mutateUpdateTicketITSMState(params: {
+  ticketType: "workstream" | "customer_request" | "task";
+  ticketId: string;
+  targetState: string;
+  actorUserId?: string;
+  actorName?: string;
+  reason?: string;
+  pauseReason?: string;
+}): Promise<MutationResult<any>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data, error } = await client.rpc("rpc_update_ticket_itsm_state", {
+    p_ticket_type: params.ticketType,
+    p_ticket_id: params.ticketId,
+    p_target_state: params.targetState,
+    p_actor_user_id: params.actorUserId ?? null,
+    p_actor_name: params.actorName ?? "System User",
+    p_reason: params.reason ?? null,
+    p_pause_reason: params.pauseReason ?? null,
+  });
+  if (error || !data) {
+    return { data: null, error: new Error(error?.message ?? "ITSM state update was not confirmed by the database.") };
+  }
+  return { data, error: null };
+}
+
+export async function mutateSetTicketPriority(params: {
+  ticketType: "workstream" | "customer_request" | "task";
+  ticketId: string;
+  priority: string;
+  actorUserId?: string;
+  actorName?: string;
+  reason?: string;
+}): Promise<MutationResult<any>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data, error } = await client.rpc("rpc_set_ticket_priority", {
+    p_ticket_type: params.ticketType,
+    p_ticket_id: params.ticketId,
+    p_priority: params.priority,
+    p_actor_user_id: params.actorUserId ?? null,
+    p_actor_name: params.actorName ?? "System User",
+    p_reason: params.reason ?? null,
+  });
+  if (error || !data) {
+    return { data: null, error: new Error(error?.message ?? "Priority update was not confirmed by the database.") };
+  }
+  return { data, error: null };
+}
+
+export async function mutateManageAssignmentGroup(params: {
+  action: "create" | "update" | "deactivate";
+  groupId?: string;
+  orgCode?: string;
+  name?: string;
+  description?: string;
+  leadUserId?: string;
+  actorUserId?: string;
+  actorName?: string;
+}): Promise<MutationResult<AssignmentGroupRecord>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data, error } = await client.rpc("rpc_manage_assignment_group", {
+    p_action: params.action,
+    p_group_id: params.groupId ?? null,
+    p_org_code: params.orgCode ?? null,
+    p_name: params.name ?? null,
+    p_description: params.description ?? null,
+    p_lead_user_id: params.leadUserId ?? null,
+    p_actor_user_id: params.actorUserId ?? null,
+    p_actor_name: params.actorName ?? "System Admin",
+  });
+  if (error || !data) {
+    return { data: null, error: new Error(error?.message ?? "Assignment group operation was not confirmed by the database.") };
+  }
+  return { data: data as AssignmentGroupRecord, error: null };
+}
+
+export async function mutateManageAssignmentGroupMembership(params: {
+  action: "add" | "remove" | "update_role";
+  membershipId?: string;
+  groupId?: string;
+  userId?: string;
+  role?: string;
+  actorUserId?: string;
+  actorName?: string;
+}): Promise<MutationResult<AssignmentGroupMembershipRecord>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data, error } = await client.rpc("rpc_manage_assignment_group_membership", {
+    p_action: params.action,
+    p_membership_id: params.membershipId ?? null,
+    p_group_id: params.groupId ?? null,
+    p_user_id: params.userId ?? null,
+    p_role: params.role ?? "member",
+    p_actor_user_id: params.actorUserId ?? null,
+    p_actor_name: params.actorName ?? "System Admin",
+  });
+  if (error || !data) {
+    return { data: null, error: new Error(error?.message ?? "Assignment group membership operation was not confirmed by the database.") };
+  }
+  return { data: data as AssignmentGroupMembershipRecord, error: null };
+}
+
