@@ -95,6 +95,11 @@ findings below.
   historical fixture project alias to the canonical project UUID/number.
 - Updated the test command to expose Node garbage collection, making the
   existing SSR memory stress gate deterministic after the full suite.
+- Completed the strict cross-context RFI proof: Jordan issues a persisted RFI
+  from a workstream-backed coordination item, the reviewer sees the linked
+  workstream pause, Alex retrieves the exact question and responds, and a fresh
+  Jordan context retrieves the exact response, accepts it, and sees the linked
+  workstream resume.
 
 ## Known blockers and risks
 
@@ -130,7 +135,7 @@ findings below.
 
 | Command | Result | Evidence |
 |---|---|---|
-| `npx playwright test --project=chromium tests/e2e/supabase-persistence.spec.ts` | PASS | 2/2 scenarios passed after hydration, persona, and strict-selector fixes; request creation and RFI flow execute across isolated contexts. |
+| `npx playwright test --project=chromium tests/e2e/supabase-persistence.spec.ts` | PASS | 2/2 scenarios passed; Scenario 1 proves exact request propagation and Scenario 2 proves exact RFI question, workstream pause, applicant response, reviewer acceptance, and workstream resume across isolated contexts. |
 | `npx playwright test --project=chromium tests/e2e/document-management.spec.ts` | PARTIAL | 1/2 passed: seeded private PDF download passed; live upload was correctly rejected by current remote Storage RLS. |
 | `npx tsc --noEmit` | PASS | TypeScript completed without errors. |
 | `npm run build` | PASS | Vinext/Vite production build completed; asset-size and dynamic-route warnings remain. |

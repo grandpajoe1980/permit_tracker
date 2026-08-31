@@ -609,6 +609,8 @@ export function getAvailableActions(item: OperationalWorkItem, persona: Operatio
     }
   } else if (item.kind === "customer_request") {
     actions.push("complete_step", "request_information", "mark_blocked", "escalate", "transfer", "add_note");
+  } else if (item.kind === "coordination") {
+    actions.push("request_information", "add_note");
   } else if (item.kind === "workflow" || item.kind === "task") {
     if (item.statusTone !== "green") {
       actions.push("complete_step", "request_information", "mark_blocked");

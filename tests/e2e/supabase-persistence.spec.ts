@@ -48,9 +48,11 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
   });
 
   test("Scenario 2: RFI Creation, Applicant Response, and Acceptance across Dual Contexts", async ({ browser }) => {
-    // 1. Context A: CPRA Reviewer Jordan Lee issues RFI
+    // 1. Context A: LDEQ Reviewer Jordan Lee issues RFI
     const contextReviewer = await browser.newContext();
     const pageReviewer = await contextReviewer.newPage();
+    const questionText = `E2E Automated Hydraulic Model Request ${Date.now()}`;
+    const responseText = `E2E Applicant Response ${Date.now()}`;
     await pageReviewer.goto("/");
     await expect(pageReviewer.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
 
@@ -58,14 +60,19 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await pageReviewer.click("#demo-persona-jordan");
     await expect(pageReviewer.getByRole("heading", { name: "My Work", exact: true })).toBeVisible();
 
-    // Open first work item and initiate RFI
-    await pageReviewer.click("text=Open Work");
-    const rfiBtn = pageReviewer.locator("button:has-text('Request Information')");
-    if (await rfiBtn.isVisible()) {
-      await rfiBtn.click();
-      await pageReviewer.fill("#question-text", "E2E Automated Hydraulic Model Request");
-      await pageReviewer.getByRole("dialog").getByRole("button", { name: "Request Information", exact: true }).click();
-    }
+    // Select a real reviewer queue card that exposes the RFI command.
+    const rfiCard = pageReviewer.locator("article").filter({ hasText: "COORDINATION" }).filter({ has: pageReviewer.getByRole("button", { name: "Request Information", exact: true }) }).first();
+    await expect(rfiCard).toBeVisible();
+    const rfiBtn = rfiCard.getByRole("button", { name: "Request Information", exact: true });
+    await expect(rfiBtn).toBeVisible();
+    await rfiBtn.click();
+    await pageReviewer.fill("#question-text", questionText);
+    await pageReviewer.getByRole("dialog").getByRole("button", { name: "Request Information", exact: true }).click();
+    await expect(pageReviewer.getByRole("dialog")).not.toBeVisible();
+    const issuedRfiCard = pageReviewer.locator("article").filter({ hasText: questionText }).first();
+    await expect(issuedRfiCard).toBeVisible();
+    await issuedRfiCard.getByRole("button", { name: "Open Work", exact: true }).click();
+    await expect(pageReviewer.getByText("Waiting on Applicant (RFI Issued)", { exact: false }).first()).toBeVisible();
 
     await contextReviewer.close();
 
@@ -76,9 +83,38 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(pageApplicant.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
 
     await pageApplicant.click("#demo-login-trigger");
-    await pageApplicant.click("#demo-persona-maya");
+    await pageApplicant.click("#demo-persona-alex");
     await expect(pageApplicant.getByRole("heading", { name: "My Work", exact: true })).toBeVisible();
 
+    await pageApplicant.getByRole("button", { name: /^My actions/ }).click();
+    const customerQuestion = pageApplicant.locator("article").filter({ hasText: questionText }).first();
+    await expect(customerQuestion).toBeVisible();
+    await customerQuestion.getByRole("button", { name: "Open Work", exact: true }).click();
+    await expect(pageApplicant.getByText(questionText, { exact: false }).first()).toBeVisible();
+    await pageApplicant.getByRole("button", { name: "Respond", exact: true }).click();
+    await pageApplicant.getByRole("dialog").locator("#action-note").fill(responseText);
+    await pageApplicant.getByRole("dialog").getByRole("button", { name: "Respond", exact: true }).click();
+    await expect(pageApplicant.getByRole("dialog")).not.toBeVisible();
+
     await contextApplicant.close();
+
+    // 3. A fresh reviewer context retrieves the exact response and accepts it.
+    const contextReviewerAgain = await browser.newContext();
+    const pageReviewerAgain = await contextReviewerAgain.newPage();
+    await pageReviewerAgain.goto("/");
+    await expect(pageReviewerAgain.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
+    await pageReviewerAgain.click("#demo-login-trigger");
+    await pageReviewerAgain.click("#demo-persona-jordan");
+    await expect(pageReviewerAgain.getByRole("heading", { name: "My Work", exact: true })).toBeVisible();
+    const reviewerResponse = pageReviewerAgain.locator("article").filter({ hasText: responseText }).first();
+    await expect(reviewerResponse).toBeVisible();
+    await reviewerResponse.getByRole("button", { name: "Open Work", exact: true }).click();
+    await expect(pageReviewerAgain.getByText(questionText, { exact: false }).first()).toBeVisible();
+    await expect(pageReviewerAgain.getByText(responseText, { exact: false }).first()).toBeVisible();
+    await pageReviewerAgain.getByRole("button", { name: "Accept & Resume Review", exact: true }).click();
+    await pageReviewerAgain.getByRole("dialog").getByRole("button", { name: "Accept & Resume Review", exact: true }).click();
+    await expect(pageReviewerAgain.getByRole("dialog")).not.toBeVisible();
+    await expect(pageReviewerAgain.getByText("Running (Response Accepted)", { exact: false }).first()).toBeVisible();
+    await contextReviewerAgain.close();
   });
 });
