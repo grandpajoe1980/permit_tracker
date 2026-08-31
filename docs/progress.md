@@ -104,6 +104,9 @@ findings below.
   authenticated reads now require an accessible project workstream unless the
   caller is a system administrator. Migration `20260830222000` still needs to
   be reconciled into the live migration ledger before it can be verified there.
+- Removed the pre-authentication Supabase hydration race; initial loading now
+  hydrates only after a browser session is established, preventing an
+  unauthenticated empty result from overwriting authorized state.
 
 ## Known blockers and risks
 

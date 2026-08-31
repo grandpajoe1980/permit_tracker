@@ -344,15 +344,6 @@ export default function Home() {
     });
     const client = getSupabaseBrowserClient();
 
-    // Hydrate project state authoritatively from Supabase PostgreSQL
-    void repository.hydrateFromSupabase().then((hydrated) => {
-      if (active && hydrated) {
-        setMutationVersion((v) => v + 1);
-        setSaveStatus("saved");
-        setLastSavedTime(new Date().toLocaleTimeString());
-      }
-    });
-
     if (!client) return;
     void getBrowserUser().then(async (user) => {
       if (!active || !user) return;
