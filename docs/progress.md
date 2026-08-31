@@ -107,6 +107,8 @@ findings below.
 - Removed the pre-authentication Supabase hydration race; initial loading now
   hydrates only after a browser session is established, preventing an
   unauthenticated empty result from overwriting authorized state.
+- Replaced the Gantt's fixed March–December 2026 header with month segments
+  derived from the persisted project timeline and a runtime today marker.
 
 ## Known blockers and risks
 

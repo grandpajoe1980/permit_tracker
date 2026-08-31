@@ -204,19 +204,27 @@ export function WorkstreamGraphGantt({
     return Math.max(0, Math.min(100, (elapsed / totalTimelineDays) * 100));
   }, [todayDate, timelineStart, totalTimelineDays]);
 
-  // Months header configuration
-  const months = useMemo(() => [
-    { label: "Mar 2026", startDay: 0, days: 31 },
-    { label: "Apr 2026", startDay: 31, days: 30 },
-    { label: "May 2026", startDay: 61, days: 31 },
-    { label: "Jun 2026", startDay: 92, days: 30 },
-    { label: "Jul 2026", startDay: 122, days: 31 },
-    { label: "Aug 2026", startDay: 153, days: 31, isCurrent: true },
-    { label: "Sep 2026", startDay: 184, days: 30 },
-    { label: "Oct 2026", startDay: 214, days: 31 },
-    { label: "Nov 2026", startDay: 245, days: 30 },
-    { label: "Dec 2026", startDay: 275, days: 31 },
-  ], []);
+  // Month segments are derived from the actual persisted schedule range so
+  // the header remains correct when a project starts or ends in another year.
+  const months = useMemo(() => {
+    const segments: Array<{ label: string; days: number; isCurrent: boolean }> = [];
+    const cursor = new Date(Date.UTC(timelineStart.getUTCFullYear(), timelineStart.getUTCMonth(), 1));
+    const end = timelineEnd.getTime();
+    const formatter = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+    while (cursor.getTime() <= end) {
+      const monthEnd = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+      const visibleStart = Math.max(timelineStart.getTime(), cursor.getTime());
+      const visibleEnd = Math.min(end, monthEnd.getTime());
+      segments.push({
+        label: formatter.format(cursor),
+        days: Math.max(1, Math.ceil((visibleEnd - visibleStart) / (1000 * 60 * 60 * 24))),
+        isCurrent: cursor.getUTCFullYear() === todayDate.getUTCFullYear() && cursor.getUTCMonth() === todayDate.getUTCMonth(),
+      });
+      cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    }
+    return segments;
+  }, [timelineStart, timelineEnd, todayDate]);
+  const monthGridTemplate = months.map((month) => `${month.days}fr`).join(" ");
 
   // Helper to compute percentage position on timeline
   function getTimelinePosition(dateStr?: string): number {
@@ -482,7 +490,7 @@ export function WorkstreamGraphGantt({
               <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50/50 p-2">
                 <span className="h-3 w-1 rounded-full bg-red-600 shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-xs font-bold text-red-950">Today (Aug 30)</div>
+                  <div className="truncate text-xs font-bold text-red-950">Today ({todayDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })})</div>
                   <div className="text-[10px] text-red-700 font-semibold">Current Standup As-Of</div>
                 </div>
               </div>
@@ -503,7 +511,7 @@ export function WorkstreamGraphGantt({
                 </div>
 
                 {/* Right Column: Timeline Months Grid */}
-                <div className="hidden md:col-span-8 md:grid grid-cols-10 relative py-2.5">
+                <div className="hidden md:col-span-8 md:grid relative py-2.5" style={{ gridTemplateColumns: monthGridTemplate }}>
                   {months.map((month) => (
                     <div
                       key={month.label}
@@ -612,7 +620,7 @@ export function WorkstreamGraphGantt({
                       {/* Right Timeline Column with Traditional Bars */}
                       <div className="col-span-12 md:col-span-8 p-3 relative h-[112px] flex flex-col justify-center overflow-hidden">
                         {/* Background monthly grid lines */}
-                        <div className="absolute inset-0 grid grid-cols-10 pointer-events-none opacity-20">
+                        <div className="absolute inset-0 grid pointer-events-none opacity-20" style={{ gridTemplateColumns: monthGridTemplate }}>
                           {months.map((m) => (
                             <div key={m.label} className="border-r border-slate-300 h-full last:border-0" />
                           ))}
