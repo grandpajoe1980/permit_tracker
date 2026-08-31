@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, seedScript, commandSeedScript, repository, rlsScript] = await Promise.all([
+const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, triageMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, seedScript, commandSeedScript, repository, rlsScript] = await Promise.all([
   readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
@@ -14,6 +14,7 @@ const [page, layout, css, readme, portalMigration, hardeningMigration, policyMig
   readFile(new URL("../supabase/migrations/20260830220000_workstream_action_notifications.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830222000_scope_workflow_metadata_rls.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830223000_catalog_admin_transactions.sql", import.meta.url), "utf8"),
+  readFile(new URL("../supabase/migrations/20260830225000_atomic_multi_workstream_triage.sql", import.meta.url), "utf8"),
   readFile(new URL("../lib/project-identifiers.ts", import.meta.url), "utf8"),
   readFile(new URL("../lib/supabase/mutations.ts", import.meta.url), "utf8"),
   readFile(new URL("../lib/data-mode.ts", import.meta.url), "utf8"),
@@ -85,7 +86,7 @@ test("ships the customer schema, RLS hardening, and service-role seed contract",
 test("keeps production mutations and routes server-confirmed", () => {
   assert.match(dataMode, /export function requiresSupabase/);
   assert.match(dataMode, /return getAppDataMode\(\) === "production"/);
-  assert.match(page, /createWorkstreamFromRequestPersisted/);
+  assert.match(page, /triageCustomerRequestPersisted/);
   assert.match(page, /clearWorkstreamBlockerPersisted/);
   assert.doesNotMatch(page, /triggerFileDownload/);
   assert.match(actionMigration, /rpc_mark_workstream_blocked/);
@@ -100,6 +101,10 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(catalogAdminMigration, /rpc_register_organization/);
   assert.match(catalogAdminMigration, /rpc_create_permit_type/);
   assert.match(catalogAdminMigration, /require_workflow_admin/);
+  assert.match(triageMigration, /rpc_triage_customer_request/);
+  assert.match(triageMigration, /triaged_workstream_ids/);
+  assert.match(mutations, /mutateTriageCustomerRequest/);
+  assert.match(repository, /triageCustomerRequestPersisted/);
   assert.match(mutations, /mutateRegisterOrganization/);
   assert.match(mutations, /mutateCreatePermitType/);
   assert.match(rlsScript, /disposable RLS isolation probe/);

@@ -19,6 +19,11 @@ false-success and fixture behavior with verified Supabase-backed behavior.
   later broad policies are superseded by explicit policies, and production
   mutation paths await canonical Supabase results. Live migration application
   and full clean-context RLS verification remain outstanding.
+- Multi-workstream intake triage is now one server transaction: the UI submits
+  the complete fan-out to `rpc_triage_customer_request`, which locks the
+  request and commits workstream creation, request state, and audit together.
+  Its checked-in migration still requires live-ledger reconciliation before
+  deployment verification.
 - Fixture data is isolated behind explicit demo/test mode. Empty authorized
   production query results remain empty; the remaining in-memory repository
   methods are compatibility helpers for fixture/test execution only.

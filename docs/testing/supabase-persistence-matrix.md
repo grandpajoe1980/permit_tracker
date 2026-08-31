@@ -57,6 +57,7 @@ Every mutation must satisfy the **Non-Negotiable Supabase Durability Gate**:
 | Function Name | Parameters | Actions Executed Atomically |
 | :--- | :--- | :--- |
 | `rpc_create_customer_request` | `p_id`, `p_confirmation_number`, `p_project_id`, `p_request_type`, `p_title`, `p_description`, ... | Inserts `customer_requests`, logs `audit_events`, creates triage `notifications` |
+| `rpc_triage_customer_request` | `p_request_id`, `p_workstreams` | Locks the request, creates every linked workstream, updates triage state, and logs one audit event in one transaction |
 | `rpc_create_rfi` | `p_id`, `p_code`, `p_workstream_id`, `p_question_text`, ... | Inserts `rfis`, pauses `workstreams.operational_state` (`waiting_applicant`), logs `audit_events` |
 | `rpc_submit_rfi_response` | `p_id`, `p_rfi_id`, `p_submitted_by_user_name`, `p_response_text`, ... | Inserts `rfi_responses`, updates `rfis.status` (`submitted_by_applicant`), logs `audit_events` |
 | `rpc_accept_rfi_response` | `p_rfi_id`, `p_actor_name`, `p_actor_org_name`, `p_notes` | Updates `rfi_responses.review_status` (`accepted`), updates `rfis.status`, resumes `workstreams.operational_state` (`running`), logs `audit_events` |
@@ -76,6 +77,7 @@ Every mutation must satisfy the **Non-Negotiable Supabase Durability Gate**:
 | **SCEN-06–13** | Remaining lifecycle, admin, realtime, and filing scenarios | Multiple contexts | Authorized users | No dedicated clean-context proof in the current automated suite | **UNVERIFIED** |
 | **SCEN-14** | Production Build & Lint Gate | Automated CI | Vinext / ESLint / Node Test Runner | Build/type checks pass; lint has 0 errors but warning debt remains | **PASS WITH WARNINGS** |
 | **SCEN-15** | Tenant and Storage Isolation Probe | Disposable isolated tenant; authenticated customer and anonymous contexts | Supabase RLS/Storage | Isolated project/document are hidden and unauthorized upload is rejected | **PASS (live Supabase)** |
+| **SCEN-16** | Atomic Multi-Workstream Triage | State-office triage action | Supabase transaction | One RPC owns request lock, all workstream inserts, request update, and audit; source contract passes, live migration verification pending | **SOURCE VERIFIED; LIVE UNVERIFIED** |
 
 The older table claimed all scenarios passed; those claims were not reproducible
 from the current test suite and have been replaced with evidence-based status.

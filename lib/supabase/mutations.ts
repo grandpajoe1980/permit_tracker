@@ -479,6 +479,36 @@ export async function mutateCreateWorkstreamFromRequest(params: {
   };
 }
 
+export async function mutateTriageCustomerRequest(params: {
+  requestId: string;
+  workstreams: Array<{
+    code: string;
+    title: string;
+    category: string;
+    permitTypeId?: string;
+    leadOrgCode?: string;
+    leadOrgName?: string;
+    workflowVersionId?: string;
+  }>;
+}): Promise<MutationResult<{ requestId: string; workstreamIds: string[]; workstreamCodes: string[] }>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data, error } = await client.rpc("rpc_triage_customer_request", {
+    p_request_id: params.requestId,
+    p_workstreams: params.workstreams,
+  });
+  if (error || !data) return { data: null, error: new Error(error?.message ?? "Customer triage was not confirmed by the database.") };
+  const row = data as Record<string, unknown>;
+  return {
+    data: {
+      requestId: String(row.requestId ?? row.request_id),
+      workstreamIds: Array.isArray(row.workstreamIds) ? row.workstreamIds.map(String) : [],
+      workstreamCodes: Array.isArray(row.workstreamCodes) ? row.workstreamCodes.map(String) : [],
+    },
+    error: null,
+  };
+}
+
 export async function mutateCreateExternalFiling(params: {
   id: string;
   projectId: string;

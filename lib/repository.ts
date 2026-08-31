@@ -67,6 +67,7 @@ import {
   mutateEscalateWorkstream,
   mutateMarkWorkstreamBlocked,
   mutateSubmitRFIResponse,
+  mutateTriageCustomerRequest,
   mutateTransferWorkstream,
   mutateUpdateExternalFiling,
   mutateUpdateProjectParticipant,
@@ -603,6 +604,25 @@ class ProjectDeliveryRepository {
     }
     const result = await mutateCreateWorkstreamFromRequest(params);
     if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Workstream creation was not confirmed by the database.") };
+    await this.hydrateFromSupabase();
+    return { data: result.data, error: null };
+  }
+
+  async triageCustomerRequestPersisted(params: {
+    requestId: string;
+    workstreams: Array<{
+      code: string;
+      title: string;
+      category: string;
+      permitTypeId?: string;
+      leadOrgCode?: string;
+      leadOrgName?: string;
+      workflowVersionId?: string;
+    }>;
+  }): Promise<{ data: { requestId: string; workstreamIds: string[]; workstreamCodes: string[] } | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) return { data: null, error: new Error("Supabase is required for atomic customer triage.") };
+    const result = await mutateTriageCustomerRequest(params);
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Customer triage was not confirmed by the database.") };
     await this.hydrateFromSupabase();
     return { data: result.data, error: null };
   }

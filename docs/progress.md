@@ -121,6 +121,13 @@ findings below.
 - Added `npm run supabase:rls`, a disposable authenticated/anonymous isolation
   probe that verifies an ungranted customer cannot read a project or document
   and cannot upload to its private Storage path.
+- Replaced the UI's sequential multi-workstream triage loop with one atomic
+  `rpc_triage_customer_request` transaction. It locks the request, validates
+  every requested workstream and published workflow, creates all linked
+  workstreams, updates the request once, and writes one audit event; any
+  failure rolls back the complete fan-out. Migration
+  `20260830225000_atomic_multi_workstream_triage.sql` and the repository/RPC
+  path are source-contract tested.
 
 ## Known blockers and risks
 
@@ -141,6 +148,8 @@ findings below.
 - The direct Vite dev server is the reproducible browser-test runtime here;
   `vinext start` served the shell but returned 404s for built `/assets/*` in
   this Sites-configured environment and needs deployment-runtime validation.
+- The checked-in atomic triage RPC is not yet live-verified because the remote
+  migration ledger must be reconciled before applying local migrations.
 
 ## Next actions
 

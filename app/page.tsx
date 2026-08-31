@@ -547,20 +547,20 @@ export default function Home() {
         ]
       : [[request.knownAgencyCode ?? "STATEPO", request.knownAgencyCode ?? "Louisiana Governor's Office of Major Projects & Delivery", request.title]];
     const baseCode = request.confirmationNumber.replace(/[^A-Z0-9]+/gi, "-").slice(-14);
-    for (const [orgCode, orgName, title] of workstreamPlan) {
-      const result = await repository.createWorkstreamFromRequestPersisted({
-        requestId: request.id,
+    const result = await repository.triageCustomerRequestPersisted({
+      requestId: request.id,
+      workstreams: workstreamPlan.map(([orgCode, orgName, title]) => ({
         code: `WS-${orgCode}-${baseCode}`,
         title,
         category: request.requestType,
         permitTypeId: request.knownPermitTypeId,
         leadOrgCode: orgCode,
         leadOrgName: orgName,
-      });
-      if (result.error || !result.data) {
-        setToast(`Triage failed after ${orgCode}: ${result.error?.message ?? "the database did not confirm the workstream"}`);
-        return;
-      }
+      })),
+    });
+    if (result.error || !result.data) {
+      setToast(`Triage failed: ${result.error?.message ?? "the database did not confirm the workstreams"}`);
+      return;
     }
     setToast(`${workstreamPlan.length} workstream${workstreamPlan.length === 1 ? "" : "s"} created from ${request.confirmationNumber}.`);
     setMutationVersion((value) => value + 1);
