@@ -199,17 +199,19 @@ findings below.
   request RPC can be exercised against Supabase.
 - The organization-scoped workflow capability is source-verified but not
   live-verified until the remote migration ledger is reconciled.
+- Organization member role persistence is source-verified in migration
+  `20260830235000_persist_organization_member_roles.sql`; live verification is
+  pending the same ledger reconciliation.
 
 ## Next actions
 
-1. Add the remaining failure/workflow negative tests, implement the intake
-   first-file upload transaction, and validate every forward migration against
-   a running Supabase database.
+1. Add the remaining failure/workflow negative tests and validate every
+   forward migration against a running Supabase database.
 2. Reconcile the live migration ledger before applying the checked-in forward
    hardening/action/notification migrations.
-3. Continue through government workbench, document lifecycle, and schedule
-   persistence checkpoints; the first route extraction checkpoint is now in
-   source and build-verified.
+3. Complete the clean-context SpaceX → triage → three workstreams → RFI →
+   accepted response → stage handoff journey; the current Chromium suite
+   proves only the request/RFI/document slices independently.
 
 ## Latest verification
 
