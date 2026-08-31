@@ -100,6 +100,10 @@ findings below.
   workstream pause, Alex retrieves the exact question and responds, and a fresh
   Jordan context retrieves the exact response, accepts it, and sees the linked
   workstream resume.
+- Added forward RLS hardening for workflow transitions and checklist metadata;
+  authenticated reads now require an accessible project workstream unless the
+  caller is a system administrator. Migration `20260830222000` still needs to
+  be reconciled into the live migration ledger before it can be verified there.
 
 ## Known blockers and risks
 
