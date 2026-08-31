@@ -24,11 +24,11 @@ import { getPermitCatalog, getRegisteredOrganizations, getWorkflowTemplates } fr
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { allowsFixtureData } from "@/lib/data-mode";
 import { mutateCreatePermitType, mutateRegisterOrganization } from "@/lib/supabase/mutations";
-import type { OrganizationRecord, PermitTypeRecord } from "@/lib/domain-models";
+import type { OrganizationRecord, PermitTypeRecord, WorkflowTemplateRecord } from "@/lib/domain-models";
 import type { WorkflowStageRecord } from "@/lib/domain-models";
 
-export function WorkflowDesignerPanel({ catalog: catalogProp, organizations: organizationsProp }: { catalog?: PermitTypeRecord[]; organizations?: OrganizationRecord[] } = {}) {
-  const templates = getWorkflowTemplates();
+export function WorkflowDesignerPanel({ catalog: catalogProp, organizations: organizationsProp, templates: templatesProp }: { catalog?: PermitTypeRecord[]; organizations?: OrganizationRecord[]; templates?: WorkflowTemplateRecord[] } = {}) {
+  const templates = templatesProp ?? getWorkflowTemplates();
   const [catalogAdds, setCatalogAdds] = useState<PermitTypeRecord[]>([]);
   const [organizationAdds, setOrganizationAdds] = useState<OrganizationRecord[]>([]);
   const [activeTab, setActiveTab] = useState<"workflows" | "catalog" | "agencies">("workflows");

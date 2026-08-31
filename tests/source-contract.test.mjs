@@ -27,6 +27,7 @@ const [page, layout, css, readme, portalMigration, hardeningMigration, policyMig
   readFile(new URL("../lib/repository.ts", import.meta.url), "utf8"),
   readFile(new URL("../scripts/test-supabase-rls-isolation.mjs", import.meta.url), "utf8"),
 ]);
+const workflowQueries = await readFile(new URL("../lib/supabase/queries.ts", import.meta.url), "utf8");
 
 test("uses the typed domain module without duplicating fixtures in the UI", () => {
   assert.match(page, /^"use client";/);
@@ -107,6 +108,9 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(triageMigration, /insert into public\.tasks/);
   assert.match(mutations, /mutateTriageCustomerRequest/);
   assert.match(repository, /triageCustomerRequestPersisted/);
+  assert.match(page, /getWorkflowTemplates/);
+  assert.match(workflowQueries, /fetchWorkflowTemplates/);
+  assert.match(workflowQueries, /workflow_version_stages/);
   assert.match(versionedCompletionMigration, /workflow_version_stages/);
   assert.match(versionedCompletionMigration, /workflow_checklist_items/);
   assert.match(versionedCompletionMigration, /stage_runs/);

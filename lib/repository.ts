@@ -16,6 +16,7 @@ import type {
   ProjectRecord,
   RFIRecord,
   RFIResponseRecord,
+  WorkflowTemplateRecord,
   WorkstreamRecord,
   UserProfileRecord,
 } from "./domain-models";
@@ -50,6 +51,7 @@ import {
   fetchProjectParticipants,
   fetchRFIs,
   fetchUserProfiles,
+  fetchWorkflowTemplates,
   fetchWorkstreams,
 } from "./supabase/queries";
 import {
@@ -99,6 +101,7 @@ class ProjectDeliveryRepository {
   private participants: ProjectParticipantRecord[] = JSON.parse(JSON.stringify(projectParticipants));
   private externalFilings: ExternalFilingRecord[] = JSON.parse(JSON.stringify(initialExternalFilings));
   private customerRequests: CustomerRequestRecord[] = [];
+  private workflowTemplates: WorkflowTemplateRecord[] = JSON.parse(JSON.stringify(workflowTemplatesData));
   private isHydratedFromDb = false;
 
   constructor() {
@@ -128,6 +131,7 @@ class ProjectDeliveryRepository {
         audits,
         cat,
         orgs,
+        workflowTemplates,
       ] = await Promise.all([
         fetchWorkstreams(projectId),
         fetchCustomerRequests(projectId),
@@ -144,6 +148,7 @@ class ProjectDeliveryRepository {
         fetchAuditEvents(projectId),
         fetchCatalog(),
         fetchOrganizations(),
+        fetchWorkflowTemplates(),
       ]);
 
       const keepFixtures = allowsFixtureData();
@@ -162,6 +167,7 @@ class ProjectDeliveryRepository {
       if (!keepFixtures || audits.length > 0) this.auditEvents = audits;
       if (!keepFixtures || cat.length > 0) this.catalog = cat;
       if (!keepFixtures || orgs.length > 0) this.organizations = orgs;
+      if (!keepFixtures || workflowTemplates.length > 0) this.workflowTemplates = workflowTemplates;
 
       this.isHydratedFromDb = true;
       return true;
@@ -353,6 +359,10 @@ class ProjectDeliveryRepository {
 
   getOrganizations(): OrganizationRecord[] {
     return this.organizations;
+  }
+
+  getWorkflowTemplates(): WorkflowTemplateRecord[] {
+    return this.workflowTemplates;
   }
 
   getAuditEvents(): AuditEventRecord[] {

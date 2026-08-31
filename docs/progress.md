@@ -134,6 +134,10 @@ findings below.
   enforces configured checklist/document and statutory-day requirements,
   records `stage_runs`, activates the next task, and notifies the next
   organization's supervisors/admins.
+- Added an authoritative `fetchWorkflowTemplates` query and repository
+  hydration path. The existing Workflow Designer now receives Supabase-backed
+  definitions, versions, and stage rows in production, while fixture templates
+  remain isolated to demo/test mode.
 
 ## Known blockers and risks
 

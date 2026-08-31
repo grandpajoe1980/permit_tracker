@@ -79,6 +79,7 @@ Every mutation must satisfy the **Non-Negotiable Supabase Durability Gate**:
 | **SCEN-14** | Production Build & Lint Gate | Automated CI | Vinext / ESLint / Node Test Runner | Build/type checks pass; lint has 0 errors but warning debt remains | **PASS WITH WARNINGS** |
 | **SCEN-15** | Tenant and Storage Isolation Probe | Disposable isolated tenant; authenticated customer and anonymous contexts | Supabase RLS/Storage | Isolated project/document are hidden and unauthorized upload is rejected | **PASS (live Supabase)** |
 | **SCEN-16** | Atomic Multi-Workstream Triage | State-office triage action | Supabase transaction | One RPC owns request lock, all workstream inserts, request update, and audit; source contract passes, live migration verification pending | **SOURCE VERIFIED; LIVE UNVERIFIED** |
+| **SCEN-17** | Authoritative Workflow Designer Metadata | Authenticated administration context | Supabase workflow definitions/versions/stages | Designer receives persisted workflow metadata and uses the persisted source version for draft creation; source contract/build verified, live admin context pending | **SOURCE VERIFIED; LIVE UNVERIFIED** |
 
 The older table claimed all scenarios passed; those claims were not reproducible
 from the current test suite and have been replaced with evidence-based status.

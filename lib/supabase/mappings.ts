@@ -19,6 +19,7 @@ import type {
   RFIResponseRecord,
   TaskRecord,
   UserProfileRecord,
+  WorkflowStageRecord,
   WorkstreamRecord,
 } from "../domain-models";
 
@@ -85,6 +86,30 @@ function obj<T = Record<string, unknown>>(val: unknown, fallback = {}): T {
     } catch {}
   }
   return fallback as T;
+}
+
+export function workflowStageRowToDomain(row: Row): WorkflowStageRecord {
+  return {
+    id: str(row.id),
+    workflowVersionId: str(row.workflow_version_id),
+    stageKey: str(row.stage_key),
+    name: str(row.label),
+    internalDescription: str(row.internal_description) || undefined,
+    customerVisibilityLabel: str(row.customer_visibility_label || row.label),
+    sequenceOrder: num(row.sequence_order, 1),
+    responsibleOrgId: str(row.responsible_org_id || row.responsible_org_code),
+    responsibleOrgCode: str(row.responsible_org_code, "PATH"),
+    responsibleUnitName: str(row.responsible_unit_name) || undefined,
+    targetDurationDays: num(row.target_duration_days, 0),
+    minimumStatutoryDays: num(row.minimum_statutory_days, 0),
+    requiredInputs: arr<string>(row.required_inputs),
+    completionRequirements: arr<string>(row.completion_requirements),
+    permittedTransitions: arr<string>(row.permitted_transitions),
+    canRunInParallel: bool(row.can_run_in_parallel),
+    isMilestoneGate: bool(row.is_milestone_gate),
+    externalFilingUrl: str(row.external_filing_url) || undefined,
+    legalAuthorityCitation: str(row.legal_authority_citation) || undefined,
+  };
 }
 
 // ====================================================================

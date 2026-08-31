@@ -3,7 +3,7 @@ import {
   auditEventRowToDomain, commitmentRowToDomain, coordinationRequestRowToDomain,
   customerRequestRowToDomain, decisionRowToDomain, documentAgencyReviewRowToDomain,
   documentRowToDomain, documentVersionRowToDomain, externalFilingRowToDomain,
-  meetingRowToDomain, notificationRowToDomain, organizationRowToDomain, permitTypeRowToDomain,
+  meetingRowToDomain, notificationRowToDomain, organizationRowToDomain, permitTypeRowToDomain, workflowStageRowToDomain,
   projectParticipantRowToDomain, requirementResourceRowToDomain, rfiResponseRowToDomain,
   rfiRowToDomain, taskRowToDomain, userProfileRowToDomain, workstreamRowToDomain,
 } from "./mappings";
@@ -11,7 +11,7 @@ import type {
   AuditEventRecord, CommitmentRecord, CoordinationRequestRecord, CustomerRequestRecord,
   DecisionRecord, DocumentRecord, ExternalFilingRecord, MeetingRecord, NotificationRecord,
   OrganizationRecord, PermitTypeRecord, ProjectParticipantRecord, ProjectRecord, RFIRecord, UserProfileRecord,
-  WorkstreamRecord,
+  WorkstreamRecord, WorkflowTemplateRecord,
 } from "../domain-models";
 import { legacyProjectReferences } from "../project-identifiers";
 
@@ -203,6 +203,44 @@ export async function fetchOrganizations(): Promise<OrganizationRecord[]> {
   if (!client) return noClient();
   const { data, error } = await client.from("organizations").select("*").eq("active", true).order("code", { ascending: true });
   return error || !data ? noClient() : data.map(organizationRowToDomain);
+}
+
+export async function fetchWorkflowTemplates(): Promise<WorkflowTemplateRecord[]> {
+  const client = getSupabaseBrowser();
+  if (!client) return noClient();
+  const [definitionsRes, versionsRes, stagesRes] = await Promise.all([
+    client.from("workflow_definitions").select("*").order("case_type", { ascending: true }),
+    client.from("workflow_versions").select("*").order("version_number", { ascending: false }),
+    client.from("workflow_version_stages").select("*").order("sequence_order", { ascending: true }),
+  ]);
+  if (definitionsRes.error || versionsRes.error || stagesRes.error || !definitionsRes.data || !versionsRes.data || !stagesRes.data) return noClient();
+  return definitionsRes.data.map((definition) => {
+    const definitionId = String(definition.id);
+    const versions = versionsRes.data
+      .filter((version) => String(version.workflow_id) === definitionId)
+      .map((version) => {
+        const versionId = String(version.id);
+        return {
+          id: versionId,
+          templateId: definitionId,
+          versionNumber: Number(version.version_number ?? 1),
+          status: (String(version.lifecycle_status ?? (version.is_active ? "published" : "retired"))) as "draft" | "published" | "retired",
+          effectiveDate: version.effective_date ? String(version.effective_date) : undefined,
+          publishedAt: version.published_at ? String(version.published_at) : undefined,
+          changeSummary: version.change_summary ? String(version.change_summary) : undefined,
+          stages: stagesRes.data.filter((stage) => String(stage.workflow_version_id) === versionId).map(workflowStageRowToDomain),
+        };
+      });
+    const activeVersion = versions.find((version) => version.status === "published") ?? versions[0];
+    return {
+      id: definitionId,
+      permitTypeId: String(definition.case_type ?? definitionId),
+      name: String(definition.name ?? definition.case_type ?? "Workflow"),
+      description: definition.description ? String(definition.description) : undefined,
+      activeVersionNumber: activeVersion?.versionNumber ?? 1,
+      versions,
+    };
+  });
 }
 
 export async function fetchFullProjectState(projectId = "PRJ-PECAN-2026"): Promise<Partial<ProjectRecord>> {

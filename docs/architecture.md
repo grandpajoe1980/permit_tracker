@@ -63,6 +63,9 @@ checked in as forward-only Supabase migrations and reflected here.
   seeded private PDF download. The checked-in forward Storage/RLS migrations
   still require live ledger reconciliation before deployment verification;
   Firefox/WebKit binaries are not installed in the current runner.
+- The Workflow Designer's production source is now hydrated from
+  `workflow_definitions`, `workflow_versions`, and `workflow_version_stages`;
+  its fixture templates are used only when explicit demo/test mode is active.
 - Historical permissive migrations remain in the repository for replayability,
   but later forward migrations drop their broad policies. The live migration
   ledger still differs from this checkout and must be reconciled before deploy.
