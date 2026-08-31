@@ -32,7 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { repository } from "@/lib/repository";
 import type { OperationalWorkItem } from "@/lib/operational-ux";
-import type { AssignmentGroupRecord, DemoPersona, WorkflowStageRecord, WorkstreamRecord } from "@/lib/domain-models";
+import type { DemoPersona, WorkflowStageRecord } from "@/lib/domain-models";
 
 interface TicketWorkflowEditorProps {
   item: OperationalWorkItem;
@@ -51,9 +51,11 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
       persona.roleId === "reviewer" ||
       persona.roleId === "infrastructure" ||
       persona.roleId === "community");
+  const canEditWorkflow = item.kind === "workflow" || item.kind === "task";
 
   const workstream = item.workstreamId ? repository.getWorkstreamById(item.workstreamId) : undefined;
   const assignmentGroups = repository.getAssignmentGroups();
+  const activeAssignmentGroups = assignmentGroups.filter((group) => group.active);
 
   // Find or generate stages for this ticket
   const initialStages: WorkflowStageRecord[] = React.useMemo(() => {
@@ -136,6 +138,11 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
   const [newStageOrg, setNewStageOrg] = useState("DOTD");
   const [newStageDuration, setNewStageDuration] = useState(5);
   const [newStageGate, setNewStageGate] = useState(false);
+  const [nextStageNumber, setNextStageNumber] = useState(1);
+  const [selectedAssignmentGroupId, setSelectedAssignmentGroupId] = useState(workstream?.assignmentGroupId ?? item.assignmentGroupId ?? "");
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState(workstream?.assignedToUserId ?? item.assignedUserId ?? "");
+  const [assignmentStatus, setAssignmentStatus] = useState<string | null>(null);
+  const [assignmentSaving, setAssignmentSaving] = useState(false);
 
   // Edit stage form state
   const [editName, setEditName] = useState("");
@@ -168,10 +175,12 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
 
   function handleAddStage() {
     if (!newStageName.trim()) return;
+    const stageNumber = nextStageNumber;
+    setNextStageNumber((current) => current + 1);
     const newStage: WorkflowStageRecord = {
-      id: `stg-${Date.now()}`,
+      id: `stg-${item.id}-custom-${stageNumber}`,
       workflowVersionId: "wf-ver-1",
-      stageKey: `custom_stage_${Date.now()}`,
+      stageKey: `custom_stage_${stageNumber}`,
       name: newStageName.trim(),
       customerVisibilityLabel: newStageName.trim(),
       responsibleOrgCode: newStageOrg,
@@ -188,6 +197,39 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
     setNewStageName("");
     setIsAddingStage(false);
     triggerSaveNotification(`Added new stage: ${newStage.name}`);
+  }
+
+  async function handleSaveAssignment() {
+    if (!selectedAssignmentGroupId) {
+      setAssignmentStatus("Select an assignment group before saving.");
+      return;
+    }
+    const ticketType = item.kind === "customer_request" ? "customer_request" : item.kind === "task" ? "task" : "workstream";
+    const ticketId = item.kind === "workflow" ? workstream?.id ?? item.workstreamId ?? item.sourceId : item.sourceId;
+    if (!ticketId) {
+      setAssignmentStatus("This item is not connected to an authoritative ticket record.");
+      return;
+    }
+
+    setAssignmentSaving(true);
+    setAssignmentStatus(null);
+    const result = await repository.assignTicketPersisted({
+      ticketType,
+      ticketId,
+      assignmentGroupId: selectedAssignmentGroupId,
+      assignedToUserId: selectedAssigneeId || undefined,
+      actorUserId: persona.id,
+      actorName: persona.name,
+      reason: "Assignment updated from the ticket workflow editor.",
+    });
+    setAssignmentSaving(false);
+    if (result.error) {
+      setAssignmentStatus(result.error.message);
+      return;
+    }
+    const groupName = assignmentGroups.find((group) => group.id === selectedAssignmentGroupId)?.name ?? "selected group";
+    setAssignmentStatus(`Assignment saved to ${groupName}${selectedAssigneeId ? " and the selected fulfiller" : ""}.`);
+    if (onWorkflowUpdated) onWorkflowUpdated();
   }
 
   function handleDeleteStage(stageId: string) {
@@ -238,19 +280,19 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
             </span>
             <div>
               <CardTitle className="text-base font-black text-[#00284d] flex items-center gap-2">
-                Ticket Workflow & Stage DAG
+                 {canEditWorkflow ? "Ticket Workflow & Stage DAG" : "Ticket Assignment & Routing"}
                 <span className="rounded-full bg-teal-100 border border-teal-300 px-2 py-0.5 text-[11px] font-bold text-teal-900 font-mono">
                   {stages.length} Stages
                 </span>
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                {isAuthorized
-                  ? "As a State Reviewer / Fulfiller, you can modify stages, insert custom gates, reorder dependencies, and adjust assignees."
-                  : "Read-only view of the operational workflow sequence for this ticket."}
+                 {canEditWorkflow && isAuthorized
+                   ? "As a State Reviewer / Fulfiller, you can modify stages, insert custom gates, reorder dependencies, and adjust assignees."
+                   : canEditWorkflow ? "Read-only view of the operational workflow sequence for this ticket." : "Route this ticket to the responsible agency queue and fulfiller."}
               </CardDescription>
             </div>
           </div>
-          {isAuthorized && !isAddingStage && (
+          {canEditWorkflow && isAuthorized && !isAddingStage && (
             <Button
               type="button"
               size="sm"
@@ -270,6 +312,36 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
       </CardHeader>
 
       <CardContent className="p-4 sm:p-5 space-y-4">
+        <section aria-label="Ticket assignment" className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-slate-700">Assignment routing</p>
+              <p className="mt-1 text-xs text-slate-500">Route this ticket to an authorized agency queue and optional fulfiller.</p>
+            </div>
+              <Button type="button" size="sm" onClick={() => void handleSaveAssignment()} disabled={assignmentSaving || !isAuthorized || activeAssignmentGroups.length === 0} className="bg-[#00284d] text-xs font-bold text-white">
+              {assignmentSaving ? "Saving..." : "Save assignment"}
+            </Button>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="ticket-assignment-group" className="text-xs font-bold">Assignment group</Label>
+              <select id="ticket-assignment-group" value={selectedAssignmentGroupId} onChange={(event) => { setSelectedAssignmentGroupId(event.target.value); setSelectedAssigneeId(""); }} disabled={!isAuthorized || assignmentGroups.length === 0} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-xs">
+                <option value="">Select a group</option>
+                {activeAssignmentGroups.map((group) => <option key={group.id} value={group.id}>{group.name} · {group.orgCode}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="ticket-assignee" className="text-xs font-bold">Fulfiller</Label>
+              <select id="ticket-assignee" value={selectedAssigneeId} onChange={(event) => setSelectedAssigneeId(event.target.value)} disabled={!isAuthorized || !selectedAssignmentGroupId} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-xs">
+                <option value="">Group queue, no individual</option>
+                {repository.getAssignmentGroupMembers(selectedAssignmentGroupId).map((member) => <option key={member.userId} value={member.userId}>{member.userName ?? member.userEmail ?? member.userId}</option>)}
+              </select>
+            </div>
+          </div>
+          {assignmentStatus && <p role="status" className="mt-2 text-xs font-semibold text-slate-700">{assignmentStatus}</p>}
+        </section>
+
+        {canEditWorkflow && <>
         {/* Stage Addition Form */}
         {isAddingStage && (
           <div className="rounded-xl border-2 border-dashed border-teal-400 bg-teal-50/50 p-4 space-y-3">
@@ -540,6 +612,7 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
             );
           })}
         </div>
+        </>}
       </CardContent>
     </Card>
   );

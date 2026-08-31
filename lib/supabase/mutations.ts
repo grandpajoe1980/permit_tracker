@@ -1592,7 +1592,7 @@ export async function mutateAssignTicket(params: {
   reason?: string;
   actorUserId?: string;
   actorName?: string;
-}): Promise<MutationResult<any>> {
+}): Promise<MutationResult<unknown>> {
   const client = getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
@@ -1619,7 +1619,7 @@ export async function mutateUpdateTicketITSMState(params: {
   actorName?: string;
   reason?: string;
   pauseReason?: string;
-}): Promise<MutationResult<any>> {
+}): Promise<MutationResult<unknown>> {
   const client = getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
@@ -1649,7 +1649,7 @@ export async function mutateSetTicketPriority(params: {
   actorUserId?: string;
   actorName?: string;
   reason?: string;
-}): Promise<MutationResult<any>> {
+}): Promise<MutationResult<unknown>> {
   const client = getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
@@ -1761,4 +1761,3 @@ export async function mutateManageAssignmentGroupMembership(params: {
 
   return { data: record, error: null };
 }
-

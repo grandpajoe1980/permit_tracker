@@ -53,7 +53,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { AdminDirectory } from "@/components/admin/AdminDirectory";
 import { DocumentViewerModal } from "@/components/documents/DocumentViewerModal";
-import type { CustomerRequestRecord, DocumentRecord, DocumentVersionRecord } from "@/lib/domain-models";
+import type { CustomerRequestRecord, DocumentRecord, DocumentVersionRecord, ITSMState } from "@/lib/domain-models";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -121,6 +121,12 @@ import { TicketWorkflowEditor } from "@/components/cockpits/TicketWorkflowEditor
 type Route = "my-work" | "agency-queue" | "rfis" | "coordination" | "documents" | "project" | "notifications" | "secondary" | "admin" | "detail" | "requests" | "schedule" | "contacts" | "help" | "profile";
 type SecondaryTool = "schedule" | "vault" | "catalog";
 type DialogState = { action: WorkActionId; itemId: string } | null;
+
+function userIdForPersona(id: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+    ? id
+    : id.startsWith("user-") ? id : `user-${id}`;
+}
 
 function makeAuthenticatedPersona(email: string, name: string, userId?: string): DemoPersona {
   const membership = userId ? repository.getOrganizationMemberships().find((entry) => entry.userId === userId && entry.status === "active") : undefined;
@@ -318,6 +324,10 @@ export default function Home() {
   const [transferType, setTransferType] = useState("Ask another reviewer");
   const [escalationType, setEscalationType] = useState("Supervisor decision");
   const [statusUpdate, setStatusUpdate] = useState("in_progress");
+  const [queueSearch, setQueueSearch] = useState("");
+  const [queueKind, setQueueKind] = useState("all");
+  const [queueState, setQueueState] = useState("all");
+  const [queueGroup, setQueueGroup] = useState("all");
   const [intakeText, setIntakeText] = useState("");
   const [intakeFile, setIntakeFile] = useState<File | null>(null);
   const [intakeStatus, setIntakeStatus] = useState("");
@@ -356,18 +366,26 @@ export default function Home() {
     customerRequests: repository.getCustomerRequests(),
   });
   const workItems = operationalData.items;
+  const activeQueueItems = workItems.filter((item) => {
+    const query = queueSearch.trim().toLowerCase();
+    const matchesSearch = !query || [item.id, item.title, item.workstreamTitle, item.ownerName, item.ownerOrganization, item.assignmentGroupName, item.statusLabel].filter(Boolean).some((value) => value?.toLowerCase().includes(query));
+    const matchesKind = queueKind === "all" || item.kind === queueKind;
+    const matchesState = queueState === "all" || item.itsmState === queueState;
+    const matchesGroup = queueGroup === "all" || item.assignmentGroupId === queueGroup;
+    return matchesSearch && matchesKind && matchesState && matchesGroup;
+  });
   const selectedItem = selectedItemId ? workItems.find((item) => item.id === selectedItemId) ?? null : null;
-  const queueGroups = groupMyWork(workItems);
+  const queueGroups = groupMyWork(activeQueueItems);
   const ragSummary = calculateRAGSummary(userPermits);
   const intakePreview = intakeText.trim() ? parsePlainEnglishIntake(intakeText) : null;
   const loggedIn = Boolean(currentUser && currentPersona);
   const projectRecord = repository.getProject();
   const projectOverview: ProjectOverview = getProjectOverview(projectRecord, repository.getWorkstreams(), repository.getCustomerRequests(), repository.getExternalFilings());
-  const currentProfile = repository.getProfileByUserId(activePersona.id.startsWith("user-") ? activePersona.id : `user-${activePersona.id}`) ?? (allowsFixtureData() ? projectProfiles.find((profile) => profile.fullName === activePersona.name) : undefined);
+  const currentProfile = repository.getProfileByUserId(userIdForPersona(activePersona.id)) ?? (allowsFixtureData() ? projectProfiles.find((profile) => profile.fullName === activePersona.name) : undefined);
 
   function profileDraftForPersona(persona: DemoPersona) {
     const operational = getOperationalPersona(persona);
-    const profile = repository.getProfileByUserId(operational.id.startsWith("user-") ? operational.id : `user-${operational.id}`) ?? (allowsFixtureData() ? projectProfiles.find((entry) => entry.fullName === operational.name) : undefined);
+    const profile = repository.getProfileByUserId(userIdForPersona(operational.id)) ?? (allowsFixtureData() ? projectProfiles.find((entry) => entry.fullName === operational.name) : undefined);
     return profile ? {
       displayTitle: profile.displayTitle,
       organizationalUnit: profile.organizationalUnit ?? "",
@@ -487,6 +505,10 @@ export default function Home() {
     }
     if (action === "request_information") setQuestionText(`Please provide the information needed to move ${item.workstreamTitle} forward.`);
     if (action === "mark_blocked") setBlockNeed("");
+    if (action === "update_status") {
+      const currentState = item.sourceWorkstream?.itsmState;
+      setStatusUpdate(item.kind === "commitment" ? "on_track" : item.kind === "coordination" ? "pending" : currentState === "pending_customer" || currentState === "pending_agency" || currentState === "blocked" ? "on_hold" : currentState === "resolved" || currentState === "closed" ? "fulfilled" : currentState === "submitted" || currentState === "triaged" ? "pending_review" : currentState ?? "in_progress");
+    }
     setDialog({ action, itemId: item.id });
   }
 
@@ -621,7 +643,7 @@ export default function Home() {
   }
 
   function actorUserId() {
-    return activePersona.id.startsWith("user-") ? activePersona.id : `user-${activePersona.id}`;
+    return userIdForPersona(activePersona.id);
   }
 
   async function submitCustomerRequest(event: FormEvent<HTMLFormElement>, requestType: "permit_authorization" | "government_help" | "project_question" | "blocker_coordination" | "escalation") {
@@ -1056,28 +1078,41 @@ export default function Home() {
     }
 
     if (dialog.action === "update_status") {
-      const statusLabel = statusUpdate === "in_progress" ? "In Progress" : statusUpdate === "on_hold" ? "On Hold" : statusUpdate === "fulfilled" ? "Fulfilled / Completed" : statusUpdate === "pending_review" ? "Pending Review" : statusUpdate === "cancelled" ? "Cancelled" : statusUpdate;
-      if (workstreamId) {
-        // Update the workstream operational state
-        const newState = statusUpdate === "in_progress" ? "running" : statusUpdate === "on_hold" ? "waiting_government" : statusUpdate === "fulfilled" ? "complete" : statusUpdate === "pending_review" ? "pending_concurrence" : statusUpdate === "cancelled" ? "complete" : "running";
-        await repository.addWorkstreamNotePersisted({
-          workstreamId,
-          note: `Status updated to "${statusLabel}" by ${actorName}. ${actionNote.trim() || "No additional notes."}`,
+      const statusLabel = statusUpdate.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+      if (item.kind === "workflow" || item.kind === "task" || item.kind === "customer_request") {
+        const ticketType = item.kind === "workflow" ? "workstream" : item.kind;
+        const ticketId = item.kind === "workflow" ? workstreamId : item.sourceId;
+        if (!ticketId) {
+          setDialogError("This item is not connected to an authoritative ticket record.");
+          return;
+        }
+        const targetState: ITSMState = statusUpdate === "on_hold" ? "pending_agency" : statusUpdate === "pending_review" ? "triaged" : statusUpdate === "fulfilled" ? "resolved" : statusUpdate === "cancelled" ? "closed" : statusUpdate as ITSMState;
+        const result = await repository.updateTicketITSMStatePersisted({
+          ticketType,
+          ticketId,
+          targetState,
           actorName,
-          actorOrgName,
+          actorUserId: actorUserId(),
+          reason: actionNote.trim() || `Status changed to ${statusLabel}.`,
+          pauseReason: ["pending_customer", "pending_agency", "blocked"].includes(targetState) ? actionNote.trim() || undefined : undefined,
         });
-        // For commitments, update the commitment status directly
-        if (item.kind === "commitment") {
-          const commitmentNewStatus = statusUpdate === "fulfilled" ? "fulfilled" as const : statusUpdate === "cancelled" ? "missed" as const : statusUpdate === "on_hold" ? "at_risk" as const : "on_track" as const;
-          repository.updateCommitmentStatus(item.sourceId, commitmentNewStatus, actorName);
+        if (result.error || !result.data) {
+          setDialogError(result.error?.message ?? "The status change was not confirmed by the database.");
+          return;
         }
-        // For workflows, update the workstream operational state
-        if (item.kind === "workflow" || item.kind === "task") {
-          repository.updateWorkstreamOperationalState(workstreamId, newState, actorName);
-        }
+        if (item.kind !== "customer_request") applyRepositoryWorkstream(item);
+        notify(`Status updated to "${statusLabel}" for ${item.title}.`);
+        return;
       }
-      applyRepositoryWorkstream(item);
-      notify(`Status updated to "${statusLabel}" for ${item.title}.`);
+
+      if (item.kind === "commitment") {
+        const commitmentNewStatus = statusUpdate === "fulfilled" ? "fulfilled" as const : statusUpdate === "cancelled" ? "missed" as const : statusUpdate === "on_hold" ? "at_risk" as const : "on_track" as const;
+        repository.updateCommitmentStatus(item.sourceId, commitmentNewStatus, actorName);
+        notify(`Status updated to "${statusLabel}" for ${item.title}.`);
+        return;
+      }
+
+      setDialogError("Coordination request status changes must be recorded through its response action.");
       return;
     }
 
@@ -1228,7 +1263,7 @@ export default function Home() {
     const tone = toneClasses(item.statusTone);
     const actions = getAvailableActions(item, activePersona);
     const compactActions = actions.filter((action) => ["mark_blocked", "request_information", "respond", "accept_rfi_response", "approve_document"].includes(action)).slice(0, 1);
-    const assignmentGroupLabel = item.ownerOrganization === "DOTD"
+    const assignmentGroupLabel = item.assignmentGroupName ?? (item.ownerOrganization === "DOTD"
       ? "DOTD Heavy-Haul & Bridges"
       : item.ownerOrganization === "LDEQ"
       ? "LDEQ Water Quality"
@@ -1238,7 +1273,8 @@ export default function Home() {
       ? "Vermilion Parish Permitting"
       : item.ownerOrganization === "OSFM"
       ? "OSFM Safety & Cryogenics"
-      : "State Office Triage Queue";
+      : "State Office Triage Queue");
+    const priorityLabel = item.priority ?? (item.isCriticalPath ? "P1" : "P3");
 
     return <article key={item.id} className={`rounded-xl border bg-white p-5 shadow-sm transition hover:shadow-md ${tone.border}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1247,14 +1283,14 @@ export default function Home() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5 font-mono text-[11px] font-bold">
               <span className="text-slate-500">{item.id} · {item.kind}</span>
-              <span className="rounded bg-teal-50 border border-teal-200 px-1.5 py-0.2 text-[10px] font-sans font-bold text-teal-800">
+              {!activePersona.isCustomer && <span className="rounded bg-teal-50 border border-teal-200 px-1.5 py-0.2 text-[10px] font-sans font-bold text-teal-800">
                 Group: {assignmentGroupLabel}
-              </span>
+              </span>}
               <span className="rounded bg-slate-100 border border-slate-200 px-1.5 py-0.2 text-[10px] font-sans font-bold text-slate-700">
                 Customer: SpaceX
               </span>
               <span className={`rounded px-1.5 py-0.2 text-[10px] font-sans font-black ${item.isCriticalPath ? "bg-red-100 text-red-800 border border-red-200" : "bg-blue-50 text-blue-800 border border-blue-200"}`}>
-                {item.isCriticalPath ? "P1 Critical Path" : "P3 Standard"}
+                {priorityLabel} {item.isCriticalPath ? "Critical Path" : "Standard"}
               </span>
             </div>
             <h3 className="mt-1 text-lg font-black leading-tight text-[#00284d]">{item.title}</h3>
@@ -1290,6 +1326,12 @@ export default function Home() {
     return group.label;
   }
 
+  function renderQueueFilters() {
+    const groups = repository.getAssignmentGroups();
+    const hasFilters = Boolean(queueSearch || queueKind !== "all" || queueState !== "all" || queueGroup !== "all");
+    return <section aria-label="Queue filters" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="grid gap-3 md:grid-cols-[minmax(0,1.5fr)_repeat(2,minmax(0,1fr))] lg:grid-cols-[minmax(0,1.8fr)_repeat(3,minmax(0,1fr))]"><div><Label htmlFor="queue-search">Search work</Label><Input id="queue-search" value={queueSearch} onChange={(event) => setQueueSearch(event.target.value)} placeholder="Ticket, title, owner, or agency" className="mt-1" /></div><div><Label htmlFor="queue-kind">Type</Label><select id="queue-kind" value={queueKind} onChange={(event) => setQueueKind(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"><option value="all">All work types</option><option value="workflow">Workflow</option><option value="task">Task</option><option value="customer_request">Customer request</option><option value="rfi">RFI</option><option value="coordination">Coordination</option><option value="document">Document</option><option value="commitment">Commitment</option></select></div><div><Label htmlFor="queue-state">ITSM state</Label><select id="queue-state" value={queueState} onChange={(event) => setQueueState(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"><option value="all">All states</option>{(["draft", "submitted", "triaged", "in_progress", "pending_customer", "pending_agency", "blocked", "resolved", "closed"] as ITSMState[]).map((state) => <option key={state} value={state}>{state.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase())}</option>)}</select></div>{!activePersona.isCustomer && <div><Label htmlFor="queue-group">Assignment group</Label><select id="queue-group" value={queueGroup} onChange={(event) => setQueueGroup(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"><option value="all">All assignment groups</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></div>}</div>{hasFilters && <Button type="button" variant="ghost" onClick={() => { setQueueSearch(""); setQueueKind("all"); setQueueState("all"); setQueueGroup("all"); }} className="mt-3 px-0 text-xs font-bold text-teal-800 hover:bg-transparent hover:text-teal-950">Clear filters</Button>}</section>;
+  }
+
   function renderMyWork() {
     return <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -1302,8 +1344,9 @@ export default function Home() {
           <p className="text-xs font-black uppercase text-teal-800">Workspace & Agency</p>
           <p className="mt-1 text-sm font-black text-teal-950">{workspaceTitle(activePersona.workspace)}</p>
           <p className="text-xs font-bold text-teal-800">{activePersona.agencyCode}</p>
-        </div>
+         </div>
       </div>
+      {renderQueueFilters()}
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6" aria-label="My Work summary">
         {queueGroups.map((group) => <button key={group.id} type="button" onClick={() => document.getElementById(`queue-${group.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })} className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-teal-400 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{queueLabel(group)}</p><p className="mt-1 text-2xl font-black text-[#00284d]">{group.items.length}</p></button>)}
       </div>
@@ -1314,9 +1357,9 @@ export default function Home() {
   }
 
   function renderQueue(routeKind: Route) {
-    const filtered = routeKind === "rfis" ? workItems.filter((item) => item.kind === "rfi") : routeKind === "coordination" ? workItems.filter((item) => item.kind === "coordination") : routeKind === "documents" ? workItems.filter((item) => item.kind === "document") : workItems;
+    const filtered = routeKind === "rfis" ? activeQueueItems.filter((item) => item.kind === "rfi") : routeKind === "coordination" ? activeQueueItems.filter((item) => item.kind === "coordination") : routeKind === "documents" ? activeQueueItems.filter((item) => item.kind === "document") : activeQueueItems;
     const title = routeKind === "rfis" ? "RFIs" : routeKind === "coordination" ? "Coordination Requests" : routeKind === "documents" ? "Documents to Review" : activePersona.workspace === "supervisor" ? "Supervisor Queue" : "My Agency Queue";
-    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Operational queue</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">{title}</h1><p className="mt-2 text-sm text-slate-600">Every item below explains its owner, due date, and the next action available to you.</p></div>{filtered.length > 0 ? <div className="space-y-3">{filtered.map(renderWorkCard)}</div> : <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">No items are currently routed to this queue.</div>}</div>;
+    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Operational queue</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">{title}</h1><p className="mt-2 text-sm text-slate-600">Every item below explains its owner, due date, and the next action available to you.</p></div>{renderQueueFilters()}{filtered.length > 0 ? <div className="space-y-3">{filtered.map(renderWorkCard)}</div> : <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">No items are currently routed to this queue.</div>}</div>;
   }
 
   function renderCustomerOverview() {
@@ -1535,7 +1578,7 @@ export default function Home() {
         {selectedItem.kind === "document" && selectedItem.sourceDocument && <Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Version history</CardTitle></CardHeader><CardContent><p className="text-sm font-black text-[#00284d]">You are reviewing {selectedItem.exactDocumentVersionLabel}</p>{selectedItem.sourceDocument.versions.filter((version) => version.id !== selectedItem.exactDocumentVersionId).map((version) => <p key={version.id} className="mt-2 text-sm text-slate-600">Previously: {version.versionTag} uploaded {formatDate(version.uploadedAt)}.</p>)}</CardContent></Card>}
         {!customer && escalationPath.length > 0 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-teal-700" /> Inter-Agency Escalation Path</CardTitle></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2">{escalationPath.map((tier) => <div key={tier.level} className="rounded-lg border border-slate-200 p-3"><div className="flex items-center justify-between"><p className="text-xs font-black uppercase text-slate-500">Tier {tier.level}</p><span className="text-[10px] font-black uppercase text-teal-800">{tier.status}</span></div><p className="mt-2 text-sm font-black text-[#00284d]">{tier.title}</p><p className="mt-1 text-xs text-slate-600">{tier.contactName} · {tier.agency}</p></div>)}</CardContent></Card>}</div><div className="space-y-5"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ArrowRight className="size-5 text-teal-700" /> Downstream impact</CardTitle></CardHeader><CardContent><p className="text-sm font-black text-[#00284d]">{selectedItem.nextHandoff ?? "Next configured handoff"}</p><p className="mt-2 text-sm leading-6 text-slate-600">{selectedItem.scheduleImpact}. The next owner and notification recipients are previewed before an important action is confirmed.</p></CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Clock3 className="size-5 text-teal-700" /> Activity / audit history</CardTitle></CardHeader><CardContent className="space-y-3">{customer ? <p className="text-sm text-slate-600">Internal activity is not shown in the customer workspace.</p> : audit.length > 0 ? audit.map((event) => <div key={event.id} className="border-b border-slate-100 pb-3 last:border-0"><p className="text-xs font-black uppercase text-slate-500">{event.actionType.replaceAll("_", " ")}</p><p className="mt-1 text-sm text-slate-700">{event.reason ?? event.newValue ?? "Activity recorded"}</p><p className="mt-1 text-[11px] text-slate-400">{event.actorName} · {formatDate(event.occurredAt)}</p></div>) : <p className="text-sm text-slate-500">No activity recorded yet.</p>}</CardContent></Card></div></div>
       {!customer && selectedItem.kind === "workflow" && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Route className="size-5 text-teal-700" /> Upstream and downstream dependencies</CardTitle></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2"><div className="rounded-lg bg-slate-50 p-4"><p className="text-xs font-black uppercase text-slate-500">Upstream</p><p className="mt-2 text-sm text-slate-700">{selectedItem.waitingOn ?? "No unresolved upstream dependency"}</p></div><div className="rounded-lg bg-teal-50 p-4"><p className="text-xs font-black uppercase text-teal-800">Downstream</p><p className="mt-2 text-sm font-bold text-teal-950">{completionPreview.nextOwner} receives the next handoff after completion.</p></div></CardContent></Card>}
-      <TicketWorkflowEditor item={selectedItem} persona={activePersona} onWorkflowUpdated={() => setMutationVersion((v) => v + 1)} />
+       {(selectedItem.kind === "workflow" || selectedItem.kind === "task" || selectedItem.kind === "customer_request") && <TicketWorkflowEditor key={selectedItem.id} item={selectedItem} persona={activePersona} onWorkflowUpdated={() => setMutationVersion((v) => v + 1)} />}
     </div>;
   }
 

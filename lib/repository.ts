@@ -27,7 +27,6 @@ import type {
   ClockStatus,
   StatutoryClockState,
   TaskRecord,
-  TicketRecord,
 } from "./domain-models";
 import {
   isITSMState,
@@ -112,6 +111,29 @@ import { mutateReviewDocumentVersion, mutateUploadDocumentVersion } from "./supa
 import { isSupabaseConfigured } from "./supabase/client";
 import { allowsFixtureData } from "./data-mode";
 
+type MutableTicket = {
+  id: string;
+  title?: string;
+  code?: string;
+  assignmentGroupId?: string;
+  assignmentGroupName?: string;
+  assignedToUserId?: string;
+  assignedToUserName?: string;
+  assignedOrgCode?: string;
+  assignedUserId?: string;
+  assignedUserName?: string;
+  itsmState?: ITSMState;
+  priority?: PriorityLevel;
+  clockStatus?: ClockStatus;
+  clockPausedAt?: string;
+  clockPausedReason?: string;
+  clockTotalPausedSeconds?: number;
+  operationalState?: WorkstreamRecord["operationalState"];
+  ragHealth?: WorkstreamRecord["ragHealth"];
+  actualCompletionDate?: string;
+  status?: CustomerRequestRecord["status"] | TaskRecord["status"];
+};
+
 /**
  * PATH Authoritative Service & Repository Layer
  * Backed by canonical Supabase PostgreSQL and Supabase Storage.
@@ -194,8 +216,21 @@ class ProjectDeliveryRepository {
       ]);
 
       const keepFixtures = allowsFixtureData();
-      if (!keepFixtures || ws.length > 0) this.workstreams = ws;
-      if (!keepFixtures || custReqs.length > 0) this.customerRequests = custReqs;
+      const groupById = new Map(groups.map((group) => [group.id, group]));
+      const enrichedWorkstreams = ws.map((workstream) => ({
+        ...workstream,
+        assignmentGroupName: workstream.assignmentGroupName ?? (workstream.assignmentGroupId ? groupById.get(workstream.assignmentGroupId)?.name : undefined),
+        tasks: workstream.tasks.map((task) => ({
+          ...task,
+          assignmentGroupName: task.assignmentGroupName ?? (task.assignmentGroupId ? groupById.get(task.assignmentGroupId)?.name : undefined),
+        })),
+      }));
+      const enrichedCustomerRequests = custReqs.map((request) => ({
+        ...request,
+        assignmentGroupName: request.assignmentGroupName ?? (request.assignmentGroupId ? groupById.get(request.assignmentGroupId)?.name : undefined),
+      }));
+      if (!keepFixtures || ws.length > 0) this.workstreams = enrichedWorkstreams;
+      if (!keepFixtures || custReqs.length > 0) this.customerRequests = enrichedCustomerRequests;
       if (!keepFixtures || extFilings.length > 0) this.externalFilings = extFilings;
       if (!keepFixtures || rfisList.length > 0) this.rfis = rfisList;
       if (!keepFixtures || coordReqs.length > 0) this.coordinationRequests = coordReqs;
@@ -500,7 +535,7 @@ class ProjectDeliveryRepository {
     return { workstreams, customerRequests, tasks };
   }
 
-  private findTicket(ticketType: "workstream" | "customer_request" | "task", ticketId: string): any {
+  private findTicket(ticketType: "workstream" | "customer_request" | "task", ticketId: string): MutableTicket | undefined {
     if (ticketType === "workstream") {
       return this.workstreams.find((w) => w.id === ticketId || w.code === ticketId);
     } else if (ticketType === "customer_request") {
@@ -1880,7 +1915,7 @@ class ProjectDeliveryRepository {
     actorName?: string;
     actorUserId?: string;
     reason?: string;
-  }): { success: boolean; ticket: any } {
+  }): { success: boolean; ticket: MutableTicket | null } {
     const ticket = this.findTicket(options.ticketType, options.ticketId);
     if (!ticket) {
       return { success: false, ticket: null };
@@ -1975,7 +2010,7 @@ class ProjectDeliveryRepository {
     actorUserId?: string;
     reason?: string;
     pauseReason?: string;
-  }): { success: boolean; ticket: any } {
+  }): { success: boolean; ticket: MutableTicket | null } {
     const ticket = this.findTicket(options.ticketType, options.ticketId);
     if (!ticket) {
       return { success: false, ticket: null };
@@ -2053,7 +2088,7 @@ class ProjectDeliveryRepository {
     clockStatus: ClockStatus;
     pauseReason?: string;
     actorName?: string;
-  }): { success: boolean; ticket: any } {
+  }): { success: boolean; ticket: MutableTicket | null } {
     const ticket = this.findTicket(options.ticketType, options.ticketId);
     if (!ticket) return { success: false, ticket: null };
 
@@ -2093,7 +2128,7 @@ class ProjectDeliveryRepository {
     actorName?: string;
     actorUserId?: string;
     reason?: string;
-  }): { success: boolean; ticket: any } {
+  }): { success: boolean; ticket: MutableTicket | null } {
     const ticket = this.findTicket(options.ticketType, options.ticketId);
     if (!ticket) return { success: false, ticket: null };
 
@@ -2171,20 +2206,27 @@ class ProjectDeliveryRepository {
     actorName?: string;
     actorUserId?: string;
     reason?: string;
-  }): Promise<{ data: any; error: Error | null }> {
-    const memoryResult = this.assignTicket(options);
-    if (!memoryResult.success) {
-      return { data: null, error: new Error("Ticket not found") };
-    }
-
+  }): Promise<{ data: unknown; error: Error | null }> {
     if (isSupabaseConfigured()) {
       const dbResult = await mutateAssignTicket(options);
       if (dbResult.error) {
         return { data: null, error: dbResult.error };
       }
+      const memoryResult = this.assignTicket(options);
+      if (!memoryResult.success) {
+        await this.hydrateFromSupabase();
+        return { data: dbResult.data, error: null };
+      }
+      return { data: memoryResult.ticket, error: null };
     }
 
-    return { data: memoryResult.ticket, error: null };
+    if (!allowsFixtureData()) {
+      return { data: null, error: new Error("Supabase is required in production mode.") };
+    }
+    const memoryResult = this.assignTicket(options);
+    return memoryResult.success
+      ? { data: memoryResult.ticket, error: null }
+      : { data: null, error: new Error("Ticket not found") };
   }
 
   async updateTicketITSMStatePersisted(options: {
@@ -2195,20 +2237,27 @@ class ProjectDeliveryRepository {
     actorUserId?: string;
     reason?: string;
     pauseReason?: string;
-  }): Promise<{ data: any; error: Error | null }> {
-    const memoryResult = this.updateTicketITSMState(options);
-    if (!memoryResult.success) {
-      return { data: null, error: new Error("Ticket not found") };
-    }
-
+  }): Promise<{ data: unknown; error: Error | null }> {
     if (isSupabaseConfigured()) {
       const dbResult = await mutateUpdateTicketITSMState(options);
       if (dbResult.error) {
         return { data: null, error: dbResult.error };
       }
+      const memoryResult = this.updateTicketITSMState(options);
+      if (!memoryResult.success) {
+        await this.hydrateFromSupabase();
+        return { data: dbResult.data, error: null };
+      }
+      return { data: memoryResult.ticket, error: null };
     }
 
-    return { data: memoryResult.ticket, error: null };
+    if (!allowsFixtureData()) {
+      return { data: null, error: new Error("Supabase is required in production mode.") };
+    }
+    const memoryResult = this.updateTicketITSMState(options);
+    return memoryResult.success
+      ? { data: memoryResult.ticket, error: null }
+      : { data: null, error: new Error("Ticket not found") };
   }
 
   async setTicketPriorityPersisted(options: {
@@ -2218,20 +2267,27 @@ class ProjectDeliveryRepository {
     actorName?: string;
     actorUserId?: string;
     reason?: string;
-  }): Promise<{ data: any; error: Error | null }> {
-    const memoryResult = this.setTicketPriority(options);
-    if (!memoryResult.success) {
-      return { data: null, error: new Error("Ticket not found") };
-    }
-
+  }): Promise<{ data: unknown; error: Error | null }> {
     if (isSupabaseConfigured()) {
       const dbResult = await mutateSetTicketPriority(options);
       if (dbResult.error) {
         return { data: null, error: dbResult.error };
       }
+      const memoryResult = this.setTicketPriority(options);
+      if (!memoryResult.success) {
+        await this.hydrateFromSupabase();
+        return { data: dbResult.data, error: null };
+      }
+      return { data: memoryResult.ticket, error: null };
     }
 
-    return { data: memoryResult.ticket, error: null };
+    if (!allowsFixtureData()) {
+      return { data: null, error: new Error("Supabase is required in production mode.") };
+    }
+    const memoryResult = this.setTicketPriority(options);
+    return memoryResult.success
+      ? { data: memoryResult.ticket, error: null }
+      : { data: null, error: new Error("Ticket not found") };
   }
 
   resetE2EDemo(): void {
