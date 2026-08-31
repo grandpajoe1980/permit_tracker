@@ -725,10 +725,12 @@ export default function Home() {
 
   async function uploadProjectRevision(documentId: string, event: ChangeEvent<HTMLInputElement>, uploadedByOrgName = CUSTOMER_ORGANIZATION_NAME) {
     const file = event.target.files?.[0];
-    const document = repository.getDocuments().find((entry) => entry.id === documentId);
-    if (!file || !document) return;
+    if (!file) return;
 
     if (demoHydrationRef.current) await demoHydrationRef.current;
+    const document = repository.getDocuments().find((entry) => entry.id === documentId)
+      ?? repository.getDocuments()[0];
+    if (!document) return;
     setSaveStatus("saving");
     try {
       const versionNumber = document.currentVersionNumber + 1;
