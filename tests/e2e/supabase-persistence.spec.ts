@@ -5,6 +5,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     // 1. Context A: SpaceX PM Submits Customer Request
     const contextA = await browser.newContext();
     const pageA = await contextA.newPage();
+    const requestTitle = `E2E Automated Cross-Browser Test Request ${Date.now()}`;
     await pageA.goto("/");
     await expect(pageA.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
 
@@ -19,13 +20,13 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
 
     // Submit a Help Request
     await pageA.click("text=Request government help / service");
-    await pageA.fill("#request-title", "E2E Automated Cross-Browser Test Request");
+    await pageA.fill("#request-title", requestTitle);
     await pageA.fill("#request-description", "Cross-browser Supabase durability test payload.");
     await pageA.click("button:has-text('Submit request')");
 
     // Return to the request list and verify the committed record is visible.
     await pageA.click("text=Back to request choices");
-    await expect(pageA.getByText("E2E Automated Cross-Browser Test Request", { exact: false })).toBeVisible();
+    await expect(pageA.getByText(requestTitle, { exact: false }).first()).toBeVisible();
     await contextA.close();
 
     // 2. Context B: Clean State Office Session (Sarah Johnson) Retrieves from Supabase
@@ -37,9 +38,11 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await pageB.click("#demo-login-trigger");
     await pageB.click("#demo-persona-sarah");
 
-    // Navigate to Notifications / Project Overview
-    await pageB.click("text=Notifications");
-    await expect(pageB.locator("text=Action center")).toBeVisible();
+    // Navigate to the state-office intake queue and assert the exact record
+    // created in Context A, not merely a generic authenticated page heading.
+    await pageB.getByRole("button", { name: "Administration", exact: true }).click();
+    await expect(pageB.getByRole("heading", { name: "Customer intake queue", exact: true })).toBeVisible();
+    await expect(pageB.getByText(requestTitle, { exact: false }).first()).toBeVisible();
 
     await contextB.close();
   });

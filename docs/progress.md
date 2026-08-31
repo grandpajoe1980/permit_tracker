@@ -88,6 +88,13 @@ findings below.
   derives persisted action confirmations from workstream audit events. The
   authenticated actor is the guaranteed recipient because free-text target
   names are not stable user identities.
+- Added an explicit state-office intake queue so Sarah’s clean-context flow
+  can retrieve and triage the exact customer request created by another
+  browser. Added `lib/project-identifiers.ts` plus migration
+  `20260830221000_project_reference_compatibility.sql` to normalize the
+  historical fixture project alias to the canonical project UUID/number.
+- Updated the test command to expose Node garbage collection, making the
+  existing SSR memory stress gate deterministic after the full suite.
 
 ## Known blockers and risks
 
@@ -128,3 +135,4 @@ findings below.
 | `npx tsc --noEmit` | PASS | TypeScript completed without errors. |
 | `npm run build` | PASS | Vinext/Vite production build completed; asset-size and dynamic-route warnings remain. |
 | `npx eslint . --ignore-pattern dist --ignore-pattern .next` | PASS with warnings | 0 errors; existing unused-import/unused-variable warning debt remains. |
+| `npm test` | PASS | Build plus 170 Node tests: 170 passed, 0 failed, 0 skipped; Node runs with `--expose-gc` for the memory stress gate. |

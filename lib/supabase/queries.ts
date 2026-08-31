@@ -13,6 +13,7 @@ import type {
   PermitTypeRecord, ProjectParticipantRecord, ProjectRecord, RFIRecord, UserProfileRecord,
   WorkstreamRecord,
 } from "../domain-models";
+import { legacyProjectReferences } from "../project-identifiers";
 
 type QueryClient = NonNullable<ReturnType<typeof getSupabaseBrowser>>;
 type ProjectScope = { id: string; number: string; keys: string[] };
@@ -25,7 +26,7 @@ async function resolveProjectScope(client: QueryClient, projectId: string): Prom
   if (!data) return null;
   const id = String(data.id);
   const number = String(data.number ?? projectId);
-  return { id, number, keys: Array.from(new Set([id, number, projectId])) };
+  return { id, number, keys: Array.from(new Set([id, number, projectId, ...legacyProjectReferences(number)])) };
 }
 
 function noClient<T>(): T[] { return []; }

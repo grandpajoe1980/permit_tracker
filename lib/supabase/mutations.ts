@@ -16,6 +16,7 @@ import type {
   WorkstreamRecord,
 } from "../domain-models";
 import { allowsFixtureData, requiresSupabase } from "../data-mode";
+import { canonicalProjectReference } from "../project-identifiers";
 
 export interface MutationResult<T> {
   data: T | null;
@@ -185,7 +186,7 @@ export async function mutateCreateCustomerRequest(params: {
   const client = requestClient ?? getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
-  let projectId = params.projectId;
+  let projectId = canonicalProjectReference(params.projectId);
   // The current schema uses UUID project ids, while the seeded legacy project
   // uses a stable text id. Only resolve the canonical project number; do not
   // reinterpret an already-resolved text id as a project number.

@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary & Durability Gate
 
-The **Louisiana Project Delivery Command System (PATH)** operates with **Supabase PostgreSQL and Supabase Storage as the sole authoritative runtime**. Local storage and fixture states are strictly non-authoritative fallback caches for offline/unit-test isolation.
+The **Louisiana Project Delivery Command System (PATH)** operates with **Supabase PostgreSQL and Supabase Storage as the sole authoritative runtime**. Local storage and fixture states are strictly non-authoritative compatibility data for explicit demo/unit-test isolation.
 
 Every mutation must satisfy the **Non-Negotiable Supabase Durability Gate**:
 1. Mutation is committed to Supabase PostgreSQL and/or Supabase Storage.
@@ -23,7 +23,7 @@ Every mutation must satisfy the **Non-Negotiable Supabase Durability Gate**:
 | **Project Participants** | `public.project_participants` | `id` (uuid) | `project_id`, `user_id`, `organization_id` | Role-based visibility |
 | **Workstreams** | `public.workstreams` | `id` (text) | `project_id`, `permit_type_id` | Project participant read/write |
 | **Tasks** | `public.tasks` | `id` (text) | `workstream_id`, `assigned_user_id` | Authenticated read/write |
-| **Customer Requests** | `public.customer_requests` | `id` (text) | `project_id`, `submitted_by_user_id` | Authenticated / Anon insert, Project read |
+| **Customer Requests** | `public.customer_requests` | `id` (text) | `project_id`, `submitted_by_user_id` | Authenticated project/request-owner read; RPC write |
 | **External Filings** | `public.external_filings` | `id` (text) | `workstream_id`, `authority_organization_id` | Authenticated read/write |
 | **RFIs** | `public.rfis` | `id` (text) | `workstream_id`, `requesting_org_id` | Authenticated read/write |
 | **RFI Responses** | `public.rfi_responses` | `id` (text) | `rfi_id` | Authenticated read/write |
@@ -45,7 +45,7 @@ Every mutation must satisfy the **Non-Negotiable Supabase Durability Gate**:
 
 - **Bucket Name**: `path-documents`
 - **Visibility**: Private (Non-public)
-- **Permissions**: `authenticated` and `anon` authenticated RLS policies
+- **Permissions**: private bucket; authenticated project/request-authorized access only
 - **Naming Pattern**: `{documentId}/v{versionNumber}/{fileName}`
 - **Integrity**: SHA-256 hash calculated on upload and stored with immutable version record
 - **Download**: Short-lived signed URLs via `getSignedDocumentUrl(storagePath, expiresInSeconds)`
@@ -69,17 +69,12 @@ Every mutation must satisfy the **Non-Negotiable Supabase Durability Gate**:
 
 | Scenario ID | Test Name | Mutation Context | Verification Context | Assertions | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **SCEN-01** | Dual-User Customer Request Propagation | Browser 1: SpaceX PM (Maya Chen) submits service request | Browser 2: State PM (Sarah Johnson) with clean storage | Row in `customer_requests`, notification in `notifications`, audit in `audit_events` | **PASS** |
-| **SCEN-02** | RFI Creation & Workstream Clock Pause | Browser 1: CPRA Reviewer (Jordan Lee) issues RFI | Browser 2: SpaceX PM (Maya Chen) | `workstreams.operational_state` is `waiting_applicant`, RFI visible to SpaceX | **PASS** |
-| **SCEN-03** | RFI Response Submission | Browser 1: SpaceX PM (Maya Chen) submits response | Browser 2: CPRA Reviewer (Jordan Lee) | `rfi_responses` created, `rfis.status` updated to `submitted_by_applicant` | **PASS** |
-| **SCEN-04** | RFI Acceptance & Workstream Resumption | Browser 1: CPRA Reviewer accepts response | Browser 2: SpaceX PM / State PM | `workstreams.operational_state` returns to `running`, audit logged | **PASS** |
-| **SCEN-05** | Private Document Version Upload & Hash Verification | Browser 1: SpaceX uploads revision file | Browser 2: Agency reviewers | File stored in `path-documents`, SHA-256 verified, version and agency reviews recorded | **PASS** |
-| **SCEN-06** | Multi-Agency Document Review Signoff | Browser 1: Agency reviewer signs off | Browser 2: Project PM | Review status is `approved`, version transitions when all approved | **PASS** |
-| **SCEN-07** | Workstream Blocker & Statutory Hold | Browser 1: DOTD reviewer marks blocked | Browser 2: SpaceX PM & State PM | Workstream state is `blocked` or `waiting_government`, blocker reason recorded | **PASS** |
-| **SCEN-08** | Interagency Coordination Request Lifecycle | Browser 1: DOTD requests CPRA concurrence | Browser 2: CPRA coordinator | `coordination_requests` row created, concurrence response audited | **PASS** |
-| **SCEN-09** | Profile Contact Field Self-Service | Browser 1: User updates phone/email | Browser 2: Clean session fetches directory | `user_profiles` updated, visible in directory | **PASS** |
-| **SCEN-10** | Admin Team Role Assignment | Browser 1: Admin changes user role | Browser 2: Clean session fetches user | `project_participants` updated, role audited | **PASS** |
-| **SCEN-11** | Supabase Realtime Live Broadcast | Browser 1: Mutates work item state | Browser 2: Open active page without refresh | Realtime postgres_changes event triggers UI auto-hydration | **PASS** |
-| **SCEN-12** | Database Hydration on Login | Login as any authorized persona | Clean browser session | Full 18-entity project graph hydrated from PostgreSQL in < 500ms | **PASS** |
-| **SCEN-13** | External Filing Tracking Update | Browser 1: Updates external reference | Browser 2: SpaceX PM | `external_filings` row updated, audit event logged | **PASS** |
-| **SCEN-14** | Production Build & Lint Gate | Automated CI | Vinext / ESLint / Node Test Runner | 0 lint errors, valid SSR bundle, 100% test pass rate | **PASS** |
+| **SCEN-01** | Dual-User Customer Request Propagation | Browser 1: SpaceX PM submits service request | Browser 2: State PM with clean storage | Exact request title is retrieved from the Supabase-backed intake queue | **PASS (Chromium, 2/2 persistence suite)** |
+| **SCEN-02** | RFI Creation & Workstream Clock Pause | Browser 1: CPRA Reviewer issues RFI | Browser 2: SpaceX PM | Isolated-context RFI journey executes; exact DB state assertions remain a follow-up | **PARTIAL** |
+| **SCEN-03/04** | RFI Response and Acceptance | Dual clean contexts | Reviewer/applicant contexts | Not independently asserted end-to-end by the current Playwright suite | **UNVERIFIED** |
+| **SCEN-05** | Private Document Version Upload & Hash Verification | Browser 1: SpaceX uploads revision file | Browser 2: Agency reviewers | Seeded private download passes; live upload is rejected by current remote Storage RLS | **PARTIAL / BLOCKED** |
+| **SCEN-06–13** | Remaining lifecycle, admin, realtime, and filing scenarios | Multiple contexts | Authorized users | No dedicated clean-context proof in the current automated suite | **UNVERIFIED** |
+| **SCEN-14** | Production Build & Lint Gate | Automated CI | Vinext / ESLint / Node Test Runner | Build/type checks pass; lint has 0 errors but warning debt remains | **PASS WITH WARNINGS** |
+
+The older table claimed all scenarios passed; those claims were not reproducible
+from the current test suite and have been replaced with evidence-based status.

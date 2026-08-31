@@ -50,14 +50,18 @@ metadata retained temporarily for existing unit tests and migration tooling;
 it is not used as the production schema. New production schema changes must be
 checked in as forward-only Supabase migrations and reflected here.
 
-## Known baseline findings (2026-08-30)
+## Current verification findings (2026-08-30)
 
 - The required shell-wrapper scripts were not runnable on Windows because GNU
   `bash` was unavailable; package scripts now call the installed binaries
   directly.
-- Direct build passed and direct lint had 0 errors with 232 warnings.
-- The Node suite passed 169 tests, but this is primarily fixture/unit coverage;
+- Direct build passed and direct lint had 0 errors with existing warning debt.
+- The Node suite passed 170 tests, but this is primarily fixture/unit coverage;
   it does not prove the required clean-browser, multi-persona journey.
-- Existing code still contains unawaited mutations, fixture fallbacks, broad
-  historical policies, and only one physical API route. These are active work,
-  not completed capabilities.
+- Chromium persistence scenarios now assert exact request data across isolated
+  contexts. Document upload remains blocked by the configured live Storage RLS
+  state until migration history is reconciled; Firefox/WebKit binaries are not
+  installed in the current runner.
+- Historical permissive migrations remain in the repository for replayability,
+  but later forward migrations drop their broad policies. The live migration
+  ledger still differs from this checkout and must be reconciled before deploy.

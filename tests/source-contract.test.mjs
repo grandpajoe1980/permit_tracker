@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, dataMode, projectRoute, workstreamRoute, requestRoute, seedScript, commandSeedScript, repository] = await Promise.all([
+const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, seedScript, commandSeedScript, repository] = await Promise.all([
   readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
@@ -12,6 +12,8 @@ const [page, layout, css, readme, portalMigration, hardeningMigration, policyMig
   readFile(new URL("../supabase/migrations/20260830152028_consolidate_customer_request_update_policy.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830214000_workstream_action_transactions.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830220000_workstream_action_notifications.sql", import.meta.url), "utf8"),
+  readFile(new URL("../lib/project-identifiers.ts", import.meta.url), "utf8"),
+  readFile(new URL("../lib/supabase/mutations.ts", import.meta.url), "utf8"),
   readFile(new URL("../lib/data-mode.ts", import.meta.url), "utf8"),
   readFile(new URL("../app/projects/[projectNumber]/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/projects/[projectNumber]/workstreams/[workstreamId]/page.tsx", import.meta.url), "utf8"),
@@ -90,6 +92,8 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(actionNotificationMigration, /recipient_id, user_id, title, message, body/);
   assert.doesNotMatch(repository, /void\s+(?:mutate|insertNotification)/);
   assert.doesNotMatch(page, /repository\.dispatchNotification\(\{ userId: "user-sarah-johnson"/);
+  assert.match(identifierModule, /canonicalProjectReference/);
+  assert.match(mutations, /canonicalProjectReference\(params\.projectId\)/);
   assert.match(projectRoute, /createRequestSupabaseClient/);
   assert.match(workstreamRoute, /\.eq\("project_id", project\.id\)/);
   assert.match(requestRoute, /createRequestSupabaseClient/);

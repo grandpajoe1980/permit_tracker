@@ -13,13 +13,19 @@ false-success and fixture behavior with verified Supabase-backed behavior.
   state; only `/api/health` and `/api/requests` are physical routes.
 - Existing typed domain models, operational projections, document UI, Gantt UI,
   workflow engine helpers, migrations, and fixture tests are useful foundations.
-- The main production trust-boundary defects are now addressed in source and
+- The main production trust-boundary defects are addressed in source and
   forward migrations: browser code uses publishable credentials, the requests
   API authenticates and validates input, repository reads carry project scope,
-  and later broad policies are superseded by explicit policies. Live migration
-  application and full clean-context RLS verification remain outstanding.
-- Repository mutations frequently update memory and return before Supabase
-  succeeds. Empty Supabase results are often replaced with fixture data.
+  later broad policies are superseded by explicit policies, and production
+  mutation paths await canonical Supabase results. Live migration application
+  and full clean-context RLS verification remain outstanding.
+- Fixture data is isolated behind explicit demo/test mode. Empty authorized
+  production query results remain empty; the remaining in-memory repository
+  methods are compatibility helpers for fixture/test execution only.
+- Canonical project identifiers are UUID primary keys plus human-facing
+  numbers. A forward compatibility migration normalizes historical
+  `proj-spacex-pecan` request references and maps that fixture alias before
+  production mutations.
 
 ## Dependency-aware waves
 
