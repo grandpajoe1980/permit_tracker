@@ -9,6 +9,7 @@ import type {
   DocumentVersionRecord,
   ExternalFilingRecord,
   MeetingRecord,
+  OrganizationRecord,
   NotificationRecord,
   PermitTypeRecord,
   ProjectParticipantRecord,
@@ -45,6 +46,7 @@ import {
   fetchExternalFilings,
   fetchMeetings,
   fetchNotifications,
+  fetchOrganizations,
   fetchProjectParticipants,
   fetchRFIs,
   fetchUserProfiles,
@@ -91,6 +93,7 @@ class ProjectDeliveryRepository {
   private catalog: PermitTypeRecord[] = JSON.parse(JSON.stringify(permitCatalog));
   private auditEvents: AuditEventRecord[] = JSON.parse(JSON.stringify(spacexProjectRecord.auditLedger || []));
   private notifications: NotificationRecord[] = [];
+  private organizations: OrganizationRecord[] = JSON.parse(JSON.stringify(registeredOrganizations));
   private profiles: UserProfileRecord[] = JSON.parse(JSON.stringify(projectProfiles));
   private participants: ProjectParticipantRecord[] = JSON.parse(JSON.stringify(projectParticipants));
   private externalFilings: ExternalFilingRecord[] = JSON.parse(JSON.stringify(initialExternalFilings));
@@ -123,6 +126,7 @@ class ProjectDeliveryRepository {
         notifs,
         audits,
         cat,
+        orgs,
       ] = await Promise.all([
         fetchWorkstreams(projectId),
         fetchCustomerRequests(projectId),
@@ -138,6 +142,7 @@ class ProjectDeliveryRepository {
         fetchNotifications(),
         fetchAuditEvents(projectId),
         fetchCatalog(),
+        fetchOrganizations(),
       ]);
 
       const keepFixtures = allowsFixtureData();
@@ -155,6 +160,7 @@ class ProjectDeliveryRepository {
       if (!keepFixtures || notifs.length > 0) this.notifications = notifs;
       if (!keepFixtures || audits.length > 0) this.auditEvents = audits;
       if (!keepFixtures || cat.length > 0) this.catalog = cat;
+      if (!keepFixtures || orgs.length > 0) this.organizations = orgs;
 
       this.isHydratedFromDb = true;
       return true;
@@ -342,6 +348,10 @@ class ProjectDeliveryRepository {
 
   getCatalog(): PermitTypeRecord[] {
     return this.catalog;
+  }
+
+  getOrganizations(): OrganizationRecord[] {
+    return this.organizations;
   }
 
   getAuditEvents(): AuditEventRecord[] {

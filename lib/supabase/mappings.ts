@@ -9,6 +9,7 @@ import type {
   DocumentVersionRecord,
   ExternalFilingRecord,
   MeetingRecord,
+  OrganizationRecord,
   NotificationRecord,
   PermitTypeRecord,
   ProjectParticipantRecord,
@@ -22,6 +23,25 @@ import type {
 } from "../domain-models";
 
 type Row = Record<string, unknown>;
+
+export function organizationRowToDomain(row: Row): OrganizationRecord {
+  const contacts = obj<Record<string, string>>(row.contacts, {});
+  const jurisdiction = str(row.jurisdiction_level, "state");
+  return {
+    id: str(row.id),
+    code: str(row.code),
+    name: str(row.name),
+    abbreviation: contacts.abbreviation || str(row.code),
+    jurisdictionLevel: (jurisdiction === "federal" ? "Federal" : jurisdiction === "local" ? "Local / Parish" : jurisdiction === "external_partner" ? "Applicant" : "State") as OrganizationRecord["jurisdictionLevel"],
+    websiteUrl: contacts.websiteUrl || undefined,
+    generalContactEmail: contacts.generalContactEmail || undefined,
+    workingHours: contacts.workingHours || "Agency schedule",
+    holidayCalendar: contacts.holidayCalendar || "Agency holidays",
+    defaultSlaDays: Number(row.default_sla_days ?? contacts.defaultSlaDays ?? 30),
+    documentRetentionYears: Number(row.document_retention_years ?? contacts.documentRetentionYears ?? 7),
+    isActive: Boolean(row.active ?? true),
+  };
+}
 
 function str(val: unknown, fallback = ""): string {
   if (typeof val === "string") return val;

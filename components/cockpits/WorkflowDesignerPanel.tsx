@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   AlertCircle,
   Building2,
@@ -27,10 +27,10 @@ import { mutateCreatePermitType, mutateRegisterOrganization } from "@/lib/supaba
 import type { OrganizationRecord, PermitTypeRecord } from "@/lib/domain-models";
 import type { WorkflowStageRecord } from "@/lib/domain-models";
 
-export function WorkflowDesignerPanel() {
+export function WorkflowDesignerPanel({ catalog: catalogProp, organizations: organizationsProp }: { catalog?: PermitTypeRecord[]; organizations?: OrganizationRecord[] } = {}) {
   const templates = getWorkflowTemplates();
-  const [catalog, setCatalog] = useState<PermitTypeRecord[]>(getPermitCatalog());
-  const [orgs, setOrgs] = useState<OrganizationRecord[]>(getRegisteredOrganizations());
+  const [catalog, setCatalog] = useState<PermitTypeRecord[]>(catalogProp ?? getPermitCatalog());
+  const [orgs, setOrgs] = useState<OrganizationRecord[]>(organizationsProp ?? getRegisteredOrganizations());
   const [activeTab, setActiveTab] = useState<"workflows" | "catalog" | "agencies">("workflows");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(templates[0]?.id || "");
   const [draftVersionId, setDraftVersionId] = useState<string | null>(null);
@@ -41,6 +41,9 @@ export function WorkflowDesignerPanel() {
   const [designerBusy, setDesignerBusy] = useState(false);
   const [permitForm, setPermitForm] = useState({ code: "", name: "", responsibleOrgCode: "LDEQ", statutoryCitation: "", triggerExplanation: "" });
   const [organizationForm, setOrganizationForm] = useState({ code: "", name: "", generalContactEmail: "" });
+
+  useEffect(() => { if (catalogProp) setCatalog(catalogProp); }, [catalogProp]);
+  useEffect(() => { if (organizationsProp) setOrgs(organizationsProp); }, [organizationsProp]);
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
   const activeVersion = selectedTemplate?.versions.find((v) => v.status === "published") || selectedTemplate?.versions[0];

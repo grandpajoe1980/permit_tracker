@@ -3,14 +3,14 @@ import {
   auditEventRowToDomain, commitmentRowToDomain, coordinationRequestRowToDomain,
   customerRequestRowToDomain, decisionRowToDomain, documentAgencyReviewRowToDomain,
   documentRowToDomain, documentVersionRowToDomain, externalFilingRowToDomain,
-  meetingRowToDomain, notificationRowToDomain, permitTypeRowToDomain,
+  meetingRowToDomain, notificationRowToDomain, organizationRowToDomain, permitTypeRowToDomain,
   projectParticipantRowToDomain, requirementResourceRowToDomain, rfiResponseRowToDomain,
   rfiRowToDomain, taskRowToDomain, userProfileRowToDomain, workstreamRowToDomain,
 } from "./mappings";
 import type {
   AuditEventRecord, CommitmentRecord, CoordinationRequestRecord, CustomerRequestRecord,
   DecisionRecord, DocumentRecord, ExternalFilingRecord, MeetingRecord, NotificationRecord,
-  PermitTypeRecord, ProjectParticipantRecord, ProjectRecord, RFIRecord, UserProfileRecord,
+  OrganizationRecord, PermitTypeRecord, ProjectParticipantRecord, ProjectRecord, RFIRecord, UserProfileRecord,
   WorkstreamRecord,
 } from "../domain-models";
 import { legacyProjectReferences } from "../project-identifiers";
@@ -196,6 +196,13 @@ export async function fetchCatalog(): Promise<PermitTypeRecord[]> {
   if (permitRes.error || !permitRes.data) return noClient();
   const resources = (resourceRes.data ?? []).map(requirementResourceRowToDomain);
   return permitRes.data.map((row) => permitTypeRowToDomain(row, resources.filter((resource) => resource.permitTypeId === row.id)));
+}
+
+export async function fetchOrganizations(): Promise<OrganizationRecord[]> {
+  const client = getSupabaseBrowser();
+  if (!client) return noClient();
+  const { data, error } = await client.from("organizations").select("*").eq("active", true).order("code", { ascending: true });
+  return error || !data ? noClient() : data.map(organizationRowToDomain);
 }
 
 export async function fetchFullProjectState(projectId = "PRJ-PECAN-2026"): Promise<Partial<ProjectRecord>> {
