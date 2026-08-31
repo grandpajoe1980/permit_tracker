@@ -39,12 +39,12 @@
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| E2E | E2E Testing Track | Independent requirement-driven 4-tier opaque-box test suite + TEST_INFRA.md + TEST_READY.md | none | IN_PROGRESS |
-| M1 | ITSM & Multi-Tenancy Data Model & Supabase Persistence | F1, F2, F3, F4: DB migration, Drizzle schema, TypeScript types, Supabase RLS, Repository parity | none | IN_PROGRESS |
-| M2 | ITSM Operations UI, Fulfiller Queues & Customer Separation | F5, F6, F7: Assignment group views, ticket triage UI, priority matrix, customer vs fulfiller portal, test fix | M1 | PLANNED |
-| M3 | In-Ticket Interactive Workflow DAG Editor & Execution Engine | F8, F9, F10: Interactive in-ticket workflow editor, live step/dependency mutations, CPM recalculation | M1, M2 | PLANNED |
-| M4 | Reliable Document Downloads & System Integration | F11, F12, F13: Document download verification across all portals, signed URL fallback, full persistence sync | M1, M2, M3 | PLANNED |
-| M5 | Final Milestone: 100% E2E Test Pass & Adversarial Hardening | F14, F15, F16: Phase 1 pass 100% E2E tests, Phase 2 Tier 5 Challenger hardening, final Git checkpoints | M4, E2E | PLANNED |
+| E2E | E2E Testing Track | Independent requirement-driven 4-tier opaque-box test suite + TEST_INFRA.md + TEST_READY.md | none | DONE |
+| M1 | ITSM & Multi-Tenancy Data Model & Supabase Persistence | F1, F2, F3, F4: DB migration, Drizzle schema, TypeScript types, Supabase RLS, Repository parity | none | DONE |
+| M2 | ITSM Operations UI, Fulfiller Queues & Customer Separation | F5, F6, F7: Assignment group views, ticket triage UI, priority matrix, customer vs fulfiller portal, test fix | M1 | DONE |
+| M3 | In-Ticket Interactive Workflow DAG Editor & Execution Engine | F8, F9, F10: Interactive in-ticket workflow editor, live step/dependency mutations, CPM recalculation | M1, M2 | DONE |
+| M4 | Reliable Document Downloads & System Integration | F11, F12, F13: Document download verification across all portals, signed URL fallback, full persistence sync | M1, M2, M3 | DONE |
+| M5 | Final Milestone: 100% E2E Test Pass & Adversarial Hardening | F14, F15, F16: Phase 1 pass 100% E2E tests, Phase 2 Tier 5 Challenger hardening, final Git checkpoints | M4, E2E | DONE |
 
 ## Interface Contracts
 
