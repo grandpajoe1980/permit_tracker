@@ -87,6 +87,14 @@ findings below.
   a reproducible clean-context RLS negative-test harness for every persona.
 - Existing historical migrations contain permissive policies; a forward
   hardening migration must supersede them without rewriting migration history.
+- The live migration ledger is ahead/behind the checkout in multiple places:
+  `npx supabase migration list` reports remote `20260830210001` without a
+  local file and local hardening/action migrations not yet applied remotely.
+  Do not repair that history automatically; reconcile it before deployment.
+- Chromium E2E document upload reaches the live Storage boundary and is
+  rejected with `new row violates row-level security policy`. The forward
+  `path_documents_insert` policy is checked in locally but cannot be validated
+  against the live project until the migration drift is reconciled.
 - The large internal router must be extracted incrementally to avoid regressing
   the existing operational UI.
 
@@ -99,3 +107,13 @@ findings below.
 3. Continue through government workbench, document lifecycle, and schedule
    persistence checkpoints; the first route extraction checkpoint is now in
    source and build-verified.
+
+## Latest verification
+
+| Command | Result | Evidence |
+|---|---|---|
+| `npx playwright test --project=chromium tests/e2e/supabase-persistence.spec.ts` | PASS | 2/2 scenarios passed after hydration, persona, and strict-selector fixes; request creation and RFI flow execute across isolated contexts. |
+| `npx playwright test --project=chromium tests/e2e/document-management.spec.ts` | PARTIAL | 1/2 passed: seeded private PDF download passed; live upload was correctly rejected by current remote Storage RLS. |
+| `npx tsc --noEmit` | PASS | TypeScript completed without errors. |
+| `npm run build` | PASS | Vinext/Vite production build completed; asset-size and dynamic-route warnings remain. |
+| `npx eslint . --ignore-pattern dist --ignore-pattern .next` | PASS with warnings | 0 errors; existing unused-import/unused-variable warning debt remains. |

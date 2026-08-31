@@ -204,7 +204,7 @@ export type DemoPersona = {
   password?: string;
   badge: string;
   scenario: string;
-  group: "SpaceX Louisiana Program" | "Applicant Scenarios";
+  group: "SpaceX Louisiana Program" | "Applicant Scenarios" | "Louisiana Governor's Office of Major Projects & Delivery";
   displayTitle?: string;
   organization?: string;
   organizationalUnit?: string;
@@ -430,6 +430,21 @@ export const demoPersonas: DemoPersona[] = [
     organizationalUnit: "Regulatory Affairs & Permitting",
     workEmail: "maya.chen@spacex.com",
     legacyEmails: ["maya.chen@spacex.test"],
+  },
+  {
+    id: "sarah-johnson",
+    name: "Sarah Johnson",
+    role: "State Project Office",
+    roleDescription: "State project concierge coordinating the authorized government workbench",
+    email: "sarah.johnson@la.gov",
+    password: "PATH-MVP-2026!",
+    badge: "State PM",
+    scenario: "Cross-agency triage",
+    group: "Louisiana Governor's Office of Major Projects & Delivery",
+    displayTitle: "State Project Manager",
+    organization: "Louisiana Governor's Office of Major Projects & Delivery",
+    organizationalUnit: "PATH / Louisiana Project Delivery Office",
+    workEmail: "sarah.johnson@la.gov",
   },
   {
     id: "jordan-lee",

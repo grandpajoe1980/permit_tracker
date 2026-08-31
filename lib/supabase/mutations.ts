@@ -186,7 +186,10 @@ export async function mutateCreateCustomerRequest(params: {
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
   let projectId = params.projectId;
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(projectId)) {
+  // The current schema uses UUID project ids, while the seeded legacy project
+  // uses a stable text id. Only resolve the canonical project number; do not
+  // reinterpret an already-resolved text id as a project number.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(projectId) && projectId.toUpperCase().startsWith("PRJ-")) {
     const { data: project, error: projectError } = await client
       .from("projects")
       .select("id")

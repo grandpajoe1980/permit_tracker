@@ -25,7 +25,8 @@ const admin = createClient(
 
 async function signInAndOpenDocuments(page: Page) {
   await page.goto("/");
-  await page.waitForLoadState("networkidle");
+  await expect(page.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
+  await page.getByRole("button", { name: "Quick Demo Sign-In" }).click();
   await page.getByRole("button", { name: /Alex Martin/ }).click();
   await expect(page.getByRole("button", { name: "Documents", exact: true })).toBeVisible({ timeout: 15_000 });
   await page.getByRole("button", { name: "Documents", exact: true }).click();

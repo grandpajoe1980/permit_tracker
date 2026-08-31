@@ -197,6 +197,11 @@ function workspaceTitle(workspace: WorkspaceMode) {
   return "Reviewer Workspace";
 }
 
+function demoPersonaDomId(persona: DemoPersona) {
+  const ids: Record<string, string> = { "alex-martin": "alex", "maya-chen": "maya", "sarah-johnson": "sarah", "jordan-lee": "jordan" };
+  return ids[persona.id] ?? persona.id;
+}
+
 function syncRequestState(request: ServiceRequest, workstreamState?: ReturnType<typeof repository.getWorkstreamById>): ServiceRequest {
   if (!workstreamState) return request;
   const completed = workstreamState.operationalState === "complete";
@@ -251,12 +256,13 @@ export default function Home() {
   });
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [selectedProjectWorkstreamId, setSelectedProjectWorkstreamId] = useState<string | null>(null);
-  const [showDemoPeople, setShowDemoPeople] = useState(true);
+  const [showDemoPeople, setShowDemoPeople] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loadingData, setLoadingData] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [dialogError, setDialogError] = useState("");
   const [toast, setToast] = useState("");
@@ -292,7 +298,8 @@ export default function Home() {
   const [lastSavedTime, setLastSavedTime] = useState<string>("");
   const [viewerModalDoc, setViewerModalDoc] = useState<DocumentRecord | null>(null);
   const [viewerModalVer, setViewerModalVer] = useState<DocumentVersionRecord | undefined>(undefined);
-    const usernameRef = useRef<HTMLInputElement>(null);
+  const usernameRef = useRef<HTMLInputElement>(null);
+  const demoHydrationRef = useRef<Promise<void> | null>(null);
 
   const activePersona = getOperationalPersona(currentPersona);
   const operationalData = getOperationalWorkItems({
@@ -332,6 +339,7 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
+    setHydrated(true);
     const client = getSupabaseBrowserClient();
 
     // Hydrate project state authoritatively from Supabase PostgreSQL
@@ -478,28 +486,35 @@ export default function Home() {
     setUsername(persona.email);
     setPassword(persona.password ?? DEMO_PASSWORD);
     setLoginError("");
-    setLoadingData(true);
-    let loadedPermits: ServiceRequest[] | null = null;
-    if (supabaseConfigured() && persona.password) {
-      const { user } = await signInWithPassword(persona.email, persona.password);
-      if (user) {
-        await repository.hydrateFromSupabase();
-        const loaded = await loadRequestsForUser();
-        loadedPermits = loaded.permits.length > 0 || !allowsFixtureData() ? loaded.permits : pecanIslandRequests;
-      }
-    }
-    const permits = loadedPermits ?? (getOperationalPersona(persona).isCustomer && persona.email.startsWith("applicant.")
+    setLoadingData(false);
+    // Remote hydration runs after the route changes so the demo picker remains responsive.
+    const permits = (getOperationalPersona(persona).isCustomer && persona.email.startsWith("applicant.")
       ? userPermits
       : allowsFixtureData() ? pecanIslandRequests : []);
-    const finalPermits = permits.length > 0 || !allowsFixtureData() ? permits : pecanIslandRequests;
+    const finalPermits = permits;
     setCurrentPersona(persona);
     setProfileDraft(profileDraftForPersona(persona));
     setCurrentUser({ username: persona.email, name: persona.name, agencyId: "spaceport", applicationIds: finalPermits.map((item) => item.id), scenario: `${persona.role} · ${persona.scenario}` });
-    setUserPermits(finalPermits);
+    setUserPermits(permits);
     setSelectedItemId(null);
     setRoute("my-work");
     setLoadingData(false);
     setShowDemoPeople(false);
+    const demoPassword = persona.password;
+    if (supabaseConfigured() && demoPassword) {
+      demoHydrationRef.current = (async () => {
+        const { user, error } = await signInWithPassword(persona.email, demoPassword);
+        if (error || !user) {
+          setLoginError(error?.message ?? "Demo authentication failed. No production data was loaded.");
+          return;
+        }
+        await repository.hydrateFromSupabase();
+        const loaded = await loadRequestsForUser();
+        const hydratedPermits = loaded.permits.length > 0 || !allowsFixtureData() ? loaded.permits : pecanIslandRequests;
+        setUserPermits(hydratedPermits);
+        setCurrentUser((current) => current ? { ...current, applicationIds: hydratedPermits.map((item) => item.id) } : current);
+      })();
+    }
   }
 
   async function signOut() {
@@ -564,6 +579,7 @@ export default function Home() {
   async function submitCustomerRequest(event: FormEvent<HTMLFormElement>, requestType: "permit_authorization" | "government_help" | "project_question" | "blocker_coordination" | "escalation") {
     event.preventDefault();
     if (!requestDescription.trim() && !requestTitle.trim()) return;
+    if (demoHydrationRef.current) await demoHydrationRef.current;
     const inferredServiceType = requestTitle === "Project question" ? "project_question" : requestTitle === "Project blocker or coordination problem" ? "blocker_coordination" : requestTitle === "Concierge help" ? "concierge" : "government_help";
     const effectiveRequestType = requestType === "government_help" && requestCenterMode === "service" ? inferredServiceType : requestType;
     const selectedPermit = repository.getCatalog().find((permit) => permit.id === selectedCatalogPermitId);
@@ -620,6 +636,7 @@ export default function Home() {
     setRequestDescription("");
     setExternalReference("");
     setExternalRecordUrl("");
+    setRequestCenterMode("menu");
     setToast(`${request.confirmationNumber} submitted. The State Project Office triage queue was notified.`);
     setMutationVersion((value) => value + 1);
   }
@@ -717,6 +734,7 @@ export default function Home() {
     const document = repository.getDocuments().find((entry) => entry.id === documentId);
     if (!file || !document) return;
 
+    if (demoHydrationRef.current) await demoHydrationRef.current;
     setSaveStatus("saving");
     try {
       const versionNumber = document.currentVersionNumber + 1;
@@ -758,7 +776,7 @@ export default function Home() {
     } catch (err) {
       console.error("Upload error:", err);
       setSaveStatus("error");
-      setToast("Failed to upload document to Supabase Storage.");
+      setToast(`Failed to upload document to Supabase Storage: ${err instanceof Error ? err.message : "unknown storage error"}`);
     }
     event.target.value = "";
   }
@@ -1053,7 +1071,7 @@ export default function Home() {
 
   if (!loggedIn) {
     return (
-      <div className="min-h-screen bg-[#f3f6f7] text-[#172033]">
+      <div id="login-shell" data-hydrated={hydrated ? "true" : "false"} className="min-h-screen bg-[#f3f6f7] text-[#172033]">
         <div className="road-stripe" />
         <header className="site-header">
           <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-4 sm:px-8">
@@ -1085,7 +1103,7 @@ export default function Home() {
               <div className="border-t border-slate-100 pt-4">
                 <Button id="demo-login-trigger" type="button" variant="outline" className="w-full justify-between border-teal-300 bg-teal-50 font-bold text-teal-950" onClick={() => setShowDemoPeople((value) => !value)}><span className="flex items-center gap-2"><Sparkles className="size-4 text-teal-700" aria-hidden="true" /> Quick Demo Sign-In</span><ChevronDown className={`size-4 transition-transform ${showDemoPeople ? "rotate-180" : ""}`} aria-hidden="true" /></Button>
                 {showDemoPeople && <div className="mt-3 space-y-2" aria-label="Demo personas">
-                  {demoPersonas.map((persona) => <button key={persona.id} id={`demo-persona-${persona.id}`} type="button" onClick={() => void handleDemoPersonaSelect(persona)} className="flex w-full items-start justify-between rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-teal-500 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><span><span className="block text-sm font-black text-[#00284d]">{persona.name}</span><span className="block text-xs font-semibold text-slate-500">{persona.role}</span></span><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase text-slate-600">{persona.badge}</span></button>)}
+                  {demoPersonas.map((persona) => <button key={persona.id} id={`demo-persona-${demoPersonaDomId(persona)}`} type="button" onClick={() => void handleDemoPersonaSelect(persona)} className="flex w-full items-start justify-between rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-teal-500 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><span><span className="block text-sm font-black text-[#00284d]">{persona.name}</span><span className="block text-xs font-semibold text-slate-500">{persona.role}</span></span><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase text-slate-600">{persona.badge}</span></button>)}
                 </div>}
               </div>
               <p className="text-xs leading-5 text-slate-500"><strong className="text-slate-700">Demo:</strong> use the persona picker for the reviewer, supervisor, customer, and applicant scenarios. Official statutory filings remain in the authoritative agency systems.</p>
@@ -1169,7 +1187,9 @@ export default function Home() {
   function renderCustomerRequestCenter() {
     const catalog = repository.getCatalog();
     const permit = catalog.find((entry) => entry.id === selectedCatalogPermitId) ?? catalog[0];
-    const recent = repository.getCustomerRequests().filter((entry) => entry.submittedByUserId === actorUserId());
+    // The request repository is already scoped by Supabase RLS; production
+    // auth ids are UUIDs while demo personas use stable fixture ids.
+    const recent = repository.getCustomerRequests();
     const choice = (label: string, detail: string, icon: ReactNode, onClick: () => void) => <button type="button" onClick={onClick} className="rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-teal-400 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><span className="flex size-10 items-center justify-center rounded-lg bg-teal-50 text-teal-800">{icon}</span><span className="mt-4 block text-base font-black text-[#00284d]">{label}</span><span className="mt-1 block text-sm leading-6 text-slate-600">{detail}</span></button>;
     return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer intake</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Requests & permits</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Start with the outcome you need. PATH creates a trackable request, routes it to the State Project Office, and keeps authoritative agency filings clearly identified.</p></div>{requestCenterMode === "menu" && <><div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{choice("Submit / track a permit or authorization", "Select an authorization, review prerequisites and official resources, then create a PATH tracking record.", <FilePlus2 className="size-5" />, () => setRequestCenterMode("permit"))}{choice("Request government help / service", "Tell the project office the service or outcome you need, including date and schedule impact.", <HelpCircle className="size-5" />, () => { setRequestTitle("Government service request"); setRequestCenterMode("service"); })}{choice("Ask a project question", "Send a structured question to the project office with the context needed for a useful answer.", <MessageSquare className="size-5" />, () => { setRequestTitle("Project question"); setRequestCenterMode("service"); })}{choice("Report a blocker / coordination problem", "Identify what is blocked, who may need to act, and the date that matters.", <AlertOctagon className="size-5" />, () => { setRequestTitle("Project blocker or coordination problem"); setRequestBlocksWork(true); setRequestCenterMode("service"); })}{choice("Request escalation", "Ask for assistance when a critical-path risk or delayed dependency needs project-office attention.", <ShieldAlert className="size-5" />, () => setRequestCenterMode("escalation"))}{choice("I'm not sure what I need", "Use the PATH concierge to describe the situation in plain English and receive a suggested route.", <Sparkles className="size-5" />, () => { setRequestCenterMode("service"); setRequestTitle("Concierge help"); })}</div><Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Track my PATH requests</CardTitle></CardHeader><CardContent className="space-y-3">{recent.length > 0 ? recent.map((request) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-slate-500">{request.status.replaceAll("_", " ")} · {request.description}</p></div><span className="text-xs font-bold text-teal-800">{formatDate(request.updatedAt)}</span></div>) : <p className="text-sm text-slate-600">No requests submitted from this profile yet.</p>}</CardContent></Card></>}{requestCenterMode === "permit" && permit && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">Permit / authorization submission wizard</CardTitle><p className="mt-1 text-sm text-slate-600">Step 2 of 6 · Choose the authorization from the verified catalog.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent className="space-y-5"><div><Label htmlFor="permit-catalog">Authorization or permit</Label><select id="permit-catalog" value={permit.id} onChange={(event) => setSelectedCatalogPermitId(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm">{catalog.map((entry) => <option key={entry.id} value={entry.id}>{entry.name} · {entry.responsibleOrgCode}</option>)}</select></div><div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2"><div><p className="text-xs font-black uppercase text-slate-500">What triggers it</p><p className="mt-1 text-slate-700">{permit.triggerExplanation}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Expected duration</p><p className="mt-1 text-slate-700">{permit.expectedLeadTimeDays} days · statutory minimum {permit.minimumStatutoryDays} days</p></div><div><p className="text-xs font-black uppercase text-slate-500">Prerequisites</p><p className="mt-1 text-slate-700">{permit.prerequisites.join(" · ")}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Agency contact</p><p className="mt-1 text-slate-700">{permit.agencyContactName ?? permit.responsibleOrgCode} · {permit.agencyContactEmail ?? "Contact through official portal"}</p></div></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-black text-amber-950">Filing method: {filingModeLabel(permit.filingMode)}</p><p className="mt-1 text-sm leading-6 text-amber-900">{permit.filingMode === "EXTERNAL_PORTAL" ? `This application is submitted in the authoritative ${permit.responsibleOrgCode} system. PATH will track it as part of the SpaceX project.` : "PATH will show the next supported submission step before filing."}</p>{permit.officialFilingUrl && <a href={permit.officialFilingUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#00284d] px-3 py-2 text-xs font-bold text-white">Open official filing site <ExternalLink className="size-3.5" /></a>}</div><form onSubmit={(event) => submitCustomerRequest(event, "permit_authorization")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="permit-request-title">PATH tracking title</Label><Input id="permit-request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder={permit.name} required /></div><div><Label htmlFor="permit-submission-date">Submission date</Label><Input id="permit-submission-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="permit-request-description">Supporting context and requested outcome</Label><textarea id="permit-request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe the project scope, filing intent, and any known prerequisites." /></div>{permit.filingMode === "EXTERNAL_PORTAL" && <div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="external-reference">External case / application number</Label><Input id="external-reference" value={externalReference} onChange={(event) => setExternalReference(event.target.value)} placeholder="Enter after filing" /></div><div><Label htmlFor="external-record-url">External record URL</Label><Input id="external-record-url" type="url" value={externalRecordUrl} onChange={(event) => setExternalRecordUrl(event.target.value)} placeholder="https://..." /></div><div><Label htmlFor="external-status">Authoritative external status</Label><select id="external-status" value={externalStatus} onChange={(event) => setExternalStatus(event.target.value)} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="submitted">Submitted</option><option value="under_review">Under review</option><option value="additional_information">Additional information requested</option></select></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">PATH does not scrape or synchronize this system. Status is manually verified by a project participant.</div></div>}<Button type="submit" className="bg-[#00284d] font-bold">Create PATH tracking record <Send className="size-4" /></Button></form></CardContent></Card>}{(requestCenterMode === "service" || requestCenterMode === "escalation") && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">{requestCenterMode === "escalation" ? "Request escalation / assistance" : "Project help request"}</CardTitle><p className="mt-1 text-sm text-slate-600">Complete the structured intake so the right team can respond without a follow-up round trip.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent><form onSubmit={(event) => submitCustomerRequest(event, requestCenterMode === "escalation" ? "escalation" : "government_help")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="request-title">Request title</Label><Input id="request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder="What do you need?" required /></div><div><Label htmlFor="request-agency">Known agency (optional)</Label><Input id="request-agency" value={requestAgency} onChange={(event) => setRequestAgency(event.target.value)} placeholder="DOTD, CPRA, LDEQ..." /></div><div><Label htmlFor="request-outcome">Requested outcome</Label><Input id="request-outcome" value={requestOutcome} onChange={(event) => setRequestOutcome(event.target.value)} placeholder="A decision, meeting, review, or referral" /></div><div><Label htmlFor="request-date">Desired date</Label><Input id="request-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="request-area">Location / affected area</Label><Input id="request-area" value={requestArea} onChange={(event) => setRequestArea(event.target.value)} /></div><div><Label htmlFor="request-description">Describe the situation</Label><textarea id="request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={5} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder={requestCenterMode === "escalation" ? "Describe the critical-path risk, delayed dependency, or assistance needed." : "Include the context the project office needs to respond."} /></div><label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3"><input type="checkbox" checked={requestBlocksWork} onChange={(event) => setRequestBlocksWork(event.target.checked)} className="mt-1 size-4 accent-teal-700" /><span><span className="block text-sm font-bold text-[#00284d]">This blocks active project work</span><span className="block text-xs text-slate-500">Use this to help triage urgency; PATH will not infer a legal determination.</span></span></label><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={saveCustomerDraft}>Save draft</Button><Button type="submit" className="bg-[#00284d] font-bold">Submit request <Send className="size-4" /></Button></div></form></CardContent></Card>}</div>;
   }
