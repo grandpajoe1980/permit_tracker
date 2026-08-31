@@ -113,6 +113,14 @@ findings below.
   organization and authorization registration forms. Their audit-backed RPCs
   are checked in as migration `20260830223000` and return the persisted record
   before the designer updates its visible list.
+- Hydrated the workflow designer's catalog and organization roster from the
+  authoritative Supabase tables after login, while retaining fixture data only
+  for explicit demo/test mode. Fixed the document upload hydration race so a
+  quick-demo upload resolves the post-hydration document UUID before writing to
+  Storage.
+- Added `npm run supabase:rls`, a disposable authenticated/anonymous isolation
+  probe that verifies an ungranted customer cannot read a project or document
+  and cannot upload to its private Storage path.
 
 ## Known blockers and risks
 
@@ -124,10 +132,10 @@ findings below.
   `npx supabase migration list` reports remote `20260830210001` without a
   local file and local hardening/action migrations not yet applied remotely.
   Do not repair that history automatically; reconcile it before deployment.
-- Chromium E2E document upload reaches the live Storage boundary and is
-  rejected with `new row violates row-level security policy`. The forward
-  `path_documents_insert` policy is checked in locally but cannot be validated
-  against the live project until the migration drift is reconciled.
+- The previous Chromium document-upload failure was a client hydration race;
+  after the fix, the live upload/download lifecycle passes. The live migration
+  ledger still needs reconciliation before the checked-in forward Storage/RLS
+  changes can be declared deployed everywhere.
 - The large internal router must be extracted incrementally to avoid regressing
   the existing operational UI.
 - The direct Vite dev server is the reproducible browser-test runtime here;
@@ -136,8 +144,8 @@ findings below.
 
 ## Next actions
 
-1. Add failure/RLS regression tests and validate the forward migrations against
-   a running Supabase database.
+1. Add the remaining failure/workflow negative tests and validate every forward
+   migration against a running Supabase database.
 2. Reconcile the live migration ledger before applying the checked-in forward
    hardening/action/notification migrations.
 3. Continue through government workbench, document lifecycle, and schedule
@@ -149,7 +157,8 @@ findings below.
 | Command | Result | Evidence |
 |---|---|---|
 | `npx playwright test --project=chromium tests/e2e/supabase-persistence.spec.ts` | PASS | 2/2 scenarios passed; Scenario 1 proves exact request propagation and Scenario 2 proves exact RFI question, workstream pause, applicant response, reviewer acceptance, and workstream resume across isolated contexts. |
-| `npx playwright test --project=chromium tests/e2e/document-management.spec.ts` | PARTIAL | 1/2 passed: seeded private PDF download passed; live upload was correctly rejected by current remote Storage RLS. |
+| `npx playwright test --project=chromium tests/e2e/document-management.spec.ts` | PASS | 2/2 passed after resolving the pre-hydration fixture document ID race; exact uploaded bytes and seeded private PDF were verified. |
+| `npm run supabase:rls` | PASS | Disposable isolated project/document probe: authorized customer and anonymous reads returned no rows, and unauthorized Storage upload was rejected. |
 | `npx tsc --noEmit` | PASS | TypeScript completed without errors. |
 | `npm run build` | PASS | Vinext/Vite production build completed; asset-size and dynamic-route warnings remain. |
 | `npx eslint . --ignore-pattern dist --ignore-pattern .next` | PASS with warnings | 0 errors; existing unused-import/unused-variable warning debt remains. |

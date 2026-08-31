@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   AlertCircle,
   Building2,
@@ -29,8 +29,8 @@ import type { WorkflowStageRecord } from "@/lib/domain-models";
 
 export function WorkflowDesignerPanel({ catalog: catalogProp, organizations: organizationsProp }: { catalog?: PermitTypeRecord[]; organizations?: OrganizationRecord[] } = {}) {
   const templates = getWorkflowTemplates();
-  const [catalog, setCatalog] = useState<PermitTypeRecord[]>(catalogProp ?? getPermitCatalog());
-  const [orgs, setOrgs] = useState<OrganizationRecord[]>(organizationsProp ?? getRegisteredOrganizations());
+  const [catalogAdds, setCatalogAdds] = useState<PermitTypeRecord[]>([]);
+  const [organizationAdds, setOrganizationAdds] = useState<OrganizationRecord[]>([]);
   const [activeTab, setActiveTab] = useState<"workflows" | "catalog" | "agencies">("workflows");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(templates[0]?.id || "");
   const [draftVersionId, setDraftVersionId] = useState<string | null>(null);
@@ -42,8 +42,10 @@ export function WorkflowDesignerPanel({ catalog: catalogProp, organizations: org
   const [permitForm, setPermitForm] = useState({ code: "", name: "", responsibleOrgCode: "LDEQ", statutoryCitation: "", triggerExplanation: "" });
   const [organizationForm, setOrganizationForm] = useState({ code: "", name: "", generalContactEmail: "" });
 
-  useEffect(() => { if (catalogProp) setCatalog(catalogProp); }, [catalogProp]);
-  useEffect(() => { if (organizationsProp) setOrgs(organizationsProp); }, [organizationsProp]);
+  const baseCatalog = catalogProp ?? getPermitCatalog();
+  const catalog = [...baseCatalog, ...catalogAdds.filter((item) => !baseCatalog.some((entry) => entry.id === item.id))];
+  const baseOrganizations = organizationsProp ?? getRegisteredOrganizations();
+  const orgs = [...baseOrganizations, ...organizationAdds.filter((item) => !baseOrganizations.some((entry) => entry.id === item.id))];
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
   const activeVersion = selectedTemplate?.versions.find((v) => v.status === "published") || selectedTemplate?.versions[0];
@@ -122,7 +124,7 @@ export function WorkflowDesignerPanel({ catalog: catalogProp, organizations: org
     const result = await mutateRegisterOrganization(organizationForm);
     setDesignerBusy(false);
     if (result.error || !result.data) { setDesignerMessage(result.error?.message ?? "The organization was not confirmed by the database."); return; }
-    setOrgs((current) => [result.data!, ...current]);
+    setOrganizationAdds((current) => [result.data!, ...current]);
     setOrganizationForm({ code: "", name: "", generalContactEmail: "" });
     setDesignerMessage(`${result.data.code} registered and audit logged.`);
   }
@@ -132,7 +134,7 @@ export function WorkflowDesignerPanel({ catalog: catalogProp, organizations: org
     const result = await mutateCreatePermitType({ ...permitForm, id: `permit-${permitForm.code.toLowerCase()}` , category: "permit", statutoryCitation: permitForm.statutoryCitation || "Authority to be confirmed by the responsible agency.", triggerExplanation: permitForm.triggerExplanation || "Agency review required." });
     setDesignerBusy(false);
     if (result.error || !result.data) { setDesignerMessage(result.error?.message ?? "The authorization was not confirmed by the database."); return; }
-    setCatalog((current) => [result.data!, ...current]);
+    setCatalogAdds((current) => [result.data!, ...current]);
     setPermitForm({ code: "", name: "", responsibleOrgCode: "LDEQ", statutoryCitation: "", triggerExplanation: "" });
     setDesignerMessage(`${result.data.code} added to the authorization catalog and audit logged.`);
   }

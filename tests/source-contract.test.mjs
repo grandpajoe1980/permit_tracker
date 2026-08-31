@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, seedScript, commandSeedScript, repository] = await Promise.all([
+const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, seedScript, commandSeedScript, repository, rlsScript] = await Promise.all([
   readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
@@ -23,6 +23,7 @@ const [page, layout, css, readme, portalMigration, hardeningMigration, policyMig
   readFile(new URL("../scripts/seed-spacex-demo.mjs", import.meta.url), "utf8"),
   readFile(new URL("../scripts/seed-command-system-supabase.mjs", import.meta.url), "utf8"),
   readFile(new URL("../lib/repository.ts", import.meta.url), "utf8"),
+  readFile(new URL("../scripts/test-supabase-rls-isolation.mjs", import.meta.url), "utf8"),
 ]);
 
 test("uses the typed domain module without duplicating fixtures in the UI", () => {
@@ -101,6 +102,9 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(catalogAdminMigration, /require_workflow_admin/);
   assert.match(mutations, /mutateRegisterOrganization/);
   assert.match(mutations, /mutateCreatePermitType/);
+  assert.match(rlsScript, /disposable RLS isolation probe/);
+  assert.match(rlsScript, /unauthorizedStorageUploadRejected/);
+  assert.match(rlsScript, /assert\.deepEqual\(authenticatedProject\.data, \[\]/);
   assert.doesNotMatch(repository, /void\s+(?:mutate|insertNotification)/);
   assert.doesNotMatch(page, /repository\.dispatchNotification\(\{ userId: "user-sarah-johnson"/);
   assert.match(identifierModule, /canonicalProjectReference/);

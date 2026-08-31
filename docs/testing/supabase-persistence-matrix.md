@@ -72,9 +72,10 @@ Every mutation must satisfy the **Non-Negotiable Supabase Durability Gate**:
 | **SCEN-01** | Dual-User Customer Request Propagation | Browser 1: SpaceX PM submits service request | Browser 2: State PM with clean storage | Exact request title is retrieved from the Supabase-backed intake queue | **PASS (Chromium, 2/2 persistence suite)** |
 | **SCEN-02** | RFI Creation & Workstream Clock Pause | Browser 1: LDEQ Reviewer issues RFI | Browser 2: SpaceX PM | Exact RFI is retrieved by the applicant; linked workstream visibly enters `Waiting on Applicant (RFI Issued)` | **PASS (Chromium)** |
 | **SCEN-03/04** | RFI Response and Acceptance | Applicant and fresh reviewer contexts | Reviewer/applicant contexts | Exact question and response propagate; reviewer acceptance visibly resumes the linked workstream as `Running (Response Accepted)` | **PASS (Chromium)** |
-| **SCEN-05** | Private Document Version Upload & Hash Verification | Browser 1: SpaceX uploads revision file | Browser 2: Agency reviewers | Seeded private download passes; live upload is rejected by current remote Storage RLS | **PARTIAL / BLOCKED** |
+| **SCEN-05** | Private Document Version Upload & Hash Verification | Browser 1: SpaceX uploads revision file | Browser 2: Agency reviewers | Exact uploaded bytes round-trip through private Storage; seeded private PDF download also passes | **PASS (Chromium, 2/2)** |
 | **SCEN-06–13** | Remaining lifecycle, admin, realtime, and filing scenarios | Multiple contexts | Authorized users | No dedicated clean-context proof in the current automated suite | **UNVERIFIED** |
 | **SCEN-14** | Production Build & Lint Gate | Automated CI | Vinext / ESLint / Node Test Runner | Build/type checks pass; lint has 0 errors but warning debt remains | **PASS WITH WARNINGS** |
+| **SCEN-15** | Tenant and Storage Isolation Probe | Disposable isolated tenant; authenticated customer and anonymous contexts | Supabase RLS/Storage | Isolated project/document are hidden and unauthorized upload is rejected | **PASS (live Supabase)** |
 
 The older table claimed all scenarios passed; those claims were not reproducible
 from the current test suite and have been replaced with evidence-based status.

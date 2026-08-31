@@ -13,6 +13,7 @@
     "test": "npm run build && node --expose-gc --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "supabase:probe": "node scripts/supabase-probe.mjs",
+    "supabase:rls": "node scripts/test-supabase-rls-isolation.mjs",
     "supabase:seed:spacex": "node scripts/seed-spacex-demo.mjs",
     "db:generate": "drizzle-kit generate"
   },
