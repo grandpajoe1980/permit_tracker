@@ -155,6 +155,9 @@ findings below.
 - The authenticated `/api/requests` route now resolves either a canonical
   project UUID or its human-facing project number before querying or creating
   requests.
+- Removed the old unreachable client-side request audit/notification branch;
+  the authoritative request RPC is the sole owner of production request,
+  audit, and notification writes.
 - Scoped workflow and permit-catalog administration to the owning organization.
   `organization_admin` members can read workflow stages and create, edit,
   validate, and publish their own workflow versions; system admins retain

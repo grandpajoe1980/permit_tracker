@@ -136,6 +136,7 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(attachmentMigration, /exists \(select 1 from public\.customer_requests where id = p_request ->> 'id'\)/);
   assert.match(mutations, /mutateCreateCustomerRequestWithDocument/);
   assert.match(mutations, /uploadDocumentFile/);
+  assert.doesNotMatch(mutations, /legacy non-atomic side-effect path/);
   assert.match(repository, /attachmentFile/);
   assert.match(workflowAdminScopeMigration, /is_organization_admin/);
   assert.match(workflowAdminScopeMigration, /require_workflow_admin\(v_organization_id\)/);

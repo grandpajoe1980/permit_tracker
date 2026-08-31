@@ -308,9 +308,7 @@ export async function mutateCreateCustomerRequest(params: CustomerRequestMutatio
     // The RPC owns the request, audit, and notification transaction. Do not
     // emit client-side duplicates after it commits.
     return { data: customerRequestFromRow(rpcData as Record<string, unknown>), error: null };
-    /* legacy non-atomic side-effect path retained below only for offline
-       compatibility; it is unreachable when the RPC succeeds. */
-    const row = rpcData as Record<string, unknown>;
+    /*
     await Promise.all([
       insertAuditEvent({
         entityType: "customer_request",
@@ -332,32 +330,8 @@ export async function mutateCreateCustomerRequest(params: CustomerRequestMutatio
         metadata: { confirmationNumber: params.confirmationNumber, requestType: params.requestType },
       }),
     ]);
+    */
 
-    return {
-      data: {
-        id: String(row.id),
-        confirmationNumber: String(row.confirmation_number),
-        projectId: String(row.project_id),
-        requestType: String(row.request_type) as CustomerRequestRecord["requestType"],
-        title: String(row.title),
-        description: String(row.description),
-        requestedOutcome: (row.requested_outcome as string) || undefined,
-        locationOrAffectedArea: (row.location_or_affected_area as string) || undefined,
-        desiredDate: (row.desired_date as string) || undefined,
-        scheduleImportance: (row.schedule_importance as CustomerRequestRecord["scheduleImportance"]) || "normal",
-        knownAgencyCode: (row.known_agency_code as string) || undefined,
-        knownPermitTypeId: (row.known_permit_type_id as string) || undefined,
-        submittedByUserId: (row.submitted_by_user_id as string) || undefined,
-        submittedByName: String(row.submitted_by_name),
-        relatedWorkstreamId: (row.related_workstream_id as string) || undefined,
-        blocksActiveWork: Boolean(row.blocks_active_work),
-        status: String(row.status) as CustomerRequestRecord["status"],
-        attachmentDocumentVersionIds: (row.attachment_document_version_ids as string[]) || [],
-        createdAt: String(row.created_at || new Date().toISOString()),
-        updatedAt: String(row.updated_at || new Date().toISOString()),
-      },
-      error: null,
-    };
   }
 
   if (!allowsFixtureData()) {
