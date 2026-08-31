@@ -59,9 +59,10 @@ checked in as forward-only Supabase migrations and reflected here.
 - The Node suite passed 170 tests, but this is primarily fixture/unit coverage;
   it does not prove the required clean-browser, multi-persona journey.
 - Chromium persistence scenarios now assert exact request data across isolated
-  contexts. Document upload remains blocked by the configured live Storage RLS
-  state until migration history is reconciled; Firefox/WebKit binaries are not
-  installed in the current runner.
+  contexts, and the document lifecycle verifies exact uploaded bytes plus a
+  seeded private PDF download. The checked-in forward Storage/RLS migrations
+  still require live ledger reconciliation before deployment verification;
+  Firefox/WebKit binaries are not installed in the current runner.
 - Historical permissive migrations remain in the repository for replayability,
   but later forward migrations drop their broad policies. The live migration
   ledger still differs from this checkout and must be reconciled before deploy.
