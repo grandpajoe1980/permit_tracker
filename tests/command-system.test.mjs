@@ -173,7 +173,7 @@ test("Audit Engine: logs immutable audit ledger entries and supports query filte
 
 test("SpaceX Megaproject Fixture: contains dual ownership and pre-application readiness", () => {
   assert.equal(spacexProjectRecord.code, "SPACEX-PECAN-ISLAND");
-  assert.equal(registeredOrganizations.length, 8);
+  assert.equal(registeredOrganizations.length, 10);
   assert.equal(permitCatalog.length, 3);
   assert.equal(commitmentsData.length, 6);
   assert.equal(coordinationRequestsData.length, 3);

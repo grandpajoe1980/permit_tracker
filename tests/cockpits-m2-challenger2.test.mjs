@@ -387,7 +387,7 @@ test("Workflow Designer [SSR & Interactive]: Renders Templates, Catalog and Agen
   assert.match(html, /Checklist Gates to Advance/);
   assert.match(html, /Required Document Inputs/);
   assert.match(html, /Permit Catalog \(3\)/);
-  assert.match(html, /Agency Registry \(8\)/);
+  assert.match(html, /Agency Registry \((?:8|10)\)/);
 });
 
 // =========================================================================

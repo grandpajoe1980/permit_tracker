@@ -853,14 +853,15 @@ export function isClockStatus(value: unknown): value is ClockStatus {
 }
 
 export function parseITSMState(value: unknown, defaultState: ITSMState = "submitted"): ITSMState {
-  if (isITSMState(value)) return value;
   if (typeof value === "string") {
-    const normalized = value.toLowerCase().replace(/[\s-]/g, "_");
+    const trimmed = value.trim();
+    if (isITSMState(trimmed)) return trimmed;
+    const normalized = trimmed.toLowerCase().replace(/[\s-]+/g, "_");
     if (isITSMState(normalized)) return normalized;
     if (normalized === "triage") return "triaged";
     if (normalized === "complete" || normalized === "completed") return "resolved";
   }
-  return defaultState;
+  return isITSMState(defaultState) ? defaultState : "submitted";
 }
 
 export function parsePriorityLevel(value: unknown, defaultPriority: PriorityLevel = "P3"): PriorityLevel {
