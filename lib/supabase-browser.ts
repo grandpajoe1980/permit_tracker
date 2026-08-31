@@ -9,7 +9,7 @@ import type {
   RequestCategory,
   ServiceRequest,
 } from "./demo-data";
-import { mutateCreateCustomerRequest } from "./supabase/mutations";
+import { mutateCreateCustomerRequest, mutateCreateCustomerRequestWithDocument } from "./supabase/mutations";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey =
@@ -218,7 +218,7 @@ async function createRequestForUserLegacy(input: { title: string; requestType: s
 }
 */
 
-export async function createRequestForUser(input: { title: string; requestType: string; description: string }) {
+export async function createRequestForUser(input: { title: string; requestType: string; description: string; file?: File }) {
   const client = getSupabaseBrowserClient();
   if (!client) return { error: new Error("Supabase is not configured.") };
   const { data: userData } = await client.auth.getUser();
@@ -229,7 +229,7 @@ export async function createRequestForUser(input: { title: string; requestType: 
   const requestType = ["permit_authorization", "government_help", "project_question", "blocker_coordination", "escalation", "concierge"].includes(input.requestType)
     ? input.requestType
     : "government_help";
-  const result = await mutateCreateCustomerRequest({
+  const requestParams = {
     id: crypto.randomUUID(),
     confirmationNumber: `PATH-${new Date().getUTCFullYear()}-${String(Date.now()).slice(-6)}`,
     projectId: String(project.id),
@@ -239,9 +239,12 @@ export async function createRequestForUser(input: { title: string; requestType: 
     submittedByUserId: user.id,
     submittedByName: String(user.user_metadata?.full_name ?? user.email ?? "SpaceX employee"),
     blocksActiveWork: false,
-    scheduleImportance: "normal",
-    attachmentDocumentVersionIds: [],
-    status: "submitted",
-  });
+    scheduleImportance: "normal" as const,
+    attachmentDocumentVersionIds: [] as string[],
+    status: "submitted" as const,
+  };
+  const result = input.file
+    ? await mutateCreateCustomerRequestWithDocument({ ...requestParams, file: input.file })
+    : await mutateCreateCustomerRequest(requestParams);
   return { data: result.data, error: result.error };
 }

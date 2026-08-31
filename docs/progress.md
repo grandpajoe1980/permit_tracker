@@ -143,6 +143,12 @@ findings below.
   validates referenced document versions against that project, and supports
   safe retry idempotency. Migration `20260830232000_secure_customer_request_actor.sql`
   supersedes the legacy client-supplied actor fields.
+- Added the first-file customer intake path. The client uploads bytes to the
+  private Storage bucket, then `rpc_create_customer_request_with_document`
+  commits the document parent, immutable v1, request attachment link, audit,
+  and notification together; failed database commits remove the uploaded
+  object. The UI exposes an optional attachment on both plain-language and
+  structured customer intake.
 
 ## Known blockers and risks
 
@@ -168,9 +174,9 @@ findings below.
 - The checked-in request-actor hardening RPC is not yet live-verified because
   the remote migration ledger must be reconciled before applying local
   migrations.
-- Customer intake still submits text only; the first-file upload needs an
-  atomic document-parent/version transaction before SCEN-05 can cover the
-  complete intake attachment path.
+- Customer first-file intake is source-implemented but not live-verified; the
+  remote migration ledger must be reconciled before the combined document /
+  request RPC can be exercised against Supabase.
 
 ## Next actions
 

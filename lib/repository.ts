@@ -63,6 +63,7 @@ import {
   mutateCreateCommitment,
   mutateCreateCoordinationRequest,
   mutateCreateCustomerRequest,
+  mutateCreateCustomerRequestWithDocument,
   mutateCreateExternalFiling,
   mutateCreateRFI,
   mutateCreateWorkstreamFromRequest,
@@ -562,7 +563,7 @@ class ProjectDeliveryRepository {
 
   /** Production mutation: commit first, then expose the authoritative row. */
   async createCustomerRequestPersisted(
-    params: Omit<CustomerRequestRecord, "id" | "confirmationNumber" | "status" | "createdAt" | "updatedAt"> & { status?: CustomerRequestRecord["status"] }
+    params: Omit<CustomerRequestRecord, "id" | "confirmationNumber" | "status" | "createdAt" | "updatedAt"> & { status?: CustomerRequestRecord["status"]; attachmentFile?: File }
   ): Promise<{ data: CustomerRequestRecord | null; error: Error | null }> {
     if (!isSupabaseConfigured()) {
       if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
@@ -571,7 +572,7 @@ class ProjectDeliveryRepository {
     const now = new Date().toISOString();
     const requestId = `customer-request-${crypto.randomUUID()}`;
     const confirmationNumber = `PATH-${new Date().getUTCFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-    const result = await mutateCreateCustomerRequest({
+    const requestParams = {
       id: requestId,
       confirmationNumber,
       projectId: params.projectId,
@@ -590,7 +591,10 @@ class ProjectDeliveryRepository {
       blocksActiveWork: params.blocksActiveWork,
       status: params.status ?? "submitted",
       attachmentDocumentVersionIds: params.attachmentDocumentVersionIds,
-    });
+    };
+    const result = params.attachmentFile
+      ? await mutateCreateCustomerRequestWithDocument({ ...requestParams, file: params.attachmentFile })
+      : await mutateCreateCustomerRequest(requestParams);
     if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Customer request was not persisted.") };
     const request = { ...result.data, id: String(result.data.id), createdAt: result.data.createdAt || now, updatedAt: result.data.updatedAt || now };
     this.customerRequests = [request, ...this.customerRequests.filter((entry) => entry.id !== request.id)];

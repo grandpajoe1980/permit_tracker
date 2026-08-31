@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, triageMigration, versionedCompletionMigration, requestActorMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, seedScript, commandSeedScript, repository, rlsScript] = await Promise.all([
+const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, triageMigration, versionedCompletionMigration, requestActorMigration, attachmentMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, seedScript, commandSeedScript, repository, rlsScript] = await Promise.all([
   readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
@@ -17,6 +17,7 @@ const [page, layout, css, readme, portalMigration, hardeningMigration, policyMig
   readFile(new URL("../supabase/migrations/20260830225000_atomic_multi_workstream_triage.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830231000_pin_legacy_workflows_and_enforce_versioned_completion.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830232000_secure_customer_request_actor.sql", import.meta.url), "utf8"),
+  readFile(new URL("../supabase/migrations/20260830233000_customer_request_first_attachment.sql", import.meta.url), "utf8"),
   readFile(new URL("../lib/project-identifiers.ts", import.meta.url), "utf8"),
   readFile(new URL("../lib/supabase/mutations.ts", import.meta.url), "utf8"),
   readFile(new URL("../lib/data-mode.ts", import.meta.url), "utf8"),
@@ -121,6 +122,13 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(requestActorMigration, /v_actor_name/);
   assert.match(requestActorMigration, /attachments must belong to the selected project/);
   assert.match(requestActorMigration, /idempotency key/);
+  assert.match(attachmentMigration, /rpc_create_customer_request_with_document/);
+  assert.match(attachmentMigration, /insert into public\.documents/);
+  assert.match(attachmentMigration, /insert into public\.document_versions/);
+  assert.match(attachmentMigration, /public\.rpc_create_customer_request/);
+  assert.match(mutations, /mutateCreateCustomerRequestWithDocument/);
+  assert.match(mutations, /uploadDocumentFile/);
+  assert.match(repository, /attachmentFile/);
   assert.match(mutations, /mutateRegisterOrganization/);
   assert.match(mutations, /mutateCreatePermitType/);
   assert.match(rlsScript, /disposable RLS isolation probe/);

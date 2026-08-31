@@ -69,6 +69,11 @@ checked in as forward-only Supabase migrations and reflected here.
   seeded private PDF download. The checked-in forward Storage/RLS migrations
   still require live ledger reconciliation before deployment verification;
   Firefox/WebKit binaries are not installed in the current runner.
+- Customer first-file intake uploads to private Storage and then uses one
+  security-definer transaction for the document parent, immutable version, and
+  request link. The client removes the Storage object if that transaction is
+  rejected; cross-system byte/database atomicity cannot be provided by
+  PostgreSQL alone.
 - The Workflow Designer's production source is now hydrated from
   `workflow_definitions`, `workflow_versions`, and `workflow_version_stages`;
   its fixture templates are used only when explicit demo/test mode is active.

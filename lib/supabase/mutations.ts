@@ -19,6 +19,7 @@ import type {
 } from "../domain-models";
 import { allowsFixtureData, requiresSupabase } from "../data-mode";
 import { canonicalProjectReference } from "../project-identifiers";
+import { calculateSHA256, uploadDocumentFile } from "./storage-primitives";
 
 export interface MutationResult<T> {
   data: T | null;
@@ -233,7 +234,7 @@ export async function insertNotification(params: {
 // 2. CUSTOMER REQUESTS
 // ====================================================================
 
-export async function mutateCreateCustomerRequest(params: {
+export type CustomerRequestMutationParams = {
   id: string;
   confirmationNumber: string;
   projectId: string;
@@ -252,7 +253,9 @@ export async function mutateCreateCustomerRequest(params: {
   blocksActiveWork: boolean;
   status: CustomerRequestRecord["status"];
   attachmentDocumentVersionIds?: string[];
-}, requestClient?: SupabaseClient): Promise<MutationResult<CustomerRequestRecord>> {
+};
+
+export async function mutateCreateCustomerRequest(params: CustomerRequestMutationParams, requestClient?: SupabaseClient): Promise<MutationResult<CustomerRequestRecord>> {
   const client = requestClient ?? getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
@@ -438,6 +441,84 @@ export async function mutateCreateCustomerRequest(params: {
     },
     error: null,
   };
+}
+
+/**
+ * Upload a customer's first attachment and commit its document parent,
+ * version, request, audit, and notification through one database RPC.
+ */
+export async function mutateCreateCustomerRequestWithDocument(
+  params: CustomerRequestMutationParams & { file: File; documentType?: string },
+  requestClient?: SupabaseClient,
+): Promise<MutationResult<CustomerRequestRecord>> {
+  const client = requestClient ?? getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  if (params.file.size <= 0) return { data: null, error: new Error("Choose a non-empty attachment.") };
+  if (params.file.size > 25 * 1024 * 1024) return { data: null, error: new Error("Attachments must be 25 MB or smaller.") };
+
+  const { data: authData, error: authError } = await client.auth.getUser();
+  if (requiresSupabase() && (authError || !authData.user)) {
+    return { data: null, error: authError ?? new Error("Sign in before uploading an attachment.") };
+  }
+
+  let projectId = canonicalProjectReference(params.projectId);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(projectId) && projectId.toUpperCase().startsWith("PRJ-")) {
+    const { data: project, error: projectError } = await client.from("projects").select("id").eq("number", projectId).maybeSingle();
+    if (projectError || !project) return { data: null, error: new Error(projectError?.message ?? `Project ${projectId} was not found.`) };
+    projectId = String(project.id);
+  }
+
+  const fileBuffer = await params.file.arrayBuffer();
+  const sha256Hash = await calculateSHA256(fileBuffer);
+  const documentId = crypto.randomUUID();
+  const uploadId = crypto.randomUUID();
+  const upload = await uploadDocumentFile(params.file, documentId, 1, uploadId);
+  if (upload.error) return { data: null, error: upload.error };
+
+  const versionId = `doc-v-${uploadId}`;
+  const { data: rpcData, error: rpcError } = await client.rpc("rpc_create_customer_request_with_document", {
+    p_request: {
+      id: params.id,
+      confirmationNumber: params.confirmationNumber,
+      projectId,
+      requestType: params.requestType,
+      title: params.title,
+      description: params.description,
+      requestedOutcome: params.requestedOutcome ?? null,
+      locationOrAffectedArea: params.locationOrAffectedArea ?? null,
+      desiredDate: params.desiredDate ?? null,
+      scheduleImportance: params.scheduleImportance ?? "normal",
+      knownAgencyCode: params.knownAgencyCode ?? null,
+      knownPermitTypeId: params.knownPermitTypeId ?? null,
+      submittedByUserId: authData.user?.id ?? params.submittedByUserId ?? null,
+      submittedByName: params.submittedByName,
+      relatedWorkstreamId: params.relatedWorkstreamId ?? null,
+      blocksActiveWork: params.blocksActiveWork,
+      status: params.status,
+    },
+    p_document: {
+      documentId,
+      versionId,
+      documentType: params.documentType ?? "customer_attachment",
+      versionLabel: "v1.0",
+      storagePath: upload.storagePath,
+      fileName: params.file.name,
+      mimeType: params.file.type || "application/octet-stream",
+      fileSizeBytes: params.file.size,
+      sha256Hash,
+      uploadedByName: params.submittedByName,
+      uploadedByOrgName: "Space Exploration Technologies Corp. (SpaceX)",
+      changeNotes: "Initial customer intake attachment.",
+    },
+  });
+
+  if (rpcError || !rpcData) {
+    await client.storage.from("path-documents").remove([upload.storagePath]);
+    if (allowsFixtureData()) return { data: null, error: new Error(`Customer request attachment transaction failed: ${rpcError?.message ?? "no row returned"}`) };
+    return { data: null, error: new Error(`Customer request attachment transaction failed: ${rpcError?.message ?? "no row returned"}`) };
+  }
+
+  return { data: customerRequestFromRow(rpcData as Record<string, unknown>), error: null };
 }
 
 // ====================================================================

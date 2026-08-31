@@ -279,12 +279,15 @@ export default function Home() {
   const [transferType, setTransferType] = useState("Ask another reviewer");
   const [escalationType, setEscalationType] = useState("Supervisor decision");
   const [intakeText, setIntakeText] = useState("");
+  const [intakeFile, setIntakeFile] = useState<File | null>(null);
   const [intakeStatus, setIntakeStatus] = useState("");
   const [requestCenterMode, setRequestCenterMode] = useState<"menu" | "permit" | "service" | "escalation">("menu");
   const [selectedCatalogPermitId, setSelectedCatalogPermitId] = useState("cat-usace-404");
   const [requestTitle, setRequestTitle] = useState("");
   const [requestOutcome, setRequestOutcome] = useState("");
   const [requestDescription, setRequestDescription] = useState("");
+  const [requestFile, setRequestFile] = useState<File | null>(null);
+  const [requestFileInputKey, setRequestFileInputKey] = useState(0);
   const [requestArea, setRequestArea] = useState("Pecan Island Launch Complex");
   const [requestDate, setRequestDate] = useState("");
   const [requestAgency, setRequestAgency] = useState("");
@@ -527,7 +530,7 @@ export default function Home() {
     if (!intakeText.trim()) return;
     const preview = parsePlainEnglishIntake(intakeText);
     if (supabaseConfigured()) {
-      const result = await createRequestForUser({ title: `${preview.categoryLabel} request`, requestType: preview.detectedCategory, description: intakeText.trim() });
+      const result = await createRequestForUser({ title: `${preview.categoryLabel} request`, requestType: preview.detectedCategory, description: intakeText.trim(), file: intakeFile ?? undefined });
       if (result.error) {
         setIntakeStatus(result.error.message);
         return;
@@ -535,6 +538,9 @@ export default function Home() {
     }
     setIntakeStatus(`Submitted to the ${preview.suggestedLeadAgency} triage queue.`);
     setIntakeText("");
+    setIntakeFile(null);
+    setRequestFile(null);
+    setRequestFileInputKey((value) => value + 1);
   }
 
   async function triageCustomerRequest(request: CustomerRequestRecord) {
@@ -593,6 +599,7 @@ export default function Home() {
       relatedWorkstreamId: selectedPermit?.responsibleOrgCode === "CPRA" ? "WS-WETLANDS-PAD-A" : undefined,
       blocksActiveWork: requestBlocksWork,
       attachmentDocumentVersionIds: [],
+      attachmentFile: requestFile ?? undefined,
     });
     if (requestResult.error || !requestResult.data) {
       setToast(`Request could not be saved: ${requestResult.error?.message ?? "the database did not confirm the submission"}`);
@@ -628,6 +635,9 @@ export default function Home() {
     setRequestTitle("");
     setRequestOutcome("");
     setRequestDescription("");
+    setRequestFile(null);
+    setIntakeFile(null);
+    setRequestFileInputKey((value) => value + 1);
     setExternalReference("");
     setExternalRecordUrl("");
     setRequestCenterMode("menu");
@@ -655,6 +665,7 @@ export default function Home() {
       relatedWorkstreamId: selectedPermit?.responsibleOrgCode === "CPRA" ? "WS-WETLANDS-PAD-A" : undefined,
       blocksActiveWork: requestBlocksWork,
       attachmentDocumentVersionIds: [],
+      attachmentFile: requestFile ?? undefined,
       status: "draft",
     });
     if (requestResult.error || !requestResult.data) {
@@ -662,6 +673,9 @@ export default function Home() {
       return;
     }
     const request = requestResult.data;
+    setRequestFile(null);
+    setIntakeFile(null);
+    setRequestFileInputKey((value) => value + 1);
     setRequestCenterMode("menu");
     setToast(`${request.confirmationNumber} saved as a draft.`);
     setMutationVersion((value) => value + 1);
@@ -1410,10 +1424,10 @@ export default function Home() {
 
   function renderMain() {
     if (route === "detail") return renderDetail();
-    if (route === "my-work") return renderMyWork();
+    if (route === "my-work") return <><div className="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><Label htmlFor="request-attachment">Supporting attachment for your next request (optional)</Label><Input key={requestFileInputKey} id="request-attachment" type="file" onChange={(event) => { const file = event.target.files?.[0] ?? null; setRequestFile(file); setIntakeFile(file); }} className="mt-1 cursor-pointer" /><p className="mt-1 text-xs text-slate-500">The selected file is attached when you submit from My Work or Requests & permits.</p></div>{renderMyWork()}</>;
     if (route === "agency-queue" || route === "rfis" || route === "coordination" || route === "documents") return activePersona.isCustomer && route === "documents" ? renderCustomerDocuments() : renderQueue(route);
     if (route === "project") return renderProject();
-    if (route === "requests") return renderCustomerRequestCenter();
+    if (route === "requests") return <><div className="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><Label htmlFor="request-attachment-requests">Supporting attachment for your next request (optional)</Label><Input key={requestFileInputKey} id="request-attachment-requests" type="file" onChange={(event) => { const file = event.target.files?.[0] ?? null; setRequestFile(file); setIntakeFile(file); }} className="mt-1 cursor-pointer" /><p className="mt-1 text-xs text-slate-500">The selected file is attached when you submit a permit or service request.</p></div>{renderCustomerRequestCenter()}</>;
     if (route === "schedule") return <div className="space-y-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Read-only project delivery schedule for SpaceX. Internal government notes and control actions are not shown.</p></div><WorkstreamGraphGantt project={projectRecord} customerSafe onSelectWorkstream={(workstreamId) => openProject(workstreamId)} /></div>;
     if (route === "contacts" || route === "profile") return renderContacts();
     if (route === "help") return renderHelp();
