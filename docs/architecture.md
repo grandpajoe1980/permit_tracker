@@ -35,6 +35,12 @@ not a fallback for ordinary user requests.
 Authorization is enforced by PostgreSQL RLS and server-side/domain checks.
 Hiding a control in React is not an authorization boundary.
 
+Security-definer request creation derives the submitter from `auth.uid()` and
+the project from the canonical `projects` row. Client-provided submitter IDs
+and names are compatibility parameters only; they are not trusted for request
+or audit attribution. Referenced document versions must belong to the selected
+project.
+
 ## Workflow execution
 
 Published workflow versions are immutable. A workstream pins the published

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, triageMigration, versionedCompletionMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, seedScript, commandSeedScript, repository, rlsScript] = await Promise.all([
+const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, triageMigration, versionedCompletionMigration, requestActorMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, seedScript, commandSeedScript, repository, rlsScript] = await Promise.all([
   readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
@@ -16,6 +16,7 @@ const [page, layout, css, readme, portalMigration, hardeningMigration, policyMig
   readFile(new URL("../supabase/migrations/20260830223000_catalog_admin_transactions.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830225000_atomic_multi_workstream_triage.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830231000_pin_legacy_workflows_and_enforce_versioned_completion.sql", import.meta.url), "utf8"),
+  readFile(new URL("../supabase/migrations/20260830232000_secure_customer_request_actor.sql", import.meta.url), "utf8"),
   readFile(new URL("../lib/project-identifiers.ts", import.meta.url), "utf8"),
   readFile(new URL("../lib/supabase/mutations.ts", import.meta.url), "utf8"),
   readFile(new URL("../lib/data-mode.ts", import.meta.url), "utf8"),
@@ -115,6 +116,11 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(versionedCompletionMigration, /workflow_checklist_items/);
   assert.match(versionedCompletionMigration, /stage_runs/);
   assert.match(versionedCompletionMigration, /workflow_handoff/);
+  assert.match(requestActorMigration, /auth\.uid\(\)/);
+  assert.match(requestActorMigration, /has_project_access/);
+  assert.match(requestActorMigration, /v_actor_name/);
+  assert.match(requestActorMigration, /attachments must belong to the selected project/);
+  assert.match(requestActorMigration, /idempotency key/);
   assert.match(mutations, /mutateRegisterOrganization/);
   assert.match(mutations, /mutateCreatePermitType/);
   assert.match(rlsScript, /disposable RLS isolation probe/);

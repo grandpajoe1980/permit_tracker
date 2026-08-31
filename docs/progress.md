@@ -138,6 +138,11 @@ findings below.
   hydration path. The existing Workflow Designer now receives Supabase-backed
   definitions, versions, and stage rows in production, while fixture templates
   remain isolated to demo/test mode.
+- Hardened `rpc_create_customer_request` so the database derives the actor from
+  `auth.uid()`, canonicalizes the project reference, requires project access,
+  validates referenced document versions against that project, and supports
+  safe retry idempotency. Migration `20260830232000_secure_customer_request_actor.sql`
+  supersedes the legacy client-supplied actor fields.
 
 ## Known blockers and risks
 
@@ -160,11 +165,18 @@ findings below.
   this Sites-configured environment and needs deployment-runtime validation.
 - The checked-in atomic triage RPC is not yet live-verified because the remote
   migration ledger must be reconciled before applying local migrations.
+- The checked-in request-actor hardening RPC is not yet live-verified because
+  the remote migration ledger must be reconciled before applying local
+  migrations.
+- Customer intake still submits text only; the first-file upload needs an
+  atomic document-parent/version transaction before SCEN-05 can cover the
+  complete intake attachment path.
 
 ## Next actions
 
-1. Add the remaining failure/workflow negative tests and validate every forward
-   migration against a running Supabase database.
+1. Add the remaining failure/workflow negative tests, implement the intake
+   first-file upload transaction, and validate every forward migration against
+   a running Supabase database.
 2. Reconcile the live migration ledger before applying the checked-in forward
    hardening/action/notification migrations.
 3. Continue through government workbench, document lifecycle, and schedule
