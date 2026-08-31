@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, triageMigration, versionedCompletionMigration, requestActorMigration, attachmentMigration, workflowAdminScopeMigration, roleMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, requestApi, workflowPanel, seedScript, commandSeedScript, repository, rlsScript] = await Promise.all([
+const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, triageMigration, versionedCompletionMigration, requestActorMigration, attachmentMigration, workflowAdminScopeMigration, roleMigration, dependencyMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, requestApi, workflowPanel, seedScript, commandSeedScript, repository, rlsScript] = await Promise.all([
   readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
@@ -20,6 +20,7 @@ const [page, layout, css, readme, portalMigration, hardeningMigration, policyMig
   readFile(new URL("../supabase/migrations/20260830233000_customer_request_first_attachment.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830234000_scope_workflow_admin_by_organization.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830235000_persist_organization_member_roles.sql", import.meta.url), "utf8"),
+  readFile(new URL("../supabase/migrations/20260830240000_enforce_mandatory_task_dependencies.sql", import.meta.url), "utf8"),
   readFile(new URL("../lib/project-identifiers.ts", import.meta.url), "utf8"),
   readFile(new URL("../lib/supabase/mutations.ts", import.meta.url), "utf8"),
   readFile(new URL("../lib/data-mode.ts", import.meta.url), "utf8"),
@@ -144,6 +145,9 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(workflowAdminScopeMigration, /organization_admin/);
   assert.match(roleMigration, /rpc_set_organization_member_role/);
   assert.match(roleMigration, /only a system administrator can assign system_admin/);
+  assert.match(dependencyMigration, /enforce_mandatory_task_dependencies/);
+  assert.match(dependencyMigration, /statutory_mandatory/);
+  assert.match(dependencyMigration, /mandatory task dependency remains incomplete/);
   assert.match(mutations, /mutateSetOrganizationMemberRole/);
   assert.match(repository, /setOrganizationMemberRolePersisted/);
   assert.match(page, /teamUsersFromMemberships/);

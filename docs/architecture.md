@@ -60,6 +60,11 @@ stage, requirements, dependencies, statutory timing, and allowed transition
 before the database transaction updates execution state, audit, notifications,
 and schedule effects.
 
+The forward migration
+`20260830240000_enforce_mandatory_task_dependencies.sql` adds a database
+trigger so a workstream cannot enter `complete` while a
+`statutory_mandatory` predecessor task remains unfinished.
+
 ## Schema strategy
 
 Supabase SQL migrations are canonical. `db/schema.ts` is legacy Drizzle/SQLite

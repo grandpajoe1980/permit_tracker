@@ -202,6 +202,10 @@ findings below.
 - Organization member role persistence is source-verified in migration
   `20260830235000_persist_organization_member_roles.sql`; live verification is
   pending the same ledger reconciliation.
+- Added the missing mandatory-DAG completion guard in migration
+  `20260830240000_enforce_mandatory_task_dependencies.sql`: a persisted
+  `statutory_mandatory` predecessor must be complete before a workstream can
+  transition to `complete`.
 
 ## Next actions
 
