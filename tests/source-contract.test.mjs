@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, triageMigration, versionedCompletionMigration, requestActorMigration, attachmentMigration, workflowAdminScopeMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, seedScript, commandSeedScript, repository, rlsScript] = await Promise.all([
+const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, triageMigration, versionedCompletionMigration, requestActorMigration, attachmentMigration, workflowAdminScopeMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, requestApi, seedScript, commandSeedScript, repository, rlsScript] = await Promise.all([
   readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
@@ -25,6 +25,7 @@ const [page, layout, css, readme, portalMigration, hardeningMigration, policyMig
   readFile(new URL("../app/projects/[projectNumber]/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/projects/[projectNumber]/workstreams/[workstreamId]/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/requests/[confirmationNumber]/page.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../app/api/requests/route.ts", import.meta.url), "utf8"),
   readFile(new URL("../scripts/seed-spacex-demo.mjs", import.meta.url), "utf8"),
   readFile(new URL("../scripts/seed-command-system-supabase.mjs", import.meta.url), "utf8"),
   readFile(new URL("../lib/repository.ts", import.meta.url), "utf8"),
@@ -148,4 +149,6 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(projectRoute, /createRequestSupabaseClient/);
   assert.match(workstreamRoute, /\.eq\("project_id", project\.id\)/);
   assert.match(requestRoute, /createRequestSupabaseClient/);
+  assert.match(requestApi, /\.eq\("id", requested\)/);
+  assert.match(requestApi, /\.eq\("number", requested\)/);
 });

@@ -16,6 +16,8 @@ false-success and fixture behavior with verified Supabase-backed behavior.
 - The main production trust-boundary defects are addressed in source and
   forward migrations: browser code uses publishable credentials, the requests
   API authenticates and validates input, repository reads carry project scope,
+  the requests API resolves both canonical UUIDs and human-facing project
+  numbers,
   later broad policies are superseded by explicit policies, and production
   mutation paths await canonical Supabase results. Live migration application
   and full clean-context RLS verification remain outstanding.

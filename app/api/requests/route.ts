@@ -30,7 +30,10 @@ async function authenticatedClient() {
 
 async function resolveProjectId(client: NonNullable<Awaited<ReturnType<typeof createRequestSupabaseClient>>>, projectId?: string) {
   const requested = projectId ?? "PRJ-PECAN-2026";
-  const lookup = await client.from("projects").select("id, number").eq("number", requested).maybeSingle();
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requested);
+  const lookup = uuid
+    ? await client.from("projects").select("id, number").eq("id", requested).maybeSingle()
+    : await client.from("projects").select("id, number").eq("number", requested).maybeSingle();
   if (lookup.error || !lookup.data) return null;
   return String(lookup.data.id);
 }

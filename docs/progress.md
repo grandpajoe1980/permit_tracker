@@ -152,6 +152,9 @@ findings below.
 - The combined first-file RPC checks the request idempotency key before
   inserting a document parent, so a successful client retry returns the
   canonical request without creating an orphan document.
+- The authenticated `/api/requests` route now resolves either a canonical
+  project UUID or its human-facing project number before querying or creating
+  requests.
 - Scoped workflow and permit-catalog administration to the owning organization.
   `organization_admin` members can read workflow stages and create, edit,
   validate, and publish their own workflow versions; system admins retain
