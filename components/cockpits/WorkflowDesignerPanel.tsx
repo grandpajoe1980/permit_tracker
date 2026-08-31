@@ -193,6 +193,8 @@ export function WorkflowDesignerPanel({ catalog: catalogProp, organizations: org
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
+              {templates.length > 1 && <label className="sr-only" htmlFor="workflow-template-select">Workflow template</label>}
+              {templates.length > 1 && <select id="workflow-template-select" aria-label="Workflow template" value={selectedTemplate?.id ?? ""} onChange={(event) => { setSelectedTemplateId(event.target.value); setDraftVersionId(null); setDraftStages([]); setSelectedStageKey(null); }} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm font-bold text-slate-800">{templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select>}
               <h2 className="text-lg font-bold text-slate-900">{selectedTemplate.name}</h2>
               <Badge className="bg-emerald-600 text-white font-mono text-xs">
                 Published v{activeVersion.versionNumber}.0

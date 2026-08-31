@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, triageMigration, versionedCompletionMigration, requestActorMigration, attachmentMigration, workflowAdminScopeMigration, roleMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, requestApi, seedScript, commandSeedScript, repository, rlsScript] = await Promise.all([
+const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, triageMigration, versionedCompletionMigration, requestActorMigration, attachmentMigration, workflowAdminScopeMigration, roleMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, requestApi, workflowPanel, seedScript, commandSeedScript, repository, rlsScript] = await Promise.all([
   readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
@@ -27,6 +27,7 @@ const [page, layout, css, readme, portalMigration, hardeningMigration, policyMig
   readFile(new URL("../app/projects/[projectNumber]/workstreams/[workstreamId]/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/requests/[confirmationNumber]/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/api/requests/route.ts", import.meta.url), "utf8"),
+  readFile(new URL("../components/cockpits/WorkflowDesignerPanel.tsx", import.meta.url), "utf8"),
   readFile(new URL("../scripts/seed-spacex-demo.mjs", import.meta.url), "utf8"),
   readFile(new URL("../scripts/seed-command-system-supabase.mjs", import.meta.url), "utf8"),
   readFile(new URL("../lib/repository.ts", import.meta.url), "utf8"),
@@ -116,6 +117,8 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(page, /getWorkflowTemplates/);
   assert.match(workflowQueries, /fetchWorkflowTemplates/);
   assert.match(workflowQueries, /workflow_version_stages/);
+  assert.match(workflowPanel, /workflow-template-select/);
+  assert.match(workflowPanel, /setSelectedTemplateId/);
   assert.match(versionedCompletionMigration, /workflow_version_stages/);
   assert.match(versionedCompletionMigration, /workflow_checklist_items/);
   assert.match(versionedCompletionMigration, /stage_runs/);
