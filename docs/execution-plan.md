@@ -24,6 +24,9 @@ false-success and fixture behavior with verified Supabase-backed behavior.
   request and commits workstream creation, request state, and audit together.
   Its checked-in migration still requires live-ledger reconciliation before
   deployment verification.
+- Legacy workflow definitions are imported into immutable version/stage rows,
+  and stage completion now reads the pinned version with server-enforced
+  checklist, document, statutory, audit, task, and handoff notification gates.
 - Fixture data is isolated behind explicit demo/test mode. Empty authorized
   production query results remain empty; the remaining in-memory repository
   methods are compatibility helpers for fixture/test execution only.

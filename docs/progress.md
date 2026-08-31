@@ -128,6 +128,12 @@ findings below.
   writes one audit event; any failure rolls back the complete fan-out. Migration
   `20260830225000_atomic_multi_workstream_triage.sql` and the repository/RPC
   path are source-contract tested.
+- Added migration `20260830231000_pin_legacy_workflows_and_enforce_versioned_completion.sql`.
+  It imports legacy workflow definitions into pinned version/stage rows and
+  replaces stage completion with a server gate that reads the pinned stage,
+  enforces configured checklist/document and statutory-day requirements,
+  records `stage_runs`, activates the next task, and notifies the next
+  organization's supervisors/admins.
 
 ## Known blockers and risks
 
