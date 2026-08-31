@@ -24,7 +24,7 @@ findings below.
 |---|---|---|
 | `npx vinext build` | PASS | Vinext/Vite build completed; route output included `/`, `/api/health`, `/api/requests`. |
 | `npx eslint . --ignore-pattern dist --ignore-pattern .next` | PASS with warnings | 0 errors; warning count remains high and is tracked as cleanup work. |
-| `node --test tests/*.test.mjs` | PASS | 169 passed, 0 failed, 0 skipped; repeated Vite WebSocket port-in-use warnings. Primarily fixture/unit coverage. |
+| `node --test tests/*.test.mjs` | PASS | 170 passed, 0 failed, 0 skipped; repeated Vite WebSocket port-in-use warnings. Primarily fixture/unit coverage. |
 | `node scripts/supabase-probe.mjs` | PASS | Configured project responded; 37 REST paths, Storage read/write/cleanup probes passed. This does not prove RLS isolation. |
 | `npm run build` / `npm run lint` before this checkpoint | BLOCKED | Both stopped because `bash` was unavailable on Windows. |
 
@@ -80,6 +80,14 @@ findings below.
   a request in a single administrator flow. Heavy-haul/coastal/wetlands
   intake creates the DOTD, CPRA, and USACE workstreams with distinct owners;
   the database retains all created workstream IDs on the request.
+- Removed remaining repository fire-and-forget Supabase writes. Legacy
+  synchronous helpers now remain fixture/test-only; production UI mutations
+  use awaited persisted methods and report remote errors before success.
+- Removed the browser-created blocker notification and added the forward
+  migration `20260830220000_workstream_action_notifications.sql`, which
+  derives persisted action confirmations from workstream audit events. The
+  authenticated actor is the guaranteed recipient because free-text target
+  names are not stable user identities.
 
 ## Known blockers and risks
 
@@ -97,13 +105,16 @@ findings below.
   against the live project until the migration drift is reconciled.
 - The large internal router must be extracted incrementally to avoid regressing
   the existing operational UI.
+- The direct Vite dev server is the reproducible browser-test runtime here;
+  `vinext start` served the shell but returned 404s for built `/assets/*` in
+  this Sites-configured environment and needs deployment-runtime validation.
 
 ## Next actions
 
-1. Finish replacing the remaining legacy direct-write fallbacks with atomic
-   RPCs or explicit demo/test-only paths.
-2. Add failure/RLS regression tests and validate the forward migrations against
+1. Add failure/RLS regression tests and validate the forward migrations against
    a running Supabase database.
+2. Reconcile the live migration ledger before applying the checked-in forward
+   hardening/action/notification migrations.
 3. Continue through government workbench, document lifecycle, and schedule
    persistence checkpoints; the first route extraction checkpoint is now in
    source and build-verified.

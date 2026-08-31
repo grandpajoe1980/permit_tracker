@@ -339,7 +339,9 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
-    setHydrated(true);
+    const hydrationFrame = window.requestAnimationFrame(() => {
+      if (active) setHydrated(true);
+    });
     const client = getSupabaseBrowserClient();
 
     // Hydrate project state authoritatively from Supabase PostgreSQL
@@ -373,6 +375,7 @@ export default function Home() {
     });
     return () => {
       active = false;
+      window.cancelAnimationFrame(hydrationFrame);
       listener.subscription.unsubscribe();
     };
   }, []);
@@ -927,9 +930,8 @@ export default function Home() {
         setDialogError(blockedResult.error?.message ?? "The blocker was not confirmed by the database.");
         return;
       }
-      repository.dispatchNotification({ userId: "user-sarah-johnson", title: `${createdLabel} needs attention`, message: blockNeed.trim(), type: "action_required", linkUrl: `/workstreams/${workstreamId}`, urgency: item.isCriticalPath ? "critical" : "high", metadata: { workstreamId, target } });
       applyRepositoryWorkstream(item);
-      notify(`${createdLabel} created. The responsible recipient and project concierge were notified.`);
+      notify(`${createdLabel} committed. The blocker and supporting record are now part of the project history.`);
       return;
     }
 

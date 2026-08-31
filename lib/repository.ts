@@ -52,7 +52,6 @@ import {
 } from "./supabase/queries";
 import {
   insertAuditEvent,
-  insertNotification,
   mutateAcceptRFIResponse,
   mutateAddWorkstreamNote,
   mutateClearWorkstreamBlocker,
@@ -409,17 +408,6 @@ class ProjectDeliveryRepository {
     });
     this.auditEvents.unshift(auditEvent);
 
-    // Persist to Supabase
-    if (isSupabaseConfigured()) {
-      void mutateUpdateUserProfile({
-        userId: params.userId,
-        updates,
-        actorUserId: params.actorUserId,
-        actorName,
-        isAdmin: params.isAdmin,
-      });
-    }
-
     return profile;
   }
 
@@ -508,14 +496,6 @@ class ProjectDeliveryRepository {
     });
     this.auditEvents.unshift(auditEvent);
 
-    if (isSupabaseConfigured()) {
-      void mutateUpdateProjectParticipant({
-        participantId: params.participantId,
-        updates: params.updates,
-        actorName,
-      });
-    }
-
     return participant;
   }
 
@@ -553,30 +533,6 @@ class ProjectDeliveryRepository {
         linkUrl: `/requests/${request.confirmationNumber}`,
         urgency: request.blocksActiveWork ? "critical" : "high",
         metadata: { confirmationNumber: request.confirmationNumber, requestType: request.requestType },
-      });
-    }
-
-    // Persist to Supabase
-    if (isSupabaseConfigured()) {
-      void mutateCreateCustomerRequest({
-        id: request.id,
-        confirmationNumber: request.confirmationNumber,
-        projectId: request.projectId,
-        requestType: request.requestType,
-        title: request.title,
-        description: request.description,
-        requestedOutcome: request.requestedOutcome,
-        locationOrAffectedArea: request.locationOrAffectedArea,
-        desiredDate: request.desiredDate,
-        scheduleImportance: request.scheduleImportance,
-        knownAgencyCode: request.knownAgencyCode,
-        knownPermitTypeId: request.knownPermitTypeId,
-        submittedByUserId: request.submittedByUserId,
-        submittedByName: request.submittedByName,
-        relatedWorkstreamId: request.relatedWorkstreamId,
-        blocksActiveWork: request.blocksActiveWork,
-        status: request.status,
-        attachmentDocumentVersionIds: request.attachmentDocumentVersionIds,
       });
     }
 
@@ -663,27 +619,6 @@ class ProjectDeliveryRepository {
     });
     this.auditEvents.unshift(auditEvent);
 
-    if (isSupabaseConfigured()) {
-      void mutateCreateExternalFiling({
-        id: filing.id,
-        projectId: filing.projectId,
-        workstreamId: filing.workstreamId,
-        permitTypeId: filing.permitTypeId,
-        authorityOrganizationId: filing.authorityOrganizationId,
-        authorityOrganizationName: filing.authorityOrganizationName,
-        filingMethod: filing.filingMethod,
-        officialPortalUrl: filing.officialPortalUrl,
-        externalReferenceNumber: filing.externalReferenceNumber,
-        externalRecordUrl: filing.externalRecordUrl,
-        externalStatus: filing.externalStatus,
-        submittedAt: filing.submittedAt,
-        submittedByUserId: filing.submittedByUserId,
-        submittedByName: filing.submittedByName,
-        notes: filing.notes,
-        receiptDocumentVersionIds: filing.receiptDocumentVersionIds,
-      });
-    }
-
     return filing;
   }
 
@@ -720,10 +655,6 @@ class ProjectDeliveryRepository {
       reason: filing.notes ?? "External filing status updated.",
     });
     this.auditEvents.unshift(auditEvent);
-
-    if (isSupabaseConfigured()) {
-      void mutateUpdateExternalFiling(id, updates, actorName, actorOrgName);
-    }
 
     return filing;
   }
@@ -780,26 +711,6 @@ class ProjectDeliveryRepository {
       reason: params.needDescription,
     });
     this.auditEvents.unshift(audit);
-
-    if (isSupabaseConfigured()) {
-      void mutateCreateCoordinationRequest({
-        id: newRequest.id,
-        code: newRequest.code,
-        workstreamId: newRequest.workstreamId,
-        workstreamTitle: newRequest.workstreamTitle,
-        requestingOrgId: newRequest.requestingOrgId,
-        requestingOrgCode: newRequest.requestingOrgCode,
-        targetOrgId: newRequest.targetOrgId,
-        targetOrgCode: newRequest.targetOrgCode,
-        requestingUserName: newRequest.requestingUserName,
-        assignedToUserName: newRequest.assignedToUserName,
-        title: newRequest.title,
-        needDescription: newRequest.needDescription,
-        dueDate: newRequest.dueDate,
-        attachedDocumentVersionIds: newRequest.attachedDocumentVersionIds,
-        priority: newRequest.priority,
-      });
-    }
 
     return newRequest;
   }
@@ -896,27 +807,6 @@ class ProjectDeliveryRepository {
       reason: params.questionText,
     }));
 
-    if (isSupabaseConfigured()) {
-      void mutateCreateRFI({
-        id: newRfi.id,
-        code: newRfi.code,
-        workstreamId: newRfi.workstreamId,
-        workstreamTitle: newRfi.workstreamTitle,
-        requestingOrgId: newRfi.requestingOrgId,
-        requestingOrgCode: newRfi.requestingOrgCode,
-        recipientOrgId: newRfi.recipientOrgId,
-        recipientOrgCode: newRfi.recipientOrgCode,
-        title: newRfi.title,
-        questionText: newRfi.questionText,
-        technicalReason: newRfi.technicalReason,
-        requiredDocumentTypes: newRfi.requiredDocumentTypes,
-        responseDeadline: newRfi.responseDeadline,
-        clockImpact: newRfi.clockImpact,
-        scheduleImpactDays: newRfi.scheduleImpactDays,
-        actorName: params.actorName,
-      });
-    }
-
     return newRfi;
   }
 
@@ -980,18 +870,6 @@ class ProjectDeliveryRepository {
       newValue: ws.operationalState,
       reason: `${params.reason} · Waiting on ${params.waitingOn}`,
     }));
-
-    if (isSupabaseConfigured()) {
-      void mutateMarkWorkstreamBlocked({
-        workstreamId: ws.id,
-        workstreamCode: ws.code,
-        reason: params.reason,
-        waitingOn: params.waitingOn,
-        actorName: params.actorName,
-        actorOrgName: params.actorOrgName,
-        pauseClock: params.pauseClock,
-      });
-    }
 
     return ws;
   }
@@ -1168,17 +1046,6 @@ class ProjectDeliveryRepository {
       metadata: { workstreamCode: ws.code, nextOwner: nextStage?.responsibleOrgCode ?? "Project Office" },
     });
 
-    if (isSupabaseConfigured()) {
-      void mutateCompleteWorkstreamStage({
-        workstreamId: ws.id,
-        workstreamCode: ws.code,
-        nextStageName: ws.currentStageName,
-        completedChecklists: params.completedChecklists,
-        actorName: params.actorName,
-        actorOrgName: params.actorOrgName,
-      });
-    }
-
     return { success: true, workstream: ws, nextOwner: nextStage?.responsibleOrgCode ?? "Project Office" };
   }
 
@@ -1220,16 +1087,6 @@ class ProjectDeliveryRepository {
     });
     this.auditEvents.unshift(event);
 
-    if (isSupabaseConfigured()) {
-      void mutateAddWorkstreamNote({
-        workstreamId: ws.id,
-        workstreamCode: ws.code,
-        note: params.note,
-        actorName: params.actorName,
-        actorOrgName: params.actorOrgName,
-      });
-    }
-
     return event;
   }
 
@@ -1264,17 +1121,6 @@ class ProjectDeliveryRepository {
       metadata: { workstreamCode: ws.code, escalationLevel: ws.escalationLevel },
     });
 
-    if (isSupabaseConfigured()) {
-      void mutateEscalateWorkstream({
-        workstreamId: ws.id,
-        workstreamCode: ws.code,
-        currentLevel: ws.escalationLevel - 1,
-        problemType: params.problemType,
-        actorName: params.actorName,
-        actorOrgName: params.actorOrgName,
-      });
-    }
-
     return ws;
   }
 
@@ -1302,18 +1148,6 @@ class ProjectDeliveryRepository {
       urgency: "high",
       metadata: { workstreamCode: ws.code, targetName: params.targetName },
     });
-
-    if (isSupabaseConfigured()) {
-      void mutateTransferWorkstream({
-        workstreamId: ws.id,
-        workstreamCode: ws.code,
-        transferType: params.transferType,
-        targetName: params.targetName,
-        actorName: params.actorName,
-        actorOrgName: params.actorOrgName,
-        note: params.note,
-      });
-    }
 
     return event;
   }
@@ -1409,17 +1243,6 @@ class ProjectDeliveryRepository {
       reason: response.reviewNotes,
     }));
 
-    if (isSupabaseConfigured()) {
-      void mutateAcceptRFIResponse({
-        rfiId: rfi.id,
-        rfiCode: rfi.code,
-        workstreamId: rfi.workstreamId,
-        actorName: params.actorName,
-        actorOrgName: params.actorOrgName,
-        notes: params.notes,
-      });
-    }
-
     return response;
   }
 
@@ -1469,18 +1292,6 @@ class ProjectDeliveryRepository {
       newValue: `Response submitted to ${rfi.requestingOrgCode}`,
       reason: params.responseText,
     }));
-
-    if (isSupabaseConfigured()) {
-      void mutateSubmitRFIResponse({
-        id: response.id,
-        rfiId: rfi.id,
-        rfiCode: rfi.code,
-        submittedByName: params.submittedByName,
-        responseText: params.responseText,
-        actorOrgName: params.actorOrgName,
-        attachedDocumentVersionIds: params.attachedDocumentVersionIds,
-      });
-    }
 
     return response;
   }
@@ -1564,10 +1375,6 @@ class ProjectDeliveryRepository {
       reason: params.originContext,
     });
     this.auditEvents.unshift(audit);
-
-    if (isSupabaseConfigured()) {
-      void mutateCreateCommitment({ ...newCommitment, workstreamTitle: newCommitment.workstreamTitle ?? "" });
-    }
 
     return newCommitment;
   }
@@ -1722,16 +1529,6 @@ class ProjectDeliveryRepository {
           });
           this.auditEvents.unshift(audit);
 
-          if (isSupabaseConfigured()) {
-            void mutateReviewDocumentVersion({
-              versionId,
-              agencyCode,
-              decision,
-              actorName,
-              comments,
-            });
-          }
-
           return review;
         }
       }
@@ -1844,18 +1641,6 @@ class ProjectDeliveryRepository {
       isRead: false,
     };
     this.notifications.unshift(full);
-
-    if (isSupabaseConfigured()) {
-      void insertNotification({
-        userId: notification.userId,
-        title: notification.title,
-        message: notification.message,
-        type: notification.type,
-        linkUrl: notification.linkUrl,
-        urgency: notification.urgency,
-        metadata: notification.metadata,
-      });
-    }
 
     return full;
   }
