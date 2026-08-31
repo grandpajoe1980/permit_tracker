@@ -127,6 +127,8 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(attachmentMigration, /insert into public\.documents/);
   assert.match(attachmentMigration, /insert into public\.document_versions/);
   assert.match(attachmentMigration, /public\.rpc_create_customer_request/);
+  assert.match(attachmentMigration, /idempotency key for the whole combined operation/);
+  assert.match(attachmentMigration, /exists \(select 1 from public\.customer_requests where id = p_request ->> 'id'\)/);
   assert.match(mutations, /mutateCreateCustomerRequestWithDocument/);
   assert.match(mutations, /uploadDocumentFile/);
   assert.match(repository, /attachmentFile/);

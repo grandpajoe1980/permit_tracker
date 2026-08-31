@@ -149,6 +149,9 @@ findings below.
   and notification together; failed database commits remove the uploaded
   object. The UI exposes an optional attachment on both plain-language and
   structured customer intake.
+- The combined first-file RPC checks the request idempotency key before
+  inserting a document parent, so a successful client retry returns the
+  canonical request without creating an orphan document.
 - Scoped workflow and permit-catalog administration to the owning organization.
   `organization_admin` members can read workflow stages and create, edit,
   validate, and publish their own workflow versions; system admins retain

@@ -29,6 +29,34 @@ begin
     raise exception 'request and document payloads must be JSON objects';
   end if;
 
+  -- The request ID is the idempotency key for the whole combined operation.
+  -- Return the canonical request before creating another document parent when
+  -- a client retries after the first transaction committed successfully.
+  if nullif(trim(p_request ->> 'id'), '') is not null
+     and exists (select 1 from public.customer_requests where id = p_request ->> 'id') then
+    v_request := public.rpc_create_customer_request(
+      p_id => p_request ->> 'id',
+      p_confirmation_number => p_request ->> 'confirmationNumber',
+      p_project_id => p_request ->> 'projectId',
+      p_request_type => p_request ->> 'requestType',
+      p_title => p_request ->> 'title',
+      p_description => p_request ->> 'description',
+      p_requested_outcome => p_request ->> 'requestedOutcome',
+      p_location_or_affected_area => p_request ->> 'locationOrAffectedArea',
+      p_desired_date => nullif(p_request ->> 'desiredDate', '')::date,
+      p_schedule_importance => coalesce(nullif(p_request ->> 'scheduleImportance', ''), 'normal'),
+      p_known_agency_code => p_request ->> 'knownAgencyCode',
+      p_known_permit_type_id => p_request ->> 'knownPermitTypeId',
+      p_submitted_by_user_id => v_actor_id,
+      p_submitted_by_name => p_request ->> 'submittedByName',
+      p_related_workstream_id => p_request ->> 'relatedWorkstreamId',
+      p_blocks_active_work => coalesce((p_request ->> 'blocksActiveWork')::boolean, false),
+      p_status => coalesce(nullif(p_request ->> 'status', ''), 'submitted'),
+      p_attachment_document_version_ids => '[]'::jsonb
+    );
+    return v_request;
+  end if;
+
   begin
     v_document_id := (p_document ->> 'documentId')::uuid;
   exception when invalid_text_representation then

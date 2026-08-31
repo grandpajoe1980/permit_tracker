@@ -514,7 +514,6 @@ export async function mutateCreateCustomerRequestWithDocument(
 
   if (rpcError || !rpcData) {
     await client.storage.from("path-documents").remove([upload.storagePath]);
-    if (allowsFixtureData()) return { data: null, error: new Error(`Customer request attachment transaction failed: ${rpcError?.message ?? "no row returned"}`) };
     return { data: null, error: new Error(`Customer request attachment transaction failed: ${rpcError?.message ?? "no row returned"}`) };
   }
 
