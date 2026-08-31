@@ -18,6 +18,7 @@ declare
   v_workstream public.workstreams%rowtype;
   v_stage_id text;
   v_stage_label text;
+  v_stage_duration integer;
   v_first_workstream_id text;
   v_created_ids jsonb := '[]'::jsonb;
   v_created_codes jsonb := '[]'::jsonb;
@@ -52,12 +53,16 @@ begin
 
     v_stage_id := null;
     v_stage_label := null;
+    v_stage_duration := 1;
     if v_version_id is not null then
-      select id::text, label into v_stage_id, v_stage_label from public.workflow_version_stages
+      select id::text, label, greatest(coalesce(target_duration_days, 1), 1)
+        into v_stage_id, v_stage_label, v_stage_duration
+      from public.workflow_version_stages
       where workflow_version_id = v_version_id order by sequence_order limit 1;
     end if;
     if v_stage_id is null then
-      select s.id::text, s.label into v_stage_id, v_stage_label
+      select s.id::text, s.label, greatest(coalesce(s.service_target_days, 1), 1)
+        into v_stage_id, v_stage_label, v_stage_duration
       from public.workflow_stages s order by s.sort_order limit 1;
     end if;
 
@@ -78,6 +83,18 @@ begin
       jsonb_build_object('orgCode', coalesce(nullif(trim(v_item->>'leadOrgCode'), ''), 'STATEPO'), 'orgName', coalesce(nullif(trim(v_item->>'leadOrgName'), ''), 'Louisiana Governor''s Office of Major Projects & Delivery')),
       '{}', v_request.id, v_now, v_now
     ) returning * into v_workstream;
+
+    insert into public.tasks (
+      id, workstream_id, task_code, title, duration_days,
+      early_start, early_finish, late_start, late_finish,
+      is_critical_path, status, predecessors
+    ) values (
+      'task-' || replace(gen_random_uuid()::text, '-', ''), v_workstream.id,
+      coalesce(nullif(upper(trim(v_item->>'leadOrgCode')), ''), 'STATEPO') || '-INTAKE-' || upper(trim(v_item->>'code')),
+      coalesce(v_stage_label, 'Request intake') || ' — ' || trim(v_item->>'title'),
+      v_stage_duration, current_date, current_date + v_stage_duration,
+      current_date, current_date + v_stage_duration, true, 'in_progress', '[]'::jsonb
+    );
 
     v_first_workstream_id := coalesce(v_first_workstream_id, v_workstream.id);
     v_created_ids := v_created_ids || jsonb_build_array(v_workstream.id);

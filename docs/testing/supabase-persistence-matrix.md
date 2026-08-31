@@ -57,7 +57,7 @@ Every mutation must satisfy the **Non-Negotiable Supabase Durability Gate**:
 | Function Name | Parameters | Actions Executed Atomically |
 | :--- | :--- | :--- |
 | `rpc_create_customer_request` | `p_id`, `p_confirmation_number`, `p_project_id`, `p_request_type`, `p_title`, `p_description`, ... | Inserts `customer_requests`, logs `audit_events`, creates triage `notifications` |
-| `rpc_triage_customer_request` | `p_request_id`, `p_workstreams` | Locks the request, creates every linked workstream, updates triage state, and logs one audit event in one transaction |
+| `rpc_triage_customer_request` | `p_request_id`, `p_workstreams` | Locks the request, creates every linked workstream and initial intake task, updates triage state, and logs one audit event in one transaction |
 | `rpc_create_rfi` | `p_id`, `p_code`, `p_workstream_id`, `p_question_text`, ... | Inserts `rfis`, pauses `workstreams.operational_state` (`waiting_applicant`), logs `audit_events` |
 | `rpc_submit_rfi_response` | `p_id`, `p_rfi_id`, `p_submitted_by_user_name`, `p_response_text`, ... | Inserts `rfi_responses`, updates `rfis.status` (`submitted_by_applicant`), logs `audit_events` |
 | `rpc_accept_rfi_response` | `p_rfi_id`, `p_actor_name`, `p_actor_org_name`, `p_notes` | Updates `rfi_responses.review_status` (`accepted`), updates `rfis.status`, resumes `workstreams.operational_state` (`running`), logs `audit_events` |

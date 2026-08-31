@@ -103,6 +103,7 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(catalogAdminMigration, /require_workflow_admin/);
   assert.match(triageMigration, /rpc_triage_customer_request/);
   assert.match(triageMigration, /triaged_workstream_ids/);
+  assert.match(triageMigration, /insert into public\.tasks/);
   assert.match(mutations, /mutateTriageCustomerRequest/);
   assert.match(repository, /triageCustomerRequestPersisted/);
   assert.match(mutations, /mutateRegisterOrganization/);

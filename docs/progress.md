@@ -124,8 +124,8 @@ findings below.
 - Replaced the UI's sequential multi-workstream triage loop with one atomic
   `rpc_triage_customer_request` transaction. It locks the request, validates
   every requested workstream and published workflow, creates all linked
-  workstreams, updates the request once, and writes one audit event; any
-  failure rolls back the complete fan-out. Migration
+  workstreams plus their initial intake tasks, updates the request once, and
+  writes one audit event; any failure rolls back the complete fan-out. Migration
   `20260830225000_atomic_multi_workstream_triage.sql` and the repository/RPC
   path are source-contract tested.
 
