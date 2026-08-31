@@ -1267,6 +1267,52 @@ class ProjectDeliveryRepository {
     return event;
   }
 
+  updateCommitmentStatus(commitmentId: string, newStatus: "on_track" | "at_risk" | "missed" | "fulfilled", actorName: string) {
+    const commitment = this.commitments.find((c) => c.id === commitmentId);
+    if (!commitment) return null;
+
+    const oldStatus = commitment.status;
+    commitment.status = newStatus;
+
+    const event = createAuditEvent({
+      entityType: "workstream",
+      entityId: commitment.workstreamId,
+      actorName,
+      actorOrgName: commitment.committingOrgCode,
+      actionType: "status_change",
+      previousValue: oldStatus,
+      newValue: newStatus,
+      reason: `Commitment ${commitmentId} status updated from "${oldStatus}" to "${newStatus}" by ${actorName}.`,
+    });
+    this.auditEvents.unshift(event);
+
+    return event;
+  }
+
+  updateWorkstreamOperationalState(workstreamId: string, newState: string, actorName: string) {
+    const ws = this.getWorkstreamById(workstreamId);
+    if (!ws) return null;
+
+    const oldState = ws.operationalState;
+    const oldLabel = ws.operationalStateLabel;
+    ws.operationalState = newState as WorkstreamRecord["operationalState"];
+    ws.operationalStateLabel = newState === "running" ? "In Progress" : newState === "waiting_government" ? "On Hold" : newState === "complete" ? "Completed" : newState === "pending_concurrence" ? "Pending Review" : newState;
+
+    const event = createAuditEvent({
+      entityType: "workstream",
+      entityId: ws.code,
+      actorName,
+      actorOrgName: ws.regulatoryLead?.orgName ?? "State Project Office",
+      actionType: "status_change",
+      previousValue: oldLabel ?? oldState,
+      newValue: ws.operationalStateLabel,
+      reason: `Workstream operational state changed from "${oldLabel ?? oldState}" to "${ws.operationalStateLabel}" by ${actorName}.`,
+    });
+    this.auditEvents.unshift(event);
+
+    return event;
+  }
+
   escalateWorkstream(params: { workstreamId: string; problemType: string; actorName: string; actorOrgName: string }) {
     const ws = this.getWorkstreamById(params.workstreamId);
     if (!ws) return null;

@@ -181,6 +181,8 @@ function toneClasses(tone: OperationalWorkItem["statusTone"]) {
 function actionLabel(action: WorkActionId) {
   const labels: Record<WorkActionId, string> = {
     complete_step: "Complete Step",
+    update_status: "Update Status",
+    advance_stage: "Advance to Next Stage",
     request_information: "Request Information",
     mark_blocked: "Mark Blocked",
     clear_blocker: "Clear Blocker & Resume",
@@ -208,6 +210,8 @@ function actionIcon(action: WorkActionId) {
   if (action === "approve_document" || action === "approve_with_comments" || action === "accept_rfi_response") return <CheckCircle2 className="size-4" aria-hidden="true" />;
   if (action === "respond" || action === "upload_documents") return <Send className="size-4" aria-hidden="true" />;
   if (action === "request_revision") return <FileText className="size-4" aria-hidden="true" />;
+  if (action === "update_status") return <ClipboardCheck className="size-4" aria-hidden="true" />;
+  if (action === "advance_stage") return <ArrowRight className="size-4" aria-hidden="true" />;
   return <Check className="size-4" aria-hidden="true" />;
 }
 
@@ -313,6 +317,7 @@ export default function Home() {
   const [questionDueDate, setQuestionDueDate] = useState("2026-09-05");
   const [transferType, setTransferType] = useState("Ask another reviewer");
   const [escalationType, setEscalationType] = useState("Supervisor decision");
+  const [statusUpdate, setStatusUpdate] = useState("in_progress");
   const [intakeText, setIntakeText] = useState("");
   const [intakeFile, setIntakeFile] = useState<File | null>(null);
   const [intakeStatus, setIntakeStatus] = useState("");
@@ -1050,6 +1055,53 @@ export default function Home() {
       return;
     }
 
+    if (dialog.action === "update_status") {
+      const statusLabel = statusUpdate === "in_progress" ? "In Progress" : statusUpdate === "on_hold" ? "On Hold" : statusUpdate === "fulfilled" ? "Fulfilled / Completed" : statusUpdate === "pending_review" ? "Pending Review" : statusUpdate === "cancelled" ? "Cancelled" : statusUpdate;
+      if (workstreamId) {
+        // Update the workstream operational state
+        const newState = statusUpdate === "in_progress" ? "running" : statusUpdate === "on_hold" ? "waiting_government" : statusUpdate === "fulfilled" ? "complete" : statusUpdate === "pending_review" ? "pending_concurrence" : statusUpdate === "cancelled" ? "complete" : "running";
+        await repository.addWorkstreamNotePersisted({
+          workstreamId,
+          note: `Status updated to "${statusLabel}" by ${actorName}. ${actionNote.trim() || "No additional notes."}`,
+          actorName,
+          actorOrgName,
+        });
+        // For commitments, update the commitment status directly
+        if (item.kind === "commitment") {
+          const commitmentNewStatus = statusUpdate === "fulfilled" ? "fulfilled" as const : statusUpdate === "cancelled" ? "missed" as const : statusUpdate === "on_hold" ? "at_risk" as const : "on_track" as const;
+          repository.updateCommitmentStatus(item.sourceId, commitmentNewStatus, actorName);
+        }
+        // For workflows, update the workstream operational state
+        if (item.kind === "workflow" || item.kind === "task") {
+          repository.updateWorkstreamOperationalState(workstreamId, newState, actorName);
+        }
+      }
+      applyRepositoryWorkstream(item);
+      notify(`Status updated to "${statusLabel}" for ${item.title}.`);
+      return;
+    }
+
+    if (dialog.action === "advance_stage") {
+      if (!workstreamId) {
+        setDialogError("This work item is not connected to a configured workstream.");
+        return;
+      }
+      const result = await repository.completeWorkstreamStagePersisted({
+        workstreamId,
+        completedChecklists: ["completeness_checklist_passed", "reviewer_determination_recorded"],
+        providedDocs: ["required_documents_verified"],
+        actorName,
+        actorOrgName,
+      });
+      if (!result.success) {
+        setDialogError(result.error?.message ?? "The workflow did not accept this transition.");
+        return;
+      }
+      applyRepositoryWorkstream(item);
+      notify(`Stage advanced. The next configured stage is ${result.nextStageName ?? "the next workflow stage"}.`);
+      return;
+    }
+
     if (dialog.action === "approve_document" || dialog.action === "approve_with_comments" || dialog.action === "request_revision") {
       if (!item.exactDocumentVersionId) {
         setDialogError("The exact document version could not be resolved.");
@@ -1496,6 +1548,8 @@ export default function Home() {
     return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#00284d]/60 p-3 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="action-dialog-title" aria-describedby="action-dialog-description"><div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 bg-slate-50 p-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Work action</p><h2 id="action-dialog-title" className="mt-1 text-xl font-black text-[#00284d]">{actionLabel(dialog.action)}</h2><p id="action-dialog-description" className="mt-1 text-sm text-slate-600">{selectedItem.title}</p></div><Button type="button" variant="ghost" size="icon" onClick={() => setDialog(null)} aria-label="Close action dialog"><X className="size-5" /></Button></div><form onSubmit={handleConfirmAction} className="space-y-5 p-5 sm:p-6">
       {isCompletion && <><div><p className="text-xs font-black uppercase tracking-wider text-slate-500">You are completing</p><p className="mt-1 text-lg font-black text-[#00284d]">{selectedItem.title}</p><p className="mt-1 text-sm text-slate-600">Required before completion:</p></div><div className="space-y-2">{requirements.map((requirement) => <label key={requirement.id} className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 hover:bg-slate-50"><input type="checkbox" checked={Boolean(completionChecks[requirement.id])} onChange={(event) => setCompletionChecks((current) => ({ ...current, [requirement.id]: event.target.checked }))} className="mt-0.5 size-4 accent-teal-700" /><span className="text-sm font-semibold text-slate-800">{requirement.label}</span></label>)}</div><div className="rounded-xl border border-teal-200 bg-teal-50 p-4"><p className="text-xs font-black uppercase tracking-wider text-teal-900">What happens next</p><ul className="mt-2 space-y-1 text-sm text-teal-950">{completionPreview.effects.map((effect) => <li key={effect} className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{effect}</li>)}</ul></div><div><Label htmlFor="determination">Reviewer determination</Label><select id="determination" value={determination} onChange={(event) => setDetermination(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>Complete / Approved</option><option>Complete with Conditions</option><option>Not Applicable</option></select></div></>}
       {dialog.action === "clear_blocker" && <><div><p className="text-xs font-black uppercase tracking-wider text-teal-800">Clear Blocker & Resume</p><p className="mt-1 text-lg font-black text-[#00284d]">Resume active review for {selectedItem.workstreamTitle}</p><p className="mt-1 text-sm text-slate-600">The blocker will be removed, the review clock will resume, and project participants will be notified.</p></div><div><Label htmlFor="unblock-note">Resolution notes (optional)</Label><textarea id="unblock-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Concurrence received / dependency resolved..." /></div></>}
+      {dialog.action === "update_status" && <><div><p className="text-xs font-black uppercase tracking-wider text-teal-800">Update Status</p><p className="mt-1 text-lg font-black text-[#00284d]">{selectedItem.title}</p><p className="mt-1 text-sm text-slate-600">Select the new status for this {selectedItem.kind === "commitment" ? "commitment" : "work item"}. The change will be recorded in the audit history and visible to all project participants.</p></div><div><Label htmlFor="status-update">New status</Label><select id="status-update" value={statusUpdate} onChange={(event) => setStatusUpdate(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="in_progress">In Progress — Actively being worked</option><option value="pending_review">Pending Review — Awaiting reviewer decision</option><option value="on_hold">On Hold — Paused, waiting on external dependency</option><option value="fulfilled">Fulfilled / Completed — Deliverable received or action done</option><option value="cancelled">Cancelled — No longer applicable</option></select></div><div><Label htmlFor="status-note">Notes (optional)</Label><textarea id="status-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe why this status is changing and any relevant context." /></div><div className="rounded-xl border border-teal-200 bg-teal-50 p-4"><p className="text-xs font-black uppercase tracking-wider text-teal-900">What happens</p><ul className="mt-2 space-y-1 text-sm text-teal-950"><li className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />Update the ticket status to the selected state</li><li className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />Record an audit event with your name and notes</li><li className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />Notify project participants of the status change</li>{statusUpdate === "fulfilled" && <li className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />Move the item to the completed queue</li>}</ul></div></>}
+      {dialog.action === "advance_stage" && <><div><p className="text-xs font-black uppercase tracking-wider text-teal-800">Advance to Next Stage</p><p className="mt-1 text-lg font-black text-[#00284d]">{selectedItem.title}</p><p className="mt-1 text-sm text-slate-600">This will close the current workflow stage and advance the workstream to the next configured stage. The next owner will be notified.</p></div><div className="rounded-xl border border-teal-200 bg-teal-50 p-4"><p className="text-xs font-black uppercase tracking-wider text-teal-900">What happens next</p><ul className="mt-2 space-y-1 text-sm text-teal-950">{completionPreview.effects.map((effect) => <li key={effect} className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{effect}</li>)}</ul></div><div><Label htmlFor="advance-note">Notes (optional)</Label><textarea id="advance-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Add context for the handoff to the next stage owner." /></div></>}
       {dialog.action === "mark_blocked" && <><div><Label htmlFor="block-reason">What is preventing you from proceeding?</Label><select id="block-reason" value={blockReason} onChange={(event) => setBlockReason(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="customer">Waiting on SpaceX</option><option value="another_agency">Waiting on another agency</option><option value="internal">Missing internal decision</option><option value="statutory">Scheduled / statutory hold</option><option value="technical">Technical problem</option><option value="legal">Legal / policy question</option><option value="external">External third party</option><option value="other">Other</option></select></div>{blockReason === "another_agency" && <div><Label htmlFor="block-agency">Who needs to act?</Label><select id="block-agency" value={blockAgency} onChange={(event) => setBlockAgency(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>CPRA</option><option>USACE</option><option>DOTD</option><option>Vermilion Parish</option><option>LDEQ</option></select></div>}<div><Label htmlFor="block-need">What do you need from them?</Label><textarea id="block-need" value={blockNeed} onChange={(event) => setBlockNeed(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe the concurrence, document, or decision needed." /></div><div><Label htmlFor="block-due">When is it needed?</Label><Input id="block-due" type="date" value={blockDueDate} onChange={(event) => setBlockDueDate(event.target.value)} className="mt-1" /></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"><strong className="text-[#00284d]">Clock behavior:</strong> PATH derives the wait policy from the selected reason. You are not asked to make a legal/policy determination.</div></>}
       {(dialog.action === "request_information" || dialog.action === "request_clarification") && <><div><Label htmlFor="question-text">What do you need?</Label><textarea id="question-text" value={questionText} onChange={(event) => setQuestionText(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" /></div><div><Label htmlFor="question-due">When is it needed?</Label><Input id="question-due" type="date" value={questionDueDate} onChange={(event) => setQuestionDueDate(event.target.value)} className="mt-1" /></div></>}
       {dialog.action === "transfer" && <><div><Label htmlFor="transfer-type">How should we help?</Label><select id="transfer-type" value={transferType} onChange={(event) => setTransferType(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>Ask another reviewer</option><option>Transfer assignment</option><option>Add co-reviewer</option><option>Send to supervisor</option><option>Request specialist consultation</option></select></div><div><Label htmlFor="transfer-note">What should the supervisor know?</Label><textarea id="transfer-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" /></div></>}

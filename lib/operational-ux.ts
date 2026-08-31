@@ -32,6 +32,8 @@ export type WorkItemKind = "workflow" | "task" | "rfi" | "coordination" | "docum
 
 export type WorkActionId =
   | "complete_step"
+  | "update_status"
+  | "advance_stage"
   | "request_information"
   | "mark_blocked"
   | "clear_blocker"
@@ -597,6 +599,8 @@ export function getAvailableActions(item: OperationalWorkItem, persona: Operatio
   }
 
   const actions: WorkActionId[] = [];
+  const isSupervisorOrAbove = persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin";
+
   if (item.kind === "document") {
     if (persona.permissions.includes("edit_workflow") || persona.workspace === "reviewer" || persona.workspace === "agency" || persona.workspace === "supervisor") {
       actions.push("approve_document", "approve_with_comments", "request_revision", "add_note");
@@ -608,12 +612,24 @@ export function getAvailableActions(item: OperationalWorkItem, persona: Operatio
       actions.push("request_information", "add_note");
     }
   } else if (item.kind === "customer_request") {
-    actions.push("complete_step", "request_information", "mark_blocked", "escalate", "transfer", "add_note");
+    actions.push("complete_step", "update_status", "request_information", "mark_blocked", "escalate", "transfer", "add_note");
+  } else if (item.kind === "commitment") {
+    // Commitments need the ability to mark fulfilled, update status, request info, and block
+    if (item.statusTone !== "green") {
+      actions.push("complete_step", "update_status", "mark_blocked");
+      if (item.statusTone === "red" || item.statusLabel.toLowerCase().includes("miss") || item.statusLabel.toLowerCase().includes("risk")) {
+        actions.push("escalate");
+      }
+    }
+    actions.push("request_information", "add_note");
   } else if (item.kind === "coordination") {
+    if (item.statusTone !== "green") {
+      actions.push("update_status", "complete_step", "mark_blocked");
+    }
     actions.push("request_information", "add_note");
   } else if (item.kind === "workflow" || item.kind === "task") {
     if (item.statusTone !== "green") {
-      actions.push("complete_step", "request_information", "mark_blocked");
+      actions.push("complete_step", "update_status", "advance_stage", "request_information", "mark_blocked");
       if (item.statusTone === "red" || item.statusLabel.toLowerCase().includes("block") || item.statusLabel.toLowerCase().includes("wait")) {
         actions.push("clear_blocker");
       }
@@ -621,7 +637,16 @@ export function getAvailableActions(item: OperationalWorkItem, persona: Operatio
     actions.push("escalate", "transfer", "add_note");
   }
 
-  if (persona.permissions.includes("reassign_agency") || persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin") {
+  // Supervisor, state office, and admin always get transfer and escalate on non-green items
+  if (isSupervisorOrAbove) {
+    actions.push("transfer");
+    if (item.statusTone !== "green") {
+      actions.push("escalate");
+      // State office and admin can always update status on anything
+      actions.push("update_status");
+    }
+  }
+  if (persona.permissions.includes("reassign_agency")) {
     actions.push("transfer");
   }
   if (persona.permissions.includes("escalate_liaison") && item.statusTone !== "green") {
