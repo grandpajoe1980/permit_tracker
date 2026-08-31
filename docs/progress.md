@@ -149,6 +149,12 @@ findings below.
   and notification together; failed database commits remove the uploaded
   object. The UI exposes an optional attachment on both plain-language and
   structured customer intake.
+- Scoped workflow and permit-catalog administration to the owning organization.
+  `organization_admin` members can read workflow stages and create, edit,
+  validate, and publish their own workflow versions; system admins retain
+  global access, while organization registration remains system-admin-only.
+  Migration `20260830234000_scope_workflow_admin_by_organization.sql` owns the
+  forward capability boundary.
 
 ## Known blockers and risks
 
@@ -177,6 +183,8 @@ findings below.
 - Customer first-file intake is source-implemented but not live-verified; the
   remote migration ledger must be reconciled before the combined document /
   request RPC can be exercised against Supabase.
+- The organization-scoped workflow capability is source-verified but not
+  live-verified until the remote migration ledger is reconciled.
 
 ## Next actions
 

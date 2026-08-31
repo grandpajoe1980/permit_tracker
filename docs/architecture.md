@@ -41,6 +41,11 @@ and names are compatibility parameters only; they are not trusted for request
 or audit attribution. Referenced document versions must belong to the selected
 project.
 
+Workflow and permit-catalog administration is scoped by the owning
+`organizations.id`. An active `organization_admin` membership may manage that
+organization’s workflow versions and permit types; a `system_admin` may manage
+all tenants. Registering a new organization remains system-admin-only.
+
 ## Workflow execution
 
 Published workflow versions are immutable. A workstream pins the published
