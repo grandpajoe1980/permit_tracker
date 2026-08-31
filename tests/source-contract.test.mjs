@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, seedScript, commandSeedScript, repository] = await Promise.all([
+const [page, layout, css, readme, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, seedScript, commandSeedScript, repository] = await Promise.all([
   readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
@@ -13,6 +13,7 @@ const [page, layout, css, readme, portalMigration, hardeningMigration, policyMig
   readFile(new URL("../supabase/migrations/20260830214000_workstream_action_transactions.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830220000_workstream_action_notifications.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830222000_scope_workflow_metadata_rls.sql", import.meta.url), "utf8"),
+  readFile(new URL("../supabase/migrations/20260830223000_catalog_admin_transactions.sql", import.meta.url), "utf8"),
   readFile(new URL("../lib/project-identifiers.ts", import.meta.url), "utf8"),
   readFile(new URL("../lib/supabase/mutations.ts", import.meta.url), "utf8"),
   readFile(new URL("../lib/data-mode.ts", import.meta.url), "utf8"),
@@ -95,6 +96,11 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(workflowRlsMigration, /workflow_checklist_items_select_project/);
   assert.match(workflowRlsMigration, /app_private\.has_project_access/);
   assert.doesNotMatch(workflowRlsMigration, /using\s*\(true\)/i);
+  assert.match(catalogAdminMigration, /rpc_register_organization/);
+  assert.match(catalogAdminMigration, /rpc_create_permit_type/);
+  assert.match(catalogAdminMigration, /require_workflow_admin/);
+  assert.match(mutations, /mutateRegisterOrganization/);
+  assert.match(mutations, /mutateCreatePermitType/);
   assert.doesNotMatch(repository, /void\s+(?:mutate|insertNotification)/);
   assert.doesNotMatch(page, /repository\.dispatchNotification\(\{ userId: "user-sarah-johnson"/);
   assert.match(identifierModule, /canonicalProjectReference/);

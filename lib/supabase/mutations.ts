@@ -9,6 +9,8 @@ import type {
   DocumentVersionRecord,
   ExternalFilingRecord,
   NotificationRecord,
+  OrganizationRecord,
+  PermitTypeRecord,
   ProjectParticipantRecord,
   RFIRecord,
   RFIResponseRecord,
@@ -21,6 +23,74 @@ import { canonicalProjectReference } from "../project-identifiers";
 export interface MutationResult<T> {
   data: T | null;
   error: Error | null;
+}
+
+export async function mutateRegisterOrganization(params: {
+  code: string;
+  name: string;
+  organizationType?: string;
+  jurisdictionLevel?: string;
+  abbreviation?: string;
+  websiteUrl?: string;
+  generalContactEmail?: string;
+}): Promise<MutationResult<OrganizationRecord>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data, error } = await client.rpc("rpc_register_organization", {
+    p_code: params.code,
+    p_name: params.name,
+    p_organization_type: params.organizationType ?? "agency",
+    p_jurisdiction_level: params.jurisdictionLevel ?? "state",
+    p_abbreviation: params.abbreviation ?? null,
+    p_website_url: params.websiteUrl ?? null,
+    p_general_contact_email: params.generalContactEmail ?? null,
+  });
+  if (error || !data) return { data: null, error: new Error(error?.message ?? "Organization registration was not confirmed by the database.") };
+  const row = data as Record<string, unknown>;
+  return {
+    data: {
+      id: String(row.id), code: String(row.code), name: String(row.name), abbreviation: params.abbreviation ?? String(row.code),
+      jurisdictionLevel: (String(row.jurisdiction_level ?? "state") === "federal" ? "Federal" : String(row.jurisdiction_level ?? "state") === "local" ? "Local / Parish" : "State") as OrganizationRecord["jurisdictionLevel"],
+      websiteUrl: params.websiteUrl, generalContactEmail: params.generalContactEmail, workingHours: "Agency schedule", holidayCalendar: "Agency holidays",
+      defaultSlaDays: 30, documentRetentionYears: 7, isActive: Boolean(row.active ?? true),
+    },
+    error: null,
+  };
+}
+
+export async function mutateCreatePermitType(params: {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  responsibleOrgCode: string;
+  triggerExplanation: string;
+  statutoryCitation: string;
+  expectedLeadTimeDays?: number;
+  minimumStatutoryDays?: number;
+  officialFilingUrl?: string;
+}): Promise<MutationResult<PermitTypeRecord>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data, error } = await client.rpc("rpc_create_permit_type", {
+    p_id: params.id, p_code: params.code, p_name: params.name, p_category: params.category,
+    p_responsible_org_code: params.responsibleOrgCode, p_trigger_explanation: params.triggerExplanation,
+    p_statutory_citation: params.statutoryCitation, p_expected_lead_time_days: params.expectedLeadTimeDays ?? 30,
+    p_minimum_statutory_days: params.minimumStatutoryDays ?? 0, p_official_filing_url: params.officialFilingUrl ?? null,
+  });
+  if (error || !data) return { data: null, error: new Error(error?.message ?? "Authorization registration was not confirmed by the database.") };
+  const row = data as Record<string, unknown>;
+  return {
+    data: {
+      id: String(row.id), code: String(row.code), name: String(row.name), category: (String(row.category) as PermitTypeRecord["category"]),
+      responsibleOrgId: String(row.responsible_org_id), responsibleOrgCode: String(row.responsible_org_code),
+      triggerExplanation: String(row.trigger_explanation), statutoryCitation: String(row.statutory_citation), officialFilingUrl: (row.official_filing_url as string) || undefined,
+      expectedLeadTimeDays: Number(row.expected_lead_time_days ?? 30), minimumStatutoryDays: Number(row.minimum_statutory_days ?? 0),
+      publicNoticeRequired: Boolean(row.public_notice_required), publicNoticeDays: Number(row.public_notice_days ?? 0), prerequisites: [], relatedPermitTypeIds: [],
+      lastVerifiedAt: (row.last_verified_at as string) || undefined, verificationStatus: (String(row.verification_status ?? "verification_due") as PermitTypeRecord["verificationStatus"]), resources: [],
+    },
+    error: null,
+  };
 }
 
 function customerRequestFromRow(row: Record<string, unknown>): CustomerRequestRecord {

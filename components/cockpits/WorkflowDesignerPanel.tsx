@@ -23,12 +23,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getPermitCatalog, getRegisteredOrganizations, getWorkflowTemplates } from "@/lib/permit-utils";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { allowsFixtureData } from "@/lib/data-mode";
+import { mutateCreatePermitType, mutateRegisterOrganization } from "@/lib/supabase/mutations";
+import type { OrganizationRecord, PermitTypeRecord } from "@/lib/domain-models";
 import type { WorkflowStageRecord } from "@/lib/domain-models";
 
 export function WorkflowDesignerPanel() {
   const templates = getWorkflowTemplates();
-  const catalog = getPermitCatalog();
-  const orgs = getRegisteredOrganizations();
+  const [catalog, setCatalog] = useState<PermitTypeRecord[]>(getPermitCatalog());
+  const [orgs, setOrgs] = useState<OrganizationRecord[]>(getRegisteredOrganizations());
   const [activeTab, setActiveTab] = useState<"workflows" | "catalog" | "agencies">("workflows");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(templates[0]?.id || "");
   const [draftVersionId, setDraftVersionId] = useState<string | null>(null);
@@ -37,6 +39,8 @@ export function WorkflowDesignerPanel() {
   const [stageLabel, setStageLabel] = useState("");
   const [designerMessage, setDesignerMessage] = useState("");
   const [designerBusy, setDesignerBusy] = useState(false);
+  const [permitForm, setPermitForm] = useState({ code: "", name: "", responsibleOrgCode: "LDEQ", statutoryCitation: "", triggerExplanation: "" });
+  const [organizationForm, setOrganizationForm] = useState({ code: "", name: "", generalContactEmail: "" });
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
   const activeVersion = selectedTemplate?.versions.find((v) => v.status === "published") || selectedTemplate?.versions[0];
@@ -108,6 +112,26 @@ export function WorkflowDesignerPanel() {
     const { error } = await client.rpc("rpc_publish_workflow_version", { p_version_id: draftVersionId });
     setDesignerBusy(false);
     setDesignerMessage(error?.message ?? `Workflow ${draftVersionId} published. New workstreams will use this version.`);
+  }
+
+  async function registerOrganization() {
+    setDesignerBusy(true);
+    const result = await mutateRegisterOrganization(organizationForm);
+    setDesignerBusy(false);
+    if (result.error || !result.data) { setDesignerMessage(result.error?.message ?? "The organization was not confirmed by the database."); return; }
+    setOrgs((current) => [result.data!, ...current]);
+    setOrganizationForm({ code: "", name: "", generalContactEmail: "" });
+    setDesignerMessage(`${result.data.code} registered and audit logged.`);
+  }
+
+  async function registerPermitType() {
+    setDesignerBusy(true);
+    const result = await mutateCreatePermitType({ ...permitForm, id: `permit-${permitForm.code.toLowerCase()}` , category: "permit", statutoryCitation: permitForm.statutoryCitation || "Authority to be confirmed by the responsible agency.", triggerExplanation: permitForm.triggerExplanation || "Agency review required." });
+    setDesignerBusy(false);
+    if (result.error || !result.data) { setDesignerMessage(result.error?.message ?? "The authorization was not confirmed by the database."); return; }
+    setCatalog((current) => [result.data!, ...current]);
+    setPermitForm({ code: "", name: "", responsibleOrgCode: "LDEQ", statutoryCitation: "", triggerExplanation: "" });
+    setDesignerMessage(`${result.data.code} added to the authorization catalog and audit logged.`);
   }
 
   return (
@@ -272,10 +296,12 @@ export function WorkflowDesignerPanel() {
             <h2 className="text-lg font-bold text-slate-900">
               Living Statutory Permit & Authorization Catalog
             </h2>
-            <Button type="button" size="sm" disabled title="Authorization catalog editing is not enabled in this demo workspace." className="bg-slate-300 text-slate-600 font-bold text-xs gap-1.5 shadow-none">
+            <Button type="button" size="sm" onClick={() => setDesignerMessage("Complete the authorization form below, then save it through the administrator transaction.")} className="bg-[#00284d] text-white font-bold text-xs gap-1.5 shadow-none">
               <Plus className="size-3.5" /> Add Authorization Type
             </Button>
           </div>
+
+          <Card className="border-sky-200 bg-sky-50/40"><CardHeader className="pb-3"><CardTitle className="text-base">Register authorization type</CardTitle><CardDescription>Creates a database-backed catalog record. The server validates administrator authority and the responsible organization.</CardDescription></CardHeader><CardContent className="grid gap-3 md:grid-cols-2"><input aria-label="Authorization code" placeholder="Authorization code" value={permitForm.code} onChange={(event) => setPermitForm({ ...permitForm, code: event.target.value })} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" /><input aria-label="Authorization name" placeholder="Authorization name" value={permitForm.name} onChange={(event) => setPermitForm({ ...permitForm, name: event.target.value })} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" /><input aria-label="Responsible organization code" placeholder="Responsible organization code" value={permitForm.responsibleOrgCode} onChange={(event) => setPermitForm({ ...permitForm, responsibleOrgCode: event.target.value })} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" /><input aria-label="Statutory citation" placeholder="Statutory citation" value={permitForm.statutoryCitation} onChange={(event) => setPermitForm({ ...permitForm, statutoryCitation: event.target.value })} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" /><input aria-label="Regulatory trigger" placeholder="Regulatory trigger" value={permitForm.triggerExplanation} onChange={(event) => setPermitForm({ ...permitForm, triggerExplanation: event.target.value })} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm md:col-span-2" /><Button type="button" onClick={() => void registerPermitType()} disabled={designerBusy || !permitForm.code.trim() || !permitForm.name.trim()} className="bg-[#00284d] text-white md:col-span-2">Save authorization type</Button></CardContent></Card>
 
           <div className="space-y-4">
             {catalog.map((item) => (
@@ -344,10 +370,12 @@ export function WorkflowDesignerPanel() {
             <h2 className="text-lg font-bold text-slate-900">
               Participating Organization & Agency Registry
             </h2>
-            <Button type="button" size="sm" disabled title="Organization registration is not enabled in this demo workspace." className="bg-slate-300 text-slate-600 font-bold text-xs gap-1.5 shadow-none">
+            <Button type="button" size="sm" onClick={() => setDesignerMessage("Complete the organization form below, then save it through the administrator transaction.")} className="bg-[#00284d] text-white font-bold text-xs gap-1.5 shadow-none">
               <Plus className="size-3.5" /> Register Organization
             </Button>
           </div>
+
+          <Card className="border-sky-200 bg-sky-50/40"><CardHeader className="pb-3"><CardTitle className="text-base">Register organization</CardTitle><CardDescription>Creates a database-backed organization record and immutable audit event.</CardDescription></CardHeader><CardContent className="grid gap-3 md:grid-cols-2"><input aria-label="Organization code" placeholder="Organization code" value={organizationForm.code} onChange={(event) => setOrganizationForm({ ...organizationForm, code: event.target.value })} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" /><input aria-label="Organization name" placeholder="Organization name" value={organizationForm.name} onChange={(event) => setOrganizationForm({ ...organizationForm, name: event.target.value })} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" /><input aria-label="General contact email" placeholder="General contact email" value={organizationForm.generalContactEmail} onChange={(event) => setOrganizationForm({ ...organizationForm, generalContactEmail: event.target.value })} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm md:col-span-2" /><Button type="button" onClick={() => void registerOrganization()} disabled={designerBusy || !organizationForm.code.trim() || !organizationForm.name.trim()} className="bg-[#00284d] text-white md:col-span-2">Save organization</Button></CardContent></Card>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {orgs.map((org) => (

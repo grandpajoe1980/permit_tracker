@@ -109,6 +109,10 @@ findings below.
   unauthenticated empty result from overwriting authorized state.
 - Replaced the Gantt's fixed March–December 2026 header with month segments
   derived from the persisted project timeline and a runtime today marker.
+- Replaced disabled workflow-designer catalog controls with server-guarded
+  organization and authorization registration forms. Their audit-backed RPCs
+  are checked in as migration `20260830223000` and return the persisted record
+  before the designer updates its visible list.
 
 ## Known blockers and risks
 
