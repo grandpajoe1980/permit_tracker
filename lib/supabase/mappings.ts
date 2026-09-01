@@ -1,4 +1,6 @@
 import type {
+  AssignmentGroupRecord,
+  AssignmentGroupMembershipRecord,
   AuditEventRecord,
   CommitmentRecord,
   CoordinationRequestRecord,
@@ -25,6 +27,31 @@ import type {
 } from "../domain-models";
 
 type Row = Record<string, unknown>;
+
+export function assignmentGroupRowToDomain(row: Row): AssignmentGroupRecord {
+  return {
+    id: str(row.id),
+    orgCode: str(row.org_code),
+    organizationId: str(row.organization_id) || undefined,
+    name: str(row.name),
+    description: str(row.description) || "",
+    leadUserId: str(row.lead_user_id) || undefined,
+    active: bool(row.active, true),
+    createdAt: str(row.created_at),
+    updatedAt: str(row.updated_at),
+  };
+}
+
+export function assignmentGroupMembershipRowToDomain(row: Row): AssignmentGroupMembershipRecord {
+  return {
+    id: str(row.id),
+    assignmentGroupId: str(row.assignment_group_id),
+    userId: str(row.user_id),
+    role: (str(row.role, "member") as "member" | "lead" | "backup"),
+    createdAt: str(row.created_at),
+    updatedAt: str(row.updated_at),
+  };
+}
 
 export function organizationMembershipRowToDomain(row: Row): OrganizationMembershipRecord {
   return {
@@ -183,6 +210,21 @@ export function workstreamRowToDomain(row: Row): WorkstreamRecord {
     escalationLevel: num(row.escalation_level, 0) as WorkstreamRecord["escalationLevel"],
     escalationTriggeredAt: str(row.escalation_triggered_at) || undefined,
     escalationSummary: str(row.escalation_summary) || undefined,
+
+    // Milestone 1 ITSM & Assignment Extensions
+    assignmentGroupId: str(row.assignment_group_id) || undefined,
+    assignmentGroupName: str(row.assignment_group_name) || undefined,
+    assignedToUserId: str(row.assigned_to_user_id) || undefined,
+    assignedToUserName: str(row.assigned_to_user_name) || undefined,
+    assignedOrgCode: str(row.assigned_org_code) || undefined,
+    itsmState: (str(row.itsm_state) || undefined) as WorkstreamRecord["itsmState"],
+    priority: (str(row.priority) || undefined) as WorkstreamRecord["priority"],
+    statutoryDeadline: str(row.statutory_deadline) || undefined,
+    clockStatus: (str(row.clock_status) || undefined) as WorkstreamRecord["clockStatus"],
+    clockPausedReason: str(row.clock_paused_reason) || undefined,
+    clockPausedAt: str(row.clock_paused_at) || undefined,
+    clockTotalPausedSeconds: num(row.clock_total_paused_seconds, 0),
+
     tasks: [],
     commitments: [],
     coordinationRequests: [],
@@ -215,6 +257,19 @@ export function domainToWorkstreamRow(domain: Partial<WorkstreamRecord>): Row {
     ...(domain.escalationTriggeredAt !== undefined && { escalation_triggered_at: domain.escalationTriggeredAt }),
     ...(domain.escalationSummary !== undefined && { escalation_summary: domain.escalationSummary }),
     ...(domain.actualCompletionDate !== undefined && { actual_completion_date: domain.actualCompletionDate }),
+
+    // Milestone 1 ITSM Extensions
+    ...(domain.assignmentGroupId !== undefined && { assignment_group_id: domain.assignmentGroupId }),
+    ...(domain.assignedToUserId !== undefined && { assigned_to_user_id: domain.assignedToUserId }),
+    ...(domain.assignedOrgCode !== undefined && { assigned_org_code: domain.assignedOrgCode }),
+    ...(domain.itsmState !== undefined && { itsm_state: domain.itsmState }),
+    ...(domain.priority !== undefined && { priority: domain.priority }),
+    ...(domain.statutoryDeadline !== undefined && { statutory_deadline: domain.statutoryDeadline }),
+    ...(domain.clockStatus !== undefined && { clock_status: domain.clockStatus }),
+    ...(domain.clockPausedReason !== undefined && { clock_paused_reason: domain.clockPausedReason }),
+    ...(domain.clockPausedAt !== undefined && { clock_paused_at: domain.clockPausedAt }),
+    ...(domain.clockTotalPausedSeconds !== undefined && { clock_total_paused_seconds: domain.clockTotalPausedSeconds }),
+
     updated_at: new Date().toISOString(),
   };
 }
@@ -246,6 +301,17 @@ export function taskRowToDomain(row: Row): TaskRecord {
     durationDays: num(row.duration_days, 1),
     floatDays: num(row.float_days, 0),
     predecessorTaskIds: arr<string>(row.predecessors),
+
+    // Milestone 1 ITSM Extensions
+    assignmentGroupId: str(row.assignment_group_id) || undefined,
+    assignmentGroupName: str(row.assignment_group_name) || undefined,
+    itsmState: (str(row.itsm_state) || undefined) as TaskRecord["itsmState"],
+    priority: (str(row.priority) || undefined) as TaskRecord["priority"],
+    statutoryDeadline: str(row.statutory_deadline) || undefined,
+    clockStatus: (str(row.clock_status) || undefined) as TaskRecord["clockStatus"],
+    clockPausedReason: str(row.clock_paused_reason) || undefined,
+    clockPausedAt: str(row.clock_paused_at) || undefined,
+    clockTotalPausedSeconds: num(row.clock_total_paused_seconds, 0),
   };
 }
 
@@ -629,8 +695,62 @@ export function customerRequestRowToDomain(row: Row): CustomerRequestRecord {
     blocksActiveWork: bool(row.blocks_active_work),
     status: (str(row.status, "submitted")) as CustomerRequestRecord["status"],
     attachmentDocumentVersionIds: arr<string>(row.attachment_document_version_ids),
+
+    // Milestone 1 ITSM & Assignment Extensions
+    assignmentGroupId: str(row.assignment_group_id) || undefined,
+    assignmentGroupName: str(row.assignment_group_name) || undefined,
+    assignedToUserId: str(row.assigned_to_user_id) || undefined,
+    assignedToUserName: str(row.assigned_to_user_name) || undefined,
+    itsmState: (str(row.itsm_state) || undefined) as CustomerRequestRecord["itsmState"],
+    priority: (str(row.priority) || undefined) as CustomerRequestRecord["priority"],
+    urgency: (str(row.urgency) || undefined) as CustomerRequestRecord["urgency"],
+    impact: (str(row.impact) || undefined) as CustomerRequestRecord["impact"],
+    statutoryDeadline: str(row.statutory_deadline) || undefined,
+    clockStatus: (str(row.clock_status) || undefined) as CustomerRequestRecord["clockStatus"],
+    clockPausedReason: str(row.clock_paused_reason) || undefined,
+    clockPausedAt: str(row.clock_paused_at) || undefined,
+    clockTotalPausedSeconds: num(row.clock_total_paused_seconds, 0),
+
     createdAt: str(row.created_at || new Date().toISOString()),
     updatedAt: str(row.updated_at || new Date().toISOString()),
+  };
+}
+
+export function domainToCustomerRequestRow(domain: Partial<CustomerRequestRecord>): Row {
+  return {
+    ...(domain.id && { id: domain.id }),
+    ...(domain.confirmationNumber && { confirmation_number: domain.confirmationNumber }),
+    ...(domain.projectId && { project_id: domain.projectId }),
+    ...(domain.requestType && { request_type: domain.requestType }),
+    ...(domain.title && { title: domain.title }),
+    ...(domain.description && { description: domain.description }),
+    ...(domain.requestedOutcome !== undefined && { requested_outcome: domain.requestedOutcome }),
+    ...(domain.locationOrAffectedArea !== undefined && { location_or_affected_area: domain.locationOrAffectedArea }),
+    ...(domain.desiredDate !== undefined && { desired_date: domain.desiredDate }),
+    ...(domain.scheduleImportance && { schedule_importance: domain.scheduleImportance }),
+    ...(domain.knownAgencyCode !== undefined && { known_agency_code: domain.knownAgencyCode }),
+    ...(domain.knownPermitTypeId !== undefined && { known_permit_type_id: domain.knownPermitTypeId }),
+    ...(domain.submittedByUserId !== undefined && { submitted_by_user_id: domain.submittedByUserId }),
+    ...(domain.submittedByName && { submitted_by_name: domain.submittedByName }),
+    ...(domain.relatedWorkstreamId !== undefined && { related_workstream_id: domain.relatedWorkstreamId }),
+    ...(domain.blocksActiveWork !== undefined && { blocks_active_work: domain.blocksActiveWork }),
+    ...(domain.status && { status: domain.status }),
+    ...(domain.attachmentDocumentVersionIds && { attachment_document_version_ids: domain.attachmentDocumentVersionIds }),
+
+    // Milestone 1 ITSM Extensions
+    ...(domain.assignmentGroupId !== undefined && { assignment_group_id: domain.assignmentGroupId }),
+    ...(domain.assignedToUserId !== undefined && { assigned_to_user_id: domain.assignedToUserId }),
+    ...(domain.itsmState !== undefined && { itsm_state: domain.itsmState }),
+    ...(domain.priority !== undefined && { priority: domain.priority }),
+    ...(domain.urgency !== undefined && { urgency: domain.urgency }),
+    ...(domain.impact !== undefined && { impact: domain.impact }),
+    ...(domain.statutoryDeadline !== undefined && { statutory_deadline: domain.statutoryDeadline }),
+    ...(domain.clockStatus !== undefined && { clock_status: domain.clockStatus }),
+    ...(domain.clockPausedReason !== undefined && { clock_paused_reason: domain.clockPausedReason }),
+    ...(domain.clockPausedAt !== undefined && { clock_paused_at: domain.clockPausedAt }),
+    ...(domain.clockTotalPausedSeconds !== undefined && { clock_total_paused_seconds: domain.clockTotalPausedSeconds }),
+
+    updated_at: new Date().toISOString(),
   };
 }
 

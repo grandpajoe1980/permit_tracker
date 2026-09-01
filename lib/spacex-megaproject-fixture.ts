@@ -1,4 +1,6 @@
 import type {
+  AssignmentGroupRecord,
+  AssignmentGroupMembershipRecord,
   CommitmentRecord,
   CoordinationRequestRecord,
   DecisionRecord,
@@ -176,6 +178,258 @@ export const registeredOrganizations: OrganizationRecord[] = [
     documentRetentionYears: 10,
     isActive: true,
   },
+  {
+    id: "org-lsp",
+    code: "LSP",
+    name: "Louisiana State Police",
+    abbreviation: "LSP",
+    jurisdictionLevel: "State",
+    websiteUrl: "https://lsp.org",
+    permitPortalUrl: "https://lsp.org/emergency-services/hazmat",
+    generalContactEmail: "hazmat@dps.la.gov",
+    projectLiaisonName: "Capt. Robert Landry",
+    projectLiaisonEmail: "robert.landry@dps.la.gov",
+    projectLiaisonPhone: "(225) 925-6113",
+    executiveEscalationName: "Superintendent of State Police",
+    executiveEscalationEmail: "superintendent@dps.la.gov",
+    workingHours: "24/7 Operations / Mon-Fri 8:00 AM - 4:30 PM CST",
+    holidayCalendar: "Louisiana State Legal Holidays",
+    defaultSlaDays: 7,
+    statutoryAuthority: "La. R.S. 32:1501 et seq. — Hazardous Materials Transportation & Emergency Response",
+    geographicCoverage: "Statewide (Troop I — Acadiana / Troop D — Southwest)",
+    documentRetentionYears: 15,
+    isActive: true,
+  },
+  {
+    id: "org-led",
+    code: "LED",
+    name: "Louisiana Economic Development",
+    abbreviation: "LED",
+    jurisdictionLevel: "State",
+    websiteUrl: "https://www.opportunitylouisiana.gov",
+    permitPortalUrl: "https://www.opportunitylouisiana.gov/faststart",
+    generalContactEmail: "faststart@la.gov",
+    projectLiaisonName: "Joe Skaggs / Paul Helton",
+    projectLiaisonEmail: "joe.skaggs@la.gov",
+    projectLiaisonPhone: "(225) 342-3000",
+    executiveEscalationName: "Secretary of Economic Development",
+    executiveEscalationEmail: "sec.econ@la.gov",
+    workingHours: "Mon-Fri 8:00 AM - 5:00 PM CST",
+    holidayCalendar: "Louisiana State Legal Holidays",
+    defaultSlaDays: 10,
+    statutoryAuthority: "La. R.S. 51:921 et seq. — Louisiana Economic Development & FastStart Aerospace Training",
+    geographicCoverage: "Statewide & Acadiana Aerospace Corridor",
+    documentRetentionYears: 20,
+    isActive: true,
+  },
+];
+
+// ==========================================
+// 1.1 ASSIGNMENT GROUPS (MULTI-AGENCY ITSM QUEUES)
+// ==========================================
+
+export const assignmentGroupsData: AssignmentGroupRecord[] = [
+  // 1. SpaceX Internal Queues
+  {
+    id: "grp-spacex-tech",
+    orgCode: "SPACEX",
+    organizationId: "org-spacex",
+    name: "SpaceX - Internal Technical Queue",
+    description: "Launch mount structural civil engineering, high-pressure deluge, and mechanical interface reviews",
+    leadUserId: "user-alex-martin",
+    leadUserName: "Alex Martin",
+    active: true,
+  },
+  {
+    id: "grp-spacex-reg",
+    orgCode: "SPACEX",
+    organizationId: "org-spacex",
+    name: "SpaceX - Regulatory Affairs Queue",
+    description: "Multi-agency permit applications, NEPA environmental disclosures, and statutory compliance management",
+    leadUserId: "user-maya-chen",
+    leadUserName: "Maya Chen",
+    active: true,
+  },
+
+  // 2. Governor's Project Office (State Concierge)
+  {
+    id: "grp-state-po-triage",
+    orgCode: "LA-PROJECTS",
+    organizationId: "org-state-po",
+    name: "Governor's Project Office - Executive Triage & Delivery",
+    description: "State-level executive intake, cross-agency critical path unblocking, and Cabinet escalation coordination",
+    leadUserId: "user-sarah-johnson",
+    leadUserName: "Sarah Johnson",
+    active: true,
+  },
+  {
+    id: "grp-state-po-concierge",
+    orgCode: "LA-PROJECTS",
+    organizationId: "org-state-po",
+    name: "Governor's Project Office - Interagency Concierge",
+    description: "Dedicated state concierge facilitating interagency concurrence, timeline alignment, and agency meetings",
+    leadUserId: "user-sarah-johnson",
+    leadUserName: "Sarah Johnson",
+    active: true,
+  },
+
+  // 3. DOTD (Transportation & Development)
+  {
+    id: "grp-dotd-heavyhaul",
+    orgCode: "DOTD",
+    organizationId: "org-dotd",
+    name: "DOTD - Structures & Bridge Review",
+    description: "LA-82 bridge structural load simulations, axle weight distribution ratings, and culvert reinforcement engineering",
+    leadUserId: "user-sam-rivera",
+    leadUserName: "Sam Rivera",
+    active: true,
+  },
+  {
+    id: "grp-dotd-access",
+    orgCode: "DOTD",
+    organizationId: "org-dotd",
+    name: "DOTD - Highway Access & Heavy-Haul",
+    description: "State highway oversize superload routing, turning radius clearances, and drive connection permits",
+    leadUserId: "user-sam-rivera",
+    leadUserName: "Sam Rivera",
+    active: true,
+  },
+
+  // 4. LDEQ (Environmental Quality)
+  {
+    id: "grp-ldeq-water",
+    orgCode: "LDEQ",
+    organizationId: "org-ldeq",
+    name: "LDEQ - Water Quality & Deluge Permitting",
+    description: "LPDES industrial stormwater, acoustic water deluge runoff retention, and baseline canal monitoring",
+    leadUserId: "user-jordan-lee",
+    leadUserName: "Jordan Lee",
+    active: true,
+  },
+  {
+    id: "grp-ldeq-air",
+    orgCode: "LDEQ",
+    organizationId: "org-ldeq",
+    name: "LDEQ - Air Quality & Environmental Review",
+    description: "Title V minor air source modeling, flare stack emissions limits, and environmental impact assessments",
+    leadUserId: "user-jordan-lee",
+    leadUserName: "Jordan Lee",
+    active: true,
+  },
+
+  // 5. CPRA (Coastal Protection & Restoration Authority)
+  {
+    id: "grp-cpra-cup",
+    orgCode: "CPRA",
+    organizationId: "org-cpra",
+    name: "CPRA - Coastal Use & Hydrology Permitting",
+    description: "Coastal Use Permits (CUP), coastal zone management consistency, and Chenier Plain wetland ecology",
+    leadUserId: "user-jean-paul-guidry",
+    leadUserName: "Jean-Paul Guidry",
+    active: true,
+  },
+  {
+    id: "grp-cpra-levee",
+    orgCode: "CPRA",
+    organizationId: "org-cpra",
+    name: "CPRA - Drainage & Levee Concurrence",
+    description: "Hydrologic surge modeling, flood protection levee buffer concurrence, and coastal restoration alignment",
+    leadUserId: "user-jean-paul-guidry",
+    leadUserName: "Jean-Paul Guidry",
+    active: true,
+  },
+
+  // 6. OSFM (Office of State Fire Marshal)
+  {
+    id: "grp-osfm-lifesafety",
+    orgCode: "OSFM",
+    organizationId: "org-osfm",
+    name: "OSFM - Life Safety & Plan Review",
+    description: "Commercial building safety codes, explosive setback compliance, and emergency egress routing",
+    leadUserId: "user-dan-thibodeaux",
+    leadUserName: "Chief Dan Thibodeaux",
+    active: true,
+  },
+  {
+    id: "grp-osfm-hazmat",
+    orgCode: "OSFM",
+    organizationId: "org-osfm",
+    name: "OSFM - Hazardous Materials & Cryogenic Safety",
+    description: "Liquid methane (LCH4), liquid oxygen (LOX) bulk storage, and cryogenic propellant transfer safety",
+    leadUserId: "user-dan-thibodeaux",
+    leadUserName: "Chief Dan Thibodeaux",
+    active: true,
+  },
+
+  // 7. LSP (Louisiana State Police)
+  {
+    id: "grp-lsp-hazmat",
+    orgCode: "LSP",
+    organizationId: "org-lsp",
+    name: "LSP - Emergency Response & Route Clearance",
+    description: "State Police cryogenic transport escort coordination, highway rolling roadblocks, and emergency access",
+    leadUserId: "user-robert-landry",
+    leadUserName: "Capt. Robert Landry",
+    active: true,
+  },
+
+  // 8. Vermilion Parish (Parish Permitting & Police Jury)
+  {
+    id: "grp-vermilion-parish",
+    orgCode: "VERMILION-PARISH",
+    organizationId: "org-parish",
+    name: "Vermilion Parish - Coastal Permitting & Police Jury",
+    description: "Parish coastal development permits, public hearing notices, and Police Jury ordinance consistency",
+    leadUserId: "user-riley-brooks",
+    leadUserName: "Riley Brooks",
+    active: true,
+  },
+  {
+    id: "grp-vermilion-publicworks",
+    orgCode: "VERMILION-PARISH",
+    organizationId: "org-parish",
+    name: "Vermilion Parish - Public Works & Drainage",
+    description: "Parish drainage canal crossings, bridge weight restrictions, and local road maintenance agreements",
+    leadUserId: "user-riley-brooks",
+    leadUserName: "Riley Brooks",
+    active: true,
+  },
+];
+
+export const assignmentGroupMembershipsData: AssignmentGroupMembershipRecord[] = [
+  // SpaceX
+  { id: "mem-spx-1", assignmentGroupId: "grp-spacex-tech", userId: "user-alex-martin", role: "lead", userName: "Alex Martin", userEmail: "alex.martin@spacex.com" },
+  { id: "mem-spx-2", assignmentGroupId: "grp-spacex-tech", userId: "user-aris-thorne", role: "member", userName: "Dr. Aris Thorne", userEmail: "aris.thorne@gulfcoast-engineering.example" },
+  { id: "mem-spx-3", assignmentGroupId: "grp-spacex-reg", userId: "user-maya-chen", role: "lead", userName: "Maya Chen", userEmail: "maya.chen@spacex.com" },
+  { id: "mem-spx-4", assignmentGroupId: "grp-spacex-reg", userId: "user-alex-martin", role: "backup", userName: "Alex Martin", userEmail: "alex.martin@spacex.com" },
+
+  // Governor's Project Office
+  { id: "mem-gpo-1", assignmentGroupId: "grp-state-po-triage", userId: "user-sarah-johnson", role: "lead", userName: "Sarah Johnson", userEmail: "sarah.johnson@la.gov" },
+  { id: "mem-gpo-2", assignmentGroupId: "grp-state-po-triage", userId: "user-joe-skaggs", role: "backup", userName: "Joe Skaggs", userEmail: "joe.skaggs@la.gov" },
+  { id: "mem-gpo-3", assignmentGroupId: "grp-state-po-concierge", userId: "user-sarah-johnson", role: "lead", userName: "Sarah Johnson", userEmail: "sarah.johnson@la.gov" },
+
+  // DOTD
+  { id: "mem-dotd-1", assignmentGroupId: "grp-dotd-heavyhaul", userId: "user-sam-rivera", role: "lead", userName: "Sam Rivera", userEmail: "sam.rivera@la.gov" },
+  { id: "mem-dotd-2", assignmentGroupId: "grp-dotd-access", userId: "user-sam-rivera", role: "lead", userName: "Sam Rivera", userEmail: "sam.rivera@la.gov" },
+
+  // LDEQ
+  { id: "mem-ldeq-1", assignmentGroupId: "grp-ldeq-water", userId: "user-jordan-lee", role: "lead", userName: "Jordan Lee", userEmail: "jordan.lee@la.gov" },
+  { id: "mem-ldeq-2", assignmentGroupId: "grp-ldeq-air", userId: "user-jordan-lee", role: "lead", userName: "Jordan Lee", userEmail: "jordan.lee@la.gov" },
+
+  // CPRA
+  { id: "mem-cpra-1", assignmentGroupId: "grp-cpra-cup", userId: "user-jean-paul-guidry", role: "lead", userName: "Jean-Paul Guidry", userEmail: "jp.guidry@cpra.la.gov" },
+  { id: "mem-cpra-2", assignmentGroupId: "grp-cpra-levee", userId: "user-jean-paul-guidry", role: "lead", userName: "Jean-Paul Guidry", userEmail: "jp.guidry@cpra.la.gov" },
+
+  // OSFM
+  { id: "mem-osfm-1", assignmentGroupId: "grp-osfm-lifesafety", userId: "user-dan-thibodeaux", role: "lead", userName: "Chief Dan Thibodeaux", userEmail: "dan.thibodeaux@dps.la.gov" },
+  { id: "mem-osfm-2", assignmentGroupId: "grp-osfm-hazmat", userId: "user-dan-thibodeaux", role: "lead", userName: "Chief Dan Thibodeaux", userEmail: "dan.thibodeaux@dps.la.gov" },
+
+  // LSP
+  { id: "mem-lsp-1", assignmentGroupId: "grp-lsp-hazmat", userId: "user-robert-landry", role: "lead", userName: "Capt. Robert Landry", userEmail: "robert.landry@dps.la.gov" },
+
+  // Vermilion Parish
+  { id: "mem-parish-1", assignmentGroupId: "grp-vermilion-parish", userId: "user-riley-brooks", role: "lead", userName: "Riley Brooks", userEmail: "riley.brooks@vermilionparish.org" },
+  { id: "mem-parish-2", assignmentGroupId: "grp-vermilion-publicworks", userId: "user-riley-brooks", role: "lead", userName: "Riley Brooks", userEmail: "riley.brooks@vermilionparish.org" },
 ];
 
 // ==========================================
@@ -1196,6 +1450,21 @@ export const workstreamsData: WorkstreamRecord[] = [
     escalationLevel: 2,
     escalationTriggeredAt: "2026-08-28",
     escalationSummary: "Level 2: DOTD Section Supervisor engaged; State PM Sarah Johnson actively mediating.",
+
+    // Milestone 1 ITSM & Assignment Extensions
+    assignmentGroupId: "grp-dotd-heavyhaul",
+    assignmentGroupName: "DOTD - Structures & Bridge Review",
+    assignedToUserId: "user-sam-rivera",
+    assignedToUserName: "Sam Rivera",
+    assignedOrgCode: "DOTD",
+    itsmState: "blocked",
+    priority: "P1",
+    statutoryDeadline: "2026-09-15",
+    clockStatus: "paused",
+    clockPausedReason: "Waiting on CPRA coastal drainage concurrence model (CR-00451)",
+    clockPausedAt: "2026-08-28T00:00:00Z",
+    clockTotalPausedSeconds: 1123200,
+
     tasks: [
       {
         id: "task-dotd-1",
@@ -1304,6 +1573,19 @@ export const workstreamsData: WorkstreamRecord[] = [
     delayNotes: "7-day variance attributed to joint agency GIS harmonization.",
     escalationLevel: 1,
     escalationSummary: "Level 1: Reviewer SLA active; federal standup on track for Sep 2 letter.",
+
+    // Milestone 1 ITSM & Assignment Extensions
+    assignmentGroupId: "grp-cpra-cup",
+    assignmentGroupName: "CPRA - Coastal Use & Hydrology Permitting",
+    assignedToUserId: "user-jean-paul-guidry",
+    assignedToUserName: "Jean-Paul Guidry",
+    assignedOrgCode: "CPRA",
+    itsmState: "in_progress",
+    priority: "P1",
+    statutoryDeadline: "2026-10-30",
+    clockStatus: "active",
+    clockTotalPausedSeconds: 0,
+
     tasks: [
       {
         id: "task-usace-1",
@@ -1407,6 +1689,21 @@ export const workstreamsData: WorkstreamRecord[] = [
     primaryDelayReason: "public_comment",
     delayNotes: "8-day extension to address public questions on deluge retention basin water quality.",
     escalationLevel: 0,
+
+    // Milestone 1 ITSM & Assignment Extensions
+    assignmentGroupId: "grp-ldeq-water",
+    assignmentGroupName: "LDEQ - Water Quality & Deluge Permitting",
+    assignedToUserId: "user-jordan-lee",
+    assignedToUserName: "Jordan Lee",
+    assignedOrgCode: "LDEQ",
+    itsmState: "pending_agency",
+    priority: "P2",
+    statutoryDeadline: "2026-09-30",
+    clockStatus: "paused",
+    clockPausedReason: "Public hearing notice and comment resolution",
+    clockPausedAt: "2026-08-26T00:00:00Z",
+    clockTotalPausedSeconds: 432000,
+
     tasks: [],
     commitments: commitmentsData.filter((c) => c.workstreamId === "WS-WASTEWATER-DELUGE"),
     coordinationRequests: coordinationRequestsData.filter((c) => c.workstreamId === "WS-WASTEWATER-DELUGE"),
@@ -1450,6 +1747,19 @@ export const workstreamsData: WorkstreamRecord[] = [
     customerActionRequired: "None",
     primaryDelayReason: "none",
     escalationLevel: 0,
+
+    // Milestone 1 ITSM & Assignment Extensions
+    assignmentGroupId: "grp-state-po-concierge",
+    assignmentGroupName: "Governor's Project Office - Interagency Concierge",
+    assignedToUserId: "user-sarah-johnson",
+    assignedToUserName: "Sarah Johnson",
+    assignedOrgCode: "LA-PROJECTS",
+    itsmState: "in_progress",
+    priority: "P2",
+    statutoryDeadline: "2026-11-15",
+    clockStatus: "active",
+    clockTotalPausedSeconds: 0,
+
     tasks: [],
     commitments: commitmentsData.filter((c) => c.workstreamId === "WS-GAS-LNG-PIPELINE"),
     coordinationRequests: [],
@@ -1493,6 +1803,19 @@ export const workstreamsData: WorkstreamRecord[] = [
     customerActionRequired: "Submit transformer impedance parameters (COM-006) by Sep 6",
     primaryDelayReason: "none",
     escalationLevel: 0,
+
+    // Milestone 1 ITSM & Assignment Extensions
+    assignmentGroupId: "grp-vermilion-publicworks",
+    assignmentGroupName: "Vermilion Parish - Public Works & Drainage",
+    assignedToUserId: "user-riley-brooks",
+    assignedToUserName: "Riley Brooks",
+    assignedOrgCode: "VERMILION-PARISH",
+    itsmState: "in_progress",
+    priority: "P3",
+    statutoryDeadline: "2026-10-15",
+    clockStatus: "active",
+    clockTotalPausedSeconds: 0,
+
     tasks: [],
     commitments: commitmentsData.filter((c) => c.workstreamId === "WS-SUBSTATION-230KV"),
     coordinationRequests: [],
@@ -1536,6 +1859,19 @@ export const workstreamsData: WorkstreamRecord[] = [
     customerActionRequired: "None",
     primaryDelayReason: "none",
     escalationLevel: 0,
+
+    // Milestone 1 ITSM & Assignment Extensions
+    assignmentGroupId: "grp-lsp-hazmat",
+    assignmentGroupName: "LSP - Emergency Response & Route Clearance",
+    assignedToUserId: "user-robert-landry",
+    assignedToUserName: "Capt. Robert Landry",
+    assignedOrgCode: "LSP",
+    itsmState: "in_progress",
+    priority: "P2",
+    statutoryDeadline: "2026-10-01",
+    clockStatus: "active",
+    clockTotalPausedSeconds: 0,
+
     tasks: [],
     commitments: [],
     coordinationRequests: coordinationRequestsData.filter((c) => c.workstreamId === "WS-PUBLIC-SAFETY-AIRSPACE"),
@@ -1579,6 +1915,19 @@ export const workstreamsData: WorkstreamRecord[] = [
     customerActionRequired: "None",
     primaryDelayReason: "none",
     escalationLevel: 0,
+
+    // Milestone 1 ITSM & Assignment Extensions
+    assignmentGroupId: "grp-osfm-lifesafety",
+    assignmentGroupName: "OSFM - Life Safety & Plan Review",
+    assignedToUserId: "user-dan-thibodeaux",
+    assignedToUserName: "Chief Dan Thibodeaux",
+    assignedOrgCode: "OSFM",
+    itsmState: "resolved",
+    priority: "P3",
+    statutoryDeadline: "2026-08-15",
+    clockStatus: "stopped",
+    clockTotalPausedSeconds: 0,
+
     tasks: [],
     commitments: [],
     coordinationRequests: [],
@@ -1623,6 +1972,19 @@ export const workstreamsData: WorkstreamRecord[] = [
     customerActionRequired: "None",
     primaryDelayReason: "none",
     escalationLevel: 0,
+
+    // Milestone 1 ITSM & Assignment Extensions
+    assignmentGroupId: "grp-state-po-concierge",
+    assignmentGroupName: "Governor's Project Office - Interagency Concierge",
+    assignedToUserId: "user-sarah-johnson",
+    assignedToUserName: "Sarah Johnson",
+    assignedOrgCode: "LA-PROJECTS",
+    itsmState: "in_progress",
+    priority: "P4",
+    statutoryDeadline: "2026-12-01",
+    clockStatus: "active",
+    clockTotalPausedSeconds: 0,
+
     tasks: [],
     commitments: [],
     coordinationRequests: [],
@@ -1666,6 +2028,19 @@ export const workstreamsData: WorkstreamRecord[] = [
     customerActionRequired: "Complete Cultural Resources Survey",
     primaryDelayReason: "none",
     escalationLevel: 0,
+
+    // Milestone 1 ITSM & Assignment Extensions
+    assignmentGroupId: "grp-spacex-reg",
+    assignmentGroupName: "SpaceX - Regulatory Affairs Queue",
+    assignedToUserId: "user-maya-chen",
+    assignedToUserName: "Maya Chen",
+    assignedOrgCode: "SPACEX",
+    itsmState: "draft",
+    priority: "P3",
+    statutoryDeadline: "2026-12-15",
+    clockStatus: "active",
+    clockTotalPausedSeconds: 0,
+
     readinessChecklist: {
       id: "rc-sub-ph2",
       workstreamId: "WS-PREAPP-SUBSTATION-PH2",

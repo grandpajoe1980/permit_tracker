@@ -53,7 +53,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { AdminDirectory } from "@/components/admin/AdminDirectory";
 import { DocumentViewerModal } from "@/components/documents/DocumentViewerModal";
-import type { CustomerRequestRecord, DocumentRecord, DocumentVersionRecord } from "@/lib/domain-models";
+import type { CustomerRequestRecord, DocumentRecord, DocumentVersionRecord, ITSMState } from "@/lib/domain-models";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -115,10 +115,18 @@ import { WorkstreamGraphGantt } from "@/components/cockpits/WorkstreamGraphGantt
 import { DocumentVaultPanel } from "@/components/cockpits/DocumentVaultPanel";
 import { WorkflowDesignerPanel } from "@/components/cockpits/WorkflowDesignerPanel";
 import { ProjectOverviewPage } from "@/components/cockpits/ProjectOverviewPage";
+import { SystemVersionFooter } from "@/components/SystemVersionFooter";
+import { TicketWorkflowEditor } from "@/components/cockpits/TicketWorkflowEditor";
 
 type Route = "my-work" | "agency-queue" | "rfis" | "coordination" | "documents" | "project" | "notifications" | "secondary" | "admin" | "detail" | "requests" | "schedule" | "contacts" | "help" | "profile";
 type SecondaryTool = "schedule" | "vault" | "catalog";
 type DialogState = { action: WorkActionId; itemId: string } | null;
+
+function userIdForPersona(id: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+    ? id
+    : id.startsWith("user-") ? id : `user-${id}`;
+}
 
 function makeAuthenticatedPersona(email: string, name: string, userId?: string): DemoPersona {
   const membership = userId ? repository.getOrganizationMemberships().find((entry) => entry.userId === userId && entry.status === "active") : undefined;
@@ -179,6 +187,8 @@ function toneClasses(tone: OperationalWorkItem["statusTone"]) {
 function actionLabel(action: WorkActionId) {
   const labels: Record<WorkActionId, string> = {
     complete_step: "Complete Step",
+    update_status: "Update Status",
+    advance_stage: "Advance to Next Stage",
     request_information: "Request Information",
     mark_blocked: "Mark Blocked",
     clear_blocker: "Clear Blocker & Resume",
@@ -206,6 +216,8 @@ function actionIcon(action: WorkActionId) {
   if (action === "approve_document" || action === "approve_with_comments" || action === "accept_rfi_response") return <CheckCircle2 className="size-4" aria-hidden="true" />;
   if (action === "respond" || action === "upload_documents") return <Send className="size-4" aria-hidden="true" />;
   if (action === "request_revision") return <FileText className="size-4" aria-hidden="true" />;
+  if (action === "update_status") return <ClipboardCheck className="size-4" aria-hidden="true" />;
+  if (action === "advance_stage") return <ArrowRight className="size-4" aria-hidden="true" />;
   return <Check className="size-4" aria-hidden="true" />;
 }
 
@@ -311,6 +323,11 @@ export default function Home() {
   const [questionDueDate, setQuestionDueDate] = useState("2026-09-05");
   const [transferType, setTransferType] = useState("Ask another reviewer");
   const [escalationType, setEscalationType] = useState("Supervisor decision");
+  const [statusUpdate, setStatusUpdate] = useState("in_progress");
+  const [queueSearch, setQueueSearch] = useState("");
+  const [queueKind, setQueueKind] = useState("all");
+  const [queueState, setQueueState] = useState("all");
+  const [queueGroup, setQueueGroup] = useState("all");
   const [intakeText, setIntakeText] = useState("");
   const [intakeFile, setIntakeFile] = useState<File | null>(null);
   const [intakeStatus, setIntakeStatus] = useState("");
@@ -349,18 +366,26 @@ export default function Home() {
     customerRequests: repository.getCustomerRequests(),
   });
   const workItems = operationalData.items;
+  const activeQueueItems = workItems.filter((item) => {
+    const query = queueSearch.trim().toLowerCase();
+    const matchesSearch = !query || [item.id, item.title, item.workstreamTitle, item.ownerName, item.ownerOrganization, item.assignmentGroupName, item.statusLabel].filter(Boolean).some((value) => value?.toLowerCase().includes(query));
+    const matchesKind = queueKind === "all" || item.kind === queueKind;
+    const matchesState = queueState === "all" || item.itsmState === queueState;
+    const matchesGroup = queueGroup === "all" || item.assignmentGroupId === queueGroup;
+    return matchesSearch && matchesKind && matchesState && matchesGroup;
+  });
   const selectedItem = selectedItemId ? workItems.find((item) => item.id === selectedItemId) ?? null : null;
-  const queueGroups = groupMyWork(workItems);
+  const queueGroups = groupMyWork(activeQueueItems);
   const ragSummary = calculateRAGSummary(userPermits);
   const intakePreview = intakeText.trim() ? parsePlainEnglishIntake(intakeText) : null;
   const loggedIn = Boolean(currentUser && currentPersona);
   const projectRecord = repository.getProject();
   const projectOverview: ProjectOverview = getProjectOverview(projectRecord, repository.getWorkstreams(), repository.getCustomerRequests(), repository.getExternalFilings());
-  const currentProfile = repository.getProfileByUserId(activePersona.id.startsWith("user-") ? activePersona.id : `user-${activePersona.id}`) ?? (allowsFixtureData() ? projectProfiles.find((profile) => profile.fullName === activePersona.name) : undefined);
+  const currentProfile = repository.getProfileByUserId(userIdForPersona(activePersona.id)) ?? (allowsFixtureData() ? projectProfiles.find((profile) => profile.fullName === activePersona.name) : undefined);
 
   function profileDraftForPersona(persona: DemoPersona) {
     const operational = getOperationalPersona(persona);
-    const profile = repository.getProfileByUserId(operational.id.startsWith("user-") ? operational.id : `user-${operational.id}`) ?? (allowsFixtureData() ? projectProfiles.find((entry) => entry.fullName === operational.name) : undefined);
+    const profile = repository.getProfileByUserId(userIdForPersona(operational.id)) ?? (allowsFixtureData() ? projectProfiles.find((entry) => entry.fullName === operational.name) : undefined);
     return profile ? {
       displayTitle: profile.displayTitle,
       organizationalUnit: profile.organizationalUnit ?? "",
@@ -480,6 +505,10 @@ export default function Home() {
     }
     if (action === "request_information") setQuestionText(`Please provide the information needed to move ${item.workstreamTitle} forward.`);
     if (action === "mark_blocked") setBlockNeed("");
+    if (action === "update_status") {
+      const currentState = item.sourceWorkstream?.itsmState;
+      setStatusUpdate(item.kind === "commitment" ? "on_track" : item.kind === "coordination" ? "pending" : currentState === "pending_customer" || currentState === "pending_agency" || currentState === "blocked" ? "on_hold" : currentState === "resolved" || currentState === "closed" ? "fulfilled" : currentState === "submitted" || currentState === "triaged" ? "pending_review" : currentState ?? "in_progress");
+    }
     setDialog({ action, itemId: item.id });
   }
 
@@ -614,7 +643,7 @@ export default function Home() {
   }
 
   function actorUserId() {
-    return activePersona.id.startsWith("user-") ? activePersona.id : `user-${activePersona.id}`;
+    return userIdForPersona(activePersona.id);
   }
 
   async function submitCustomerRequest(event: FormEvent<HTMLFormElement>, requestType: "permit_authorization" | "government_help" | "project_question" | "blocker_coordination" | "escalation") {
@@ -1048,6 +1077,66 @@ export default function Home() {
       return;
     }
 
+    if (dialog.action === "update_status") {
+      const statusLabel = statusUpdate.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+      if (item.kind === "workflow" || item.kind === "task" || item.kind === "customer_request") {
+        const ticketType = item.kind === "workflow" ? "workstream" : item.kind;
+        const ticketId = item.kind === "workflow" ? workstreamId : item.sourceId;
+        if (!ticketId) {
+          setDialogError("This item is not connected to an authoritative ticket record.");
+          return;
+        }
+        const targetState: ITSMState = statusUpdate === "on_hold" ? "pending_agency" : statusUpdate === "pending_review" ? "triaged" : statusUpdate === "fulfilled" ? "resolved" : statusUpdate === "cancelled" ? "closed" : statusUpdate as ITSMState;
+        const result = await repository.updateTicketITSMStatePersisted({
+          ticketType,
+          ticketId,
+          targetState,
+          actorName,
+          actorUserId: actorUserId(),
+          reason: actionNote.trim() || `Status changed to ${statusLabel}.`,
+          pauseReason: ["pending_customer", "pending_agency", "blocked"].includes(targetState) ? actionNote.trim() || undefined : undefined,
+        });
+        if (result.error || !result.data) {
+          setDialogError(result.error?.message ?? "The status change was not confirmed by the database.");
+          return;
+        }
+        if (item.kind !== "customer_request") applyRepositoryWorkstream(item);
+        notify(`Status updated to "${statusLabel}" for ${item.title}.`);
+        return;
+      }
+
+      if (item.kind === "commitment") {
+        const commitmentNewStatus = statusUpdate === "fulfilled" ? "fulfilled" as const : statusUpdate === "cancelled" ? "missed" as const : statusUpdate === "on_hold" ? "at_risk" as const : "on_track" as const;
+        repository.updateCommitmentStatus(item.sourceId, commitmentNewStatus, actorName);
+        notify(`Status updated to "${statusLabel}" for ${item.title}.`);
+        return;
+      }
+
+      setDialogError("Coordination request status changes must be recorded through its response action.");
+      return;
+    }
+
+    if (dialog.action === "advance_stage") {
+      if (!workstreamId) {
+        setDialogError("This work item is not connected to a configured workstream.");
+        return;
+      }
+      const result = await repository.completeWorkstreamStagePersisted({
+        workstreamId,
+        completedChecklists: ["completeness_checklist_passed", "reviewer_determination_recorded"],
+        providedDocs: ["required_documents_verified"],
+        actorName,
+        actorOrgName,
+      });
+      if (!result.success) {
+        setDialogError(result.error?.message ?? "The workflow did not accept this transition.");
+        return;
+      }
+      applyRepositoryWorkstream(item);
+      notify(`Stage advanced. The next configured stage is ${result.nextStageName ?? "the next workflow stage"}.`);
+      return;
+    }
+
     if (dialog.action === "approve_document" || dialog.action === "approve_with_comments" || dialog.action === "request_revision") {
       if (!item.exactDocumentVersionId) {
         setDialogError("The exact document version could not be resolved.");
@@ -1160,6 +1249,7 @@ export default function Home() {
             </CardContent>
           </Card>
         </main>
+        <SystemVersionFooter />
       </div>
     );
   }
@@ -1173,9 +1263,40 @@ export default function Home() {
     const tone = toneClasses(item.statusTone);
     const actions = getAvailableActions(item, activePersona);
     const compactActions = actions.filter((action) => ["mark_blocked", "request_information", "respond", "accept_rfi_response", "approve_document"].includes(action)).slice(0, 1);
+    const assignmentGroupLabel = item.assignmentGroupName ?? (item.ownerOrganization === "DOTD"
+      ? "DOTD Heavy-Haul & Bridges"
+      : item.ownerOrganization === "LDEQ"
+      ? "LDEQ Water Quality"
+      : item.ownerOrganization === "CPRA"
+      ? "CPRA Coastal Use & Mitigation"
+      : item.ownerOrganization === "VERMILION"
+      ? "Vermilion Parish Permitting"
+      : item.ownerOrganization === "OSFM"
+      ? "OSFM Safety & Cryogenics"
+      : "State Office Triage Queue");
+    const priorityLabel = item.priority ?? (item.isCriticalPath ? "P1" : "P3");
+
     return <article key={item.id} className={`rounded-xl border bg-white p-5 shadow-sm transition hover:shadow-md ${tone.border}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 gap-3"><span className={`mt-1 flex size-9 shrink-0 items-center justify-center rounded-lg ${tone.badge}`}>{kindIcon(item)}</span><div className="min-w-0"><p className="font-mono text-[11px] font-bold uppercase tracking-wide text-slate-500">{item.id} · {item.kind}</p><h3 className="mt-1 text-lg font-black leading-tight text-[#00284d]">{item.title}</h3><button type="button" onClick={(e) => { e.stopPropagation(); openProject(item.workstreamId); }} className="mt-1 text-sm font-semibold text-slate-600 hover:text-teal-800 hover:underline text-left cursor-pointer transition-colors" title="View in project page">{item.workstreamTitle}</button></div></div>
+        <div className="flex min-w-0 gap-3">
+          <span className={`mt-1 flex size-9 shrink-0 items-center justify-center rounded-lg ${tone.badge}`}>{kindIcon(item)}</span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5 font-mono text-[11px] font-bold">
+              <span className="text-slate-500">{item.id} · {item.kind}</span>
+              {!activePersona.isCustomer && <span className="rounded bg-teal-50 border border-teal-200 px-1.5 py-0.2 text-[10px] font-sans font-bold text-teal-800">
+                Group: {assignmentGroupLabel}
+              </span>}
+              <span className="rounded bg-slate-100 border border-slate-200 px-1.5 py-0.2 text-[10px] font-sans font-bold text-slate-700">
+                Customer: SpaceX
+              </span>
+              <span className={`rounded px-1.5 py-0.2 text-[10px] font-sans font-black ${item.isCriticalPath ? "bg-red-100 text-red-800 border border-red-200" : "bg-blue-50 text-blue-800 border border-blue-200"}`}>
+                {priorityLabel} {item.isCriticalPath ? "Critical Path" : "Standard"}
+              </span>
+            </div>
+            <h3 className="mt-1 text-lg font-black leading-tight text-[#00284d]">{item.title}</h3>
+            <button type="button" onClick={(e) => { e.stopPropagation(); openProject(item.workstreamId); }} className="mt-1 text-sm font-semibold text-slate-600 hover:text-teal-800 hover:underline text-left cursor-pointer transition-colors" title="View in project page">{item.workstreamTitle}</button>
+          </div>
+        </div>
         <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-black uppercase ${tone.badge}`}><span className={`size-1.5 rounded-full ${tone.dot}`} />{item.statusLabel}</span>
       </div>
       <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2">
@@ -1191,7 +1312,7 @@ export default function Home() {
       </div>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">
         <p className="max-w-xl text-xs text-slate-600"><strong className="text-slate-800">Removes from your queue:</strong> {item.removesFromQueue}</p>
-        <div className="flex flex-wrap gap-2"><Button type="button" onClick={() => openItem(item)} className="bg-[#00284d] text-xs font-bold hover:bg-[#003c70]">Open Work <ArrowRight className="size-3.5" aria-hidden="true" /></Button><Button type="button" variant="ghost" onClick={() => openProject(item.workstreamId)} className="text-xs font-bold text-teal-800 hover:bg-teal-50" title="Open project page"><Building2 className="size-3.5 mr-1" /> Project</Button>{compactActions.map((action) => <Button key={action} type="button" variant="outline" onClick={() => openAction(item, action)} className="text-xs font-bold">{actionIcon(action)}{actionLabel(action)}</Button>)}</div>
+        <div className="flex flex-wrap gap-2"><Button type="button" onClick={() => openItem(item)} className="bg-[#00284d] text-xs font-bold hover:bg-[#003c70]">Open Work & Workflow <ArrowRight className="size-3.5" aria-hidden="true" /></Button><Button type="button" variant="ghost" onClick={() => openProject(item.workstreamId)} className="text-xs font-bold text-teal-800 hover:bg-teal-50" title="Open project page"><Building2 className="size-3.5 mr-1" /> Project</Button>{compactActions.map((action) => <Button key={action} type="button" variant="outline" onClick={() => openAction(item, action)} className="text-xs font-bold">{actionIcon(action)}{actionLabel(action)}</Button>)}</div>
       </div>
     </article>;
   }
@@ -1205,9 +1326,27 @@ export default function Home() {
     return group.label;
   }
 
+  function renderQueueFilters() {
+    const groups = repository.getAssignmentGroups();
+    const hasFilters = Boolean(queueSearch || queueKind !== "all" || queueState !== "all" || queueGroup !== "all");
+    return <section aria-label="Queue filters" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="grid gap-3 md:grid-cols-[minmax(0,1.5fr)_repeat(2,minmax(0,1fr))] lg:grid-cols-[minmax(0,1.8fr)_repeat(3,minmax(0,1fr))]"><div><Label htmlFor="queue-search">Search work</Label><Input id="queue-search" value={queueSearch} onChange={(event) => setQueueSearch(event.target.value)} placeholder="Ticket, title, owner, or agency" className="mt-1" /></div><div><Label htmlFor="queue-kind">Type</Label><select id="queue-kind" value={queueKind} onChange={(event) => setQueueKind(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"><option value="all">All work types</option><option value="workflow">Workflow</option><option value="task">Task</option><option value="customer_request">Customer request</option><option value="rfi">RFI</option><option value="coordination">Coordination</option><option value="document">Document</option><option value="commitment">Commitment</option></select></div><div><Label htmlFor="queue-state">ITSM state</Label><select id="queue-state" value={queueState} onChange={(event) => setQueueState(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"><option value="all">All states</option>{(["draft", "submitted", "triaged", "in_progress", "pending_customer", "pending_agency", "blocked", "resolved", "closed"] as ITSMState[]).map((state) => <option key={state} value={state}>{state.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase())}</option>)}</select></div>{!activePersona.isCustomer && <div><Label htmlFor="queue-group">Assignment group</Label><select id="queue-group" value={queueGroup} onChange={(event) => setQueueGroup(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"><option value="all">All assignment groups</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></div>}</div>{hasFilters && <Button type="button" variant="ghost" onClick={() => { setQueueSearch(""); setQueueKind("all"); setQueueState("all"); setQueueGroup("all"); }} className="mt-3 px-0 text-xs font-bold text-teal-800 hover:bg-transparent hover:text-teal-950">Clear filters</Button>}</section>;
+  }
+
   function renderMyWork() {
     return <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Your operational queue</p><h1 className="mt-2 text-3xl font-black tracking-tight text-[#00284d] outline-none sm:text-4xl">My Work</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Prioritized actions for {activePersona.name}. Open an item to see the assignment, required inputs, downstream impact, and the next handoff.</p></div><div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-right"><p className="text-xs font-black uppercase text-teal-800">Workspace</p><p className="mt-1 text-sm font-black text-teal-950">{workspaceTitle(activePersona.workspace)}</p><p className="text-xs text-teal-800">{activePersona.agencyCode}</p></div></div>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Your operational queue</p>
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-[#00284d] outline-none sm:text-4xl">My Work</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Prioritized actions for {activePersona.name}. Open an item to inspect the assignment, modify workflow stages, see required inputs, and preview handoffs.</p>
+        </div>
+        <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-right">
+          <p className="text-xs font-black uppercase text-teal-800">Workspace & Agency</p>
+          <p className="mt-1 text-sm font-black text-teal-950">{workspaceTitle(activePersona.workspace)}</p>
+          <p className="text-xs font-bold text-teal-800">{activePersona.agencyCode}</p>
+         </div>
+      </div>
+      {renderQueueFilters()}
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6" aria-label="My Work summary">
         {queueGroups.map((group) => <button key={group.id} type="button" onClick={() => document.getElementById(`queue-${group.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })} className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-teal-400 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{queueLabel(group)}</p><p className="mt-1 text-2xl font-black text-[#00284d]">{group.items.length}</p></button>)}
       </div>
@@ -1218,9 +1357,9 @@ export default function Home() {
   }
 
   function renderQueue(routeKind: Route) {
-    const filtered = routeKind === "rfis" ? workItems.filter((item) => item.kind === "rfi") : routeKind === "coordination" ? workItems.filter((item) => item.kind === "coordination") : routeKind === "documents" ? workItems.filter((item) => item.kind === "document") : workItems;
+    const filtered = routeKind === "rfis" ? activeQueueItems.filter((item) => item.kind === "rfi") : routeKind === "coordination" ? activeQueueItems.filter((item) => item.kind === "coordination") : routeKind === "documents" ? activeQueueItems.filter((item) => item.kind === "document") : activeQueueItems;
     const title = routeKind === "rfis" ? "RFIs" : routeKind === "coordination" ? "Coordination Requests" : routeKind === "documents" ? "Documents to Review" : activePersona.workspace === "supervisor" ? "Supervisor Queue" : "My Agency Queue";
-    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Operational queue</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">{title}</h1><p className="mt-2 text-sm text-slate-600">Every item below explains its owner, due date, and the next action available to you.</p></div>{filtered.length > 0 ? <div className="space-y-3">{filtered.map(renderWorkCard)}</div> : <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">No items are currently routed to this queue.</div>}</div>;
+    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Operational queue</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">{title}</h1><p className="mt-2 text-sm text-slate-600">Every item below explains its owner, due date, and the next action available to you.</p></div>{renderQueueFilters()}{filtered.length > 0 ? <div className="space-y-3">{filtered.map(renderWorkCard)}</div> : <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">No items are currently routed to this queue.</div>}</div>;
   }
 
   function renderCustomerOverview() {
@@ -1439,6 +1578,7 @@ export default function Home() {
         {selectedItem.kind === "document" && selectedItem.sourceDocument && <Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Version history</CardTitle></CardHeader><CardContent><p className="text-sm font-black text-[#00284d]">You are reviewing {selectedItem.exactDocumentVersionLabel}</p>{selectedItem.sourceDocument.versions.filter((version) => version.id !== selectedItem.exactDocumentVersionId).map((version) => <p key={version.id} className="mt-2 text-sm text-slate-600">Previously: {version.versionTag} uploaded {formatDate(version.uploadedAt)}.</p>)}</CardContent></Card>}
         {!customer && escalationPath.length > 0 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-teal-700" /> Inter-Agency Escalation Path</CardTitle></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2">{escalationPath.map((tier) => <div key={tier.level} className="rounded-lg border border-slate-200 p-3"><div className="flex items-center justify-between"><p className="text-xs font-black uppercase text-slate-500">Tier {tier.level}</p><span className="text-[10px] font-black uppercase text-teal-800">{tier.status}</span></div><p className="mt-2 text-sm font-black text-[#00284d]">{tier.title}</p><p className="mt-1 text-xs text-slate-600">{tier.contactName} · {tier.agency}</p></div>)}</CardContent></Card>}</div><div className="space-y-5"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ArrowRight className="size-5 text-teal-700" /> Downstream impact</CardTitle></CardHeader><CardContent><p className="text-sm font-black text-[#00284d]">{selectedItem.nextHandoff ?? "Next configured handoff"}</p><p className="mt-2 text-sm leading-6 text-slate-600">{selectedItem.scheduleImpact}. The next owner and notification recipients are previewed before an important action is confirmed.</p></CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Clock3 className="size-5 text-teal-700" /> Activity / audit history</CardTitle></CardHeader><CardContent className="space-y-3">{customer ? <p className="text-sm text-slate-600">Internal activity is not shown in the customer workspace.</p> : audit.length > 0 ? audit.map((event) => <div key={event.id} className="border-b border-slate-100 pb-3 last:border-0"><p className="text-xs font-black uppercase text-slate-500">{event.actionType.replaceAll("_", " ")}</p><p className="mt-1 text-sm text-slate-700">{event.reason ?? event.newValue ?? "Activity recorded"}</p><p className="mt-1 text-[11px] text-slate-400">{event.actorName} · {formatDate(event.occurredAt)}</p></div>) : <p className="text-sm text-slate-500">No activity recorded yet.</p>}</CardContent></Card></div></div>
       {!customer && selectedItem.kind === "workflow" && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Route className="size-5 text-teal-700" /> Upstream and downstream dependencies</CardTitle></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2"><div className="rounded-lg bg-slate-50 p-4"><p className="text-xs font-black uppercase text-slate-500">Upstream</p><p className="mt-2 text-sm text-slate-700">{selectedItem.waitingOn ?? "No unresolved upstream dependency"}</p></div><div className="rounded-lg bg-teal-50 p-4"><p className="text-xs font-black uppercase text-teal-800">Downstream</p><p className="mt-2 text-sm font-bold text-teal-950">{completionPreview.nextOwner} receives the next handoff after completion.</p></div></CardContent></Card>}
+       {(selectedItem.kind === "workflow" || selectedItem.kind === "task" || selectedItem.kind === "customer_request") && <TicketWorkflowEditor key={selectedItem.id} item={selectedItem} persona={activePersona} onWorkflowUpdated={() => setMutationVersion((v) => v + 1)} />}
     </div>;
   }
 
@@ -1451,6 +1591,8 @@ export default function Home() {
     return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#00284d]/60 p-3 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="action-dialog-title" aria-describedby="action-dialog-description"><div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 bg-slate-50 p-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Work action</p><h2 id="action-dialog-title" className="mt-1 text-xl font-black text-[#00284d]">{actionLabel(dialog.action)}</h2><p id="action-dialog-description" className="mt-1 text-sm text-slate-600">{selectedItem.title}</p></div><Button type="button" variant="ghost" size="icon" onClick={() => setDialog(null)} aria-label="Close action dialog"><X className="size-5" /></Button></div><form onSubmit={handleConfirmAction} className="space-y-5 p-5 sm:p-6">
       {isCompletion && <><div><p className="text-xs font-black uppercase tracking-wider text-slate-500">You are completing</p><p className="mt-1 text-lg font-black text-[#00284d]">{selectedItem.title}</p><p className="mt-1 text-sm text-slate-600">Required before completion:</p></div><div className="space-y-2">{requirements.map((requirement) => <label key={requirement.id} className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 hover:bg-slate-50"><input type="checkbox" checked={Boolean(completionChecks[requirement.id])} onChange={(event) => setCompletionChecks((current) => ({ ...current, [requirement.id]: event.target.checked }))} className="mt-0.5 size-4 accent-teal-700" /><span className="text-sm font-semibold text-slate-800">{requirement.label}</span></label>)}</div><div className="rounded-xl border border-teal-200 bg-teal-50 p-4"><p className="text-xs font-black uppercase tracking-wider text-teal-900">What happens next</p><ul className="mt-2 space-y-1 text-sm text-teal-950">{completionPreview.effects.map((effect) => <li key={effect} className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{effect}</li>)}</ul></div><div><Label htmlFor="determination">Reviewer determination</Label><select id="determination" value={determination} onChange={(event) => setDetermination(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>Complete / Approved</option><option>Complete with Conditions</option><option>Not Applicable</option></select></div></>}
       {dialog.action === "clear_blocker" && <><div><p className="text-xs font-black uppercase tracking-wider text-teal-800">Clear Blocker & Resume</p><p className="mt-1 text-lg font-black text-[#00284d]">Resume active review for {selectedItem.workstreamTitle}</p><p className="mt-1 text-sm text-slate-600">The blocker will be removed, the review clock will resume, and project participants will be notified.</p></div><div><Label htmlFor="unblock-note">Resolution notes (optional)</Label><textarea id="unblock-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Concurrence received / dependency resolved..." /></div></>}
+      {dialog.action === "update_status" && <><div><p className="text-xs font-black uppercase tracking-wider text-teal-800">Update Status</p><p className="mt-1 text-lg font-black text-[#00284d]">{selectedItem.title}</p><p className="mt-1 text-sm text-slate-600">Select the new status for this {selectedItem.kind === "commitment" ? "commitment" : "work item"}. The change will be recorded in the audit history and visible to all project participants.</p></div><div><Label htmlFor="status-update">New status</Label><select id="status-update" value={statusUpdate} onChange={(event) => setStatusUpdate(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="in_progress">In Progress — Actively being worked</option><option value="pending_review">Pending Review — Awaiting reviewer decision</option><option value="on_hold">On Hold — Paused, waiting on external dependency</option><option value="fulfilled">Fulfilled / Completed — Deliverable received or action done</option><option value="cancelled">Cancelled — No longer applicable</option></select></div><div><Label htmlFor="status-note">Notes (optional)</Label><textarea id="status-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe why this status is changing and any relevant context." /></div><div className="rounded-xl border border-teal-200 bg-teal-50 p-4"><p className="text-xs font-black uppercase tracking-wider text-teal-900">What happens</p><ul className="mt-2 space-y-1 text-sm text-teal-950"><li className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />Update the ticket status to the selected state</li><li className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />Record an audit event with your name and notes</li><li className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />Notify project participants of the status change</li>{statusUpdate === "fulfilled" && <li className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />Move the item to the completed queue</li>}</ul></div></>}
+      {dialog.action === "advance_stage" && <><div><p className="text-xs font-black uppercase tracking-wider text-teal-800">Advance to Next Stage</p><p className="mt-1 text-lg font-black text-[#00284d]">{selectedItem.title}</p><p className="mt-1 text-sm text-slate-600">This will close the current workflow stage and advance the workstream to the next configured stage. The next owner will be notified.</p></div><div className="rounded-xl border border-teal-200 bg-teal-50 p-4"><p className="text-xs font-black uppercase tracking-wider text-teal-900">What happens next</p><ul className="mt-2 space-y-1 text-sm text-teal-950">{completionPreview.effects.map((effect) => <li key={effect} className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{effect}</li>)}</ul></div><div><Label htmlFor="advance-note">Notes (optional)</Label><textarea id="advance-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Add context for the handoff to the next stage owner." /></div></>}
       {dialog.action === "mark_blocked" && <><div><Label htmlFor="block-reason">What is preventing you from proceeding?</Label><select id="block-reason" value={blockReason} onChange={(event) => setBlockReason(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="customer">Waiting on SpaceX</option><option value="another_agency">Waiting on another agency</option><option value="internal">Missing internal decision</option><option value="statutory">Scheduled / statutory hold</option><option value="technical">Technical problem</option><option value="legal">Legal / policy question</option><option value="external">External third party</option><option value="other">Other</option></select></div>{blockReason === "another_agency" && <div><Label htmlFor="block-agency">Who needs to act?</Label><select id="block-agency" value={blockAgency} onChange={(event) => setBlockAgency(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>CPRA</option><option>USACE</option><option>DOTD</option><option>Vermilion Parish</option><option>LDEQ</option></select></div>}<div><Label htmlFor="block-need">What do you need from them?</Label><textarea id="block-need" value={blockNeed} onChange={(event) => setBlockNeed(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe the concurrence, document, or decision needed." /></div><div><Label htmlFor="block-due">When is it needed?</Label><Input id="block-due" type="date" value={blockDueDate} onChange={(event) => setBlockDueDate(event.target.value)} className="mt-1" /></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"><strong className="text-[#00284d]">Clock behavior:</strong> PATH derives the wait policy from the selected reason. You are not asked to make a legal/policy determination.</div></>}
       {(dialog.action === "request_information" || dialog.action === "request_clarification") && <><div><Label htmlFor="question-text">What do you need?</Label><textarea id="question-text" value={questionText} onChange={(event) => setQuestionText(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" /></div><div><Label htmlFor="question-due">When is it needed?</Label><Input id="question-due" type="date" value={questionDueDate} onChange={(event) => setQuestionDueDate(event.target.value)} className="mt-1" /></div></>}
       {dialog.action === "transfer" && <><div><Label htmlFor="transfer-type">How should we help?</Label><select id="transfer-type" value={transferType} onChange={(event) => setTransferType(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>Ask another reviewer</option><option>Transfer assignment</option><option>Add co-reviewer</option><option>Send to supervisor</option><option>Request specialist consultation</option></select></div><div><Label htmlFor="transfer-note">What should the supervisor know?</Label><textarea id="transfer-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" /></div></>}
@@ -1477,5 +1619,5 @@ export default function Home() {
     return <>{canAdmin && <CustomerRequestTriageQueue requests={repository.getCustomerRequests()} onTriage={(request) => void triageCustomerRequest(request)} />}{renderAdmin()}</>;
   }
 
-  return <div className="min-h-screen bg-[#f3f6f7] text-[#172033]"><a className="skip-link" href="#main-content">Skip to main content</a><div className="road-stripe" /><header className="site-header sticky top-0 z-30"><div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-3 sm:px-6"><Button type="button" variant="ghost" size="icon" onClick={() => setMobileNavOpen((value) => !value)} className="text-white hover:bg-white/10 lg:hidden" aria-label="Toggle navigation"><Menu className="size-5" /></Button><span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d]"><Zap className="size-5 fill-current" aria-hidden="true" /></span><div className="min-w-0"><p className="text-sm font-black text-white">PATH</p><button type="button" onClick={() => openProject()} className="truncate text-left text-[11px] font-semibold text-slate-300 hover:text-white hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 cursor-pointer" title="Go to SpaceX Pecan Island project page">{workspaceTitle(activePersona.workspace)} · SpaceX Pecan Island</button></div><div className="ml-auto hidden items-center gap-2 text-xs text-slate-200 md:flex"><span className="flex items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-950/60 px-3 py-1 font-bold text-emerald-200" title="State committed directly to Supabase PostgreSQL & Storage"><span className="size-2 rounded-full bg-emerald-400" />Supabase DB {lastSavedTime ? `· ${lastSavedTime}` : "· Connected"}</span><span className="rounded-full border border-white/20 px-3 py-1.5">{activePersona.name}</span><span className="rounded-full border border-teal-300/40 bg-teal-900/40 px-3 py-1.5 font-bold text-teal-100">{activePersona.roleLabel}</span></div><Button type="button" variant="ghost" size="icon" onClick={() => navigate("notifications")} className="relative text-white hover:bg-white/10" aria-label="Open notifications"><Bell className="size-5" /><span className="absolute right-1 top-1 size-2 rounded-full bg-[#f4a100]" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => void signOut()} className="text-white hover:bg-white/10"><LogOut className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Sign out</span></Button></div></header><div className="mx-auto flex max-w-[1600px] items-start"><aside className={`${mobileNavOpen ? "block" : "hidden"} fixed inset-x-0 top-[69px] z-20 max-h-[calc(100vh-69px)] overflow-y-auto border-b border-slate-200 bg-white p-3 shadow-xl lg:sticky lg:top-[69px] lg:block lg:min-h-[calc(100vh-69px)] lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}><button type="button" onClick={() => openProject()} className="group mb-4 w-full rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-left transition hover:border-teal-400 hover:bg-teal-50 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 cursor-pointer" aria-label="Open SpaceX Pecan Island project page" title="Open SpaceX Pecan Island project page"><div className="flex items-center justify-between"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500 group-hover:text-teal-800">Current context</p><ArrowRight className="size-3 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-teal-700" aria-hidden="true" /></div><p className="mt-1 text-sm font-black text-[#00284d] group-hover:text-teal-950">SpaceX Pecan Island</p><p className="mt-1 text-xs text-slate-500 group-hover:text-teal-900">Vermilion Parish · Louisiana</p></button><nav aria-label="Primary navigation" className="space-y-1"><p className="px-3 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Work</p>{primaryNav.map((item) => <button key={item.id} type="button" onClick={() => navigate(item.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${route === item.id ? "bg-[#00284d] text-white shadow-sm" : "text-slate-700 hover:bg-teal-50 hover:text-teal-950"}`}>{item.icon}<span className="flex-1">{item.label}</span>{typeof item.count === "number" && <span className={`rounded-full px-2 py-0.5 text-[10px] ${route === item.id ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700"}`}>{item.count}</span>}</button>)}<p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Secondary tools</p>{!activePersona.isCustomer && <><button type="button" onClick={() => { setSecondaryTool("schedule"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "schedule" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><CalendarClock className="size-4" />Schedule</button><button type="button" onClick={() => { setSecondaryTool("vault"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "vault" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><BookOpen className="size-4" />Document Vault</button><button type="button" onClick={() => { setSecondaryTool("catalog"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "catalog" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><Landmark className="size-4" />Permit Catalog</button></>}{canAdmin && <><p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Administration</p><button type="button" onClick={() => navigate("admin")} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "admin" ? "bg-[#00284d] text-white" : "text-slate-700 hover:bg-teal-50"}`}><Settings2 className="size-4" />Administration</button></>}</nav><div className="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-xs font-black text-amber-950">Official filing notice</p><p className="mt-1 text-xs leading-5 text-amber-900">PATH coordinates work. Formal statutory filings remain in agency systems.</p></div></aside><main id="main-content" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">{toast && <div role="status" aria-live="polite" className="mb-5 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-950"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" aria-hidden="true" />{toast}</div>}{renderMain()}</main></div>{renderDialog()}{viewerModalDoc && <DocumentViewerModal document={viewerModalDoc} version={viewerModalVer} isOpen={Boolean(viewerModalDoc)} onClose={() => { setViewerModalDoc(null); setViewerModalVer(undefined); }} onDownload={(docId, verId) => void downloadVersion(docId, verId)} />}</div>;
+  return <div className="min-h-screen bg-[#f3f6f7] text-[#172033] flex flex-col justify-between"><a className="skip-link" href="#main-content">Skip to main content</a><div className="road-stripe" /><header className="site-header sticky top-0 z-30"><div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-3 sm:px-6"><Button type="button" variant="ghost" size="icon" onClick={() => setMobileNavOpen((value) => !value)} className="text-white hover:bg-white/10 lg:hidden" aria-label="Toggle navigation"><Menu className="size-5" /></Button><span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d]"><Zap className="size-5 fill-current" aria-hidden="true" /></span><div className="min-w-0"><p className="text-sm font-black text-white">PATH</p><button type="button" onClick={() => openProject()} className="truncate text-left text-[11px] font-semibold text-slate-300 hover:text-white hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 cursor-pointer" title="Go to SpaceX Pecan Island project page">{workspaceTitle(activePersona.workspace)} · SpaceX Pecan Island</button></div><div className="ml-auto hidden items-center gap-2 text-xs text-slate-200 md:flex"><span className="flex items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-950/60 px-3 py-1 font-bold text-emerald-200" title="State committed directly to Supabase PostgreSQL & Storage"><span className="size-2 rounded-full bg-emerald-400" />Supabase DB {lastSavedTime ? `· ${lastSavedTime}` : "· Connected"}</span><span className="rounded-full border border-white/20 px-3 py-1.5">{activePersona.name}</span><span className="rounded-full border border-teal-300/40 bg-teal-900/40 px-3 py-1.5 font-bold text-teal-100">{activePersona.roleLabel}</span></div><Button type="button" variant="ghost" size="icon" onClick={() => navigate("notifications")} className="relative text-white hover:bg-white/10" aria-label="Open notifications"><Bell className="size-5" /><span className="absolute right-1 top-1 size-2 rounded-full bg-[#f4a100]" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => void signOut()} className="text-white hover:bg-white/10"><LogOut className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Sign out</span></Button></div></header><div className="mx-auto flex max-w-[1600px] items-start flex-1 w-full"><aside className={`${mobileNavOpen ? "block" : "hidden"} fixed inset-x-0 top-[69px] z-20 max-h-[calc(100vh-69px)] overflow-y-auto border-b border-slate-200 bg-white p-3 shadow-xl lg:sticky lg:top-[69px] lg:block lg:min-h-[calc(100vh-69px)] lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}><button type="button" onClick={() => openProject()} className="group mb-4 w-full rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-left transition hover:border-teal-400 hover:bg-teal-50 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 cursor-pointer" aria-label="Open SpaceX Pecan Island project page" title="Open SpaceX Pecan Island project page"><div className="flex items-center justify-between"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500 group-hover:text-teal-800">Current context</p><ArrowRight className="size-3 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-teal-700" aria-hidden="true" /></div><p className="mt-1 text-sm font-black text-[#00284d] group-hover:text-teal-950">SpaceX Pecan Island</p><p className="mt-1 text-xs text-slate-500 group-hover:text-teal-900">Vermilion Parish · Louisiana</p></button><nav aria-label="Primary navigation" className="space-y-1"><p className="px-3 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Work</p>{primaryNav.map((item) => <button key={item.id} type="button" onClick={() => navigate(item.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${route === item.id ? "bg-[#00284d] text-white shadow-sm" : "text-slate-700 hover:bg-teal-50 hover:text-teal-950"}`}>{item.icon}<span className="flex-1">{item.label}</span>{typeof item.count === "number" && <span className={`rounded-full px-2 py-0.5 text-[10px] ${route === item.id ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700"}`}>{item.count}</span>}</button>)}<p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Secondary tools</p>{!activePersona.isCustomer && <><button type="button" onClick={() => { setSecondaryTool("schedule"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "schedule" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><CalendarClock className="size-4" />Schedule</button><button type="button" onClick={() => { setSecondaryTool("vault"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "vault" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><BookOpen className="size-4" />Document Vault</button><button type="button" onClick={() => { setSecondaryTool("catalog"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "catalog" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><Landmark className="size-4" />Permit Catalog</button></>}{canAdmin && <><p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Administration</p><button type="button" onClick={() => navigate("admin")} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "admin" ? "bg-[#00284d] text-white" : "text-slate-700 hover:bg-teal-50"}`}><Settings2 className="size-4" />Administration</button></>}</nav><div className="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-xs font-black text-amber-950">Official filing notice</p><p className="mt-1 text-xs leading-5 text-amber-900">PATH coordinates work. Formal statutory filings remain in agency systems.</p></div></aside><main id="main-content" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">{toast && <div role="status" aria-live="polite" className="mb-5 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-950"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" aria-hidden="true" />{toast}</div>}{renderMain()}</main></div><SystemVersionFooter />{renderDialog()}{viewerModalDoc && <DocumentViewerModal document={viewerModalDoc} version={viewerModalVer} isOpen={Boolean(viewerModalDoc)} onClose={() => { setViewerModalDoc(null); setViewerModalVer(undefined); }} onDownload={(docId, verId) => void downloadVersion(docId, verId)} />}</div>;
 }

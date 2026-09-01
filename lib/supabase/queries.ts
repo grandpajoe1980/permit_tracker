@@ -1,5 +1,7 @@
 import { getSupabaseBrowser } from "./client";
 import {
+  assignmentGroupMembershipRowToDomain,
+  assignmentGroupRowToDomain,
   auditEventRowToDomain, commitmentRowToDomain, coordinationRequestRowToDomain,
   customerRequestRowToDomain, decisionRowToDomain, documentAgencyReviewRowToDomain,
   documentRowToDomain, documentVersionRowToDomain, externalFilingRowToDomain,
@@ -8,6 +10,8 @@ import {
   rfiRowToDomain, taskRowToDomain, userProfileRowToDomain, workstreamRowToDomain, organizationMembershipRowToDomain,
 } from "./mappings";
 import type {
+  AssignmentGroupRecord,
+  AssignmentGroupMembershipRecord,
   AuditEventRecord, CommitmentRecord, CoordinationRequestRecord, CustomerRequestRecord,
   DecisionRecord, DocumentRecord, ExternalFilingRecord, MeetingRecord, NotificationRecord,
   OrganizationRecord, PermitTypeRecord, ProjectParticipantRecord, ProjectRecord, RFIRecord, UserProfileRecord,
@@ -248,6 +252,28 @@ export async function fetchWorkflowTemplates(): Promise<WorkflowTemplateRecord[]
       versions,
     };
   });
+}
+
+export async function fetchAssignmentGroups(orgCode?: string): Promise<AssignmentGroupRecord[]> {
+  const client = getSupabaseBrowser();
+  if (!client) return noClient();
+  let query = client.from("assignment_groups").select("*").eq("active", true).order("name", { ascending: true });
+  if (orgCode) {
+    query = query.eq("org_code", orgCode);
+  }
+  const { data, error } = await query;
+  return error || !data ? noClient() : data.map(assignmentGroupRowToDomain);
+}
+
+export async function fetchAssignmentGroupMemberships(groupId?: string): Promise<AssignmentGroupMembershipRecord[]> {
+  const client = getSupabaseBrowser();
+  if (!client) return noClient();
+  let query = client.from("assignment_group_memberships").select("*").order("created_at", { ascending: true });
+  if (groupId) {
+    query = query.eq("assignment_group_id", groupId);
+  }
+  const { data, error } = await query;
+  return error || !data ? noClient() : data.map(assignmentGroupMembershipRowToDomain);
 }
 
 export async function fetchFullProjectState(projectId = "PRJ-PECAN-2026"): Promise<Partial<ProjectRecord>> {

@@ -1,4 +1,6 @@
 import type {
+  AssignmentGroupRecord,
+  AssignmentGroupMembershipRecord,
   AuditEventRecord,
   CommitmentRecord,
   CoordinationRequestRecord,
@@ -20,9 +22,27 @@ import type {
   WorkstreamRecord,
   UserProfileRecord,
   OrganizationMembershipRecord,
+  ITSMState,
+  PriorityLevel,
+  ClockStatus,
+  StatutoryClockState,
   TaskRecord,
 } from "./domain-models";
 import {
+  isITSMState,
+  isPriorityLevel,
+  isClockStatus,
+  parseITSMState,
+  parsePriorityLevel,
+  calculatePriority,
+  calculateStatutoryClock,
+  mapOperationalStateToITSMState,
+  mapITSMStateToOperationalState,
+  mapCustomerRequestStatusToITSMState,
+} from "./domain-models";
+import {
+  assignmentGroupsData,
+  assignmentGroupMembershipsData,
   commitmentsData,
   coordinationRequestsData,
   permitCatalog,
@@ -39,6 +59,8 @@ import { initialExternalFilings, projectParticipants, projectProfiles } from "./
 import { createAuditEvent } from "./engines/audit-engine";
 import { validateStageTransition } from "./engines/workflow-engine";
 import {
+  fetchAssignmentGroups,
+  fetchAssignmentGroupMemberships,
   fetchAuditEvents,
   fetchCatalog,
   fetchCommitments,
@@ -61,6 +83,7 @@ import {
   insertAuditEvent,
   mutateAcceptRFIResponse,
   mutateAddWorkstreamNote,
+  mutateAssignTicket,
   mutateClearWorkstreamBlocker,
   mutateCompleteWorkstreamStage,
   mutateCreateCommitment,
@@ -71,20 +94,47 @@ import {
   mutateCreateRFI,
   mutateCreateWorkstreamFromRequest,
   mutateEscalateWorkstream,
+  mutateManageAssignmentGroup,
+  mutateManageAssignmentGroupMembership,
   mutateMarkWorkstreamBlocked,
+  mutateSetOrganizationMemberRole,
+  mutateSetTicketPriority,
   mutateSubmitRFIResponse,
   mutateTriageCustomerRequest,
   mutateTransferWorkstream,
   mutateUpdateExternalFiling,
   mutateUpdateProjectParticipant,
+  mutateUpdateTicketITSMState,
   mutateUpdateUserProfile,
-  mutateSetOrganizationMemberRole,
   mutateUpdateTask,
   mutateCompleteTask,
 } from "./supabase/mutations";
 import { mutateReviewDocumentVersion, mutateUploadDocumentVersion } from "./supabase/storage";
 import { isSupabaseConfigured } from "./supabase/client";
 import { allowsFixtureData } from "./data-mode";
+
+type MutableTicket = {
+  id: string;
+  title?: string;
+  code?: string;
+  assignmentGroupId?: string;
+  assignmentGroupName?: string;
+  assignedToUserId?: string;
+  assignedToUserName?: string;
+  assignedOrgCode?: string;
+  assignedUserId?: string;
+  assignedUserName?: string;
+  itsmState?: ITSMState;
+  priority?: PriorityLevel;
+  clockStatus?: ClockStatus;
+  clockPausedAt?: string;
+  clockPausedReason?: string;
+  clockTotalPausedSeconds?: number;
+  operationalState?: WorkstreamRecord["operationalState"];
+  ragHealth?: WorkstreamRecord["ragHealth"];
+  actualCompletionDate?: string;
+  status?: CustomerRequestRecord["status"] | TaskRecord["status"];
+};
 
 /**
  * PATH Authoritative Service & Repository Layer
@@ -110,6 +160,8 @@ class ProjectDeliveryRepository {
   private externalFilings: ExternalFilingRecord[] = JSON.parse(JSON.stringify(initialExternalFilings));
   private customerRequests: CustomerRequestRecord[] = [];
   private workflowTemplates: WorkflowTemplateRecord[] = JSON.parse(JSON.stringify(workflowTemplatesData));
+  private assignmentGroups: AssignmentGroupRecord[] = JSON.parse(JSON.stringify(assignmentGroupsData));
+  private assignmentGroupMemberships: AssignmentGroupMembershipRecord[] = JSON.parse(JSON.stringify(assignmentGroupMembershipsData));
   private isHydratedFromDb = false;
 
   constructor() {
@@ -141,6 +193,8 @@ class ProjectDeliveryRepository {
         cat,
         orgs,
         workflowTemplates,
+        groups,
+        groupMemberships,
       ] = await Promise.all([
         fetchWorkstreams(projectId),
         fetchCustomerRequests(projectId),
@@ -159,11 +213,26 @@ class ProjectDeliveryRepository {
         fetchCatalog(),
         fetchOrganizations(),
         fetchWorkflowTemplates(),
+        fetchAssignmentGroups(),
+        fetchAssignmentGroupMemberships(),
       ]);
 
       const keepFixtures = allowsFixtureData();
-      if (!keepFixtures || ws.length > 0) this.workstreams = ws;
-      if (!keepFixtures || custReqs.length > 0) this.customerRequests = custReqs;
+      const groupById = new Map(groups.map((group) => [group.id, group]));
+      const enrichedWorkstreams = ws.map((workstream) => ({
+        ...workstream,
+        assignmentGroupName: workstream.assignmentGroupName ?? (workstream.assignmentGroupId ? groupById.get(workstream.assignmentGroupId)?.name : undefined),
+        tasks: workstream.tasks.map((task) => ({
+          ...task,
+          assignmentGroupName: task.assignmentGroupName ?? (task.assignmentGroupId ? groupById.get(task.assignmentGroupId)?.name : undefined),
+        })),
+      }));
+      const enrichedCustomerRequests = custReqs.map((request) => ({
+        ...request,
+        assignmentGroupName: request.assignmentGroupName ?? (request.assignmentGroupId ? groupById.get(request.assignmentGroupId)?.name : undefined),
+      }));
+      if (!keepFixtures || ws.length > 0) this.workstreams = enrichedWorkstreams;
+      if (!keepFixtures || custReqs.length > 0) this.customerRequests = enrichedCustomerRequests;
       if (!keepFixtures || extFilings.length > 0) this.externalFilings = extFilings;
       if (!keepFixtures || rfisList.length > 0) this.rfis = rfisList;
       if (!keepFixtures || coordReqs.length > 0) this.coordinationRequests = coordReqs;
@@ -179,6 +248,8 @@ class ProjectDeliveryRepository {
       if (!keepFixtures || cat.length > 0) this.catalog = cat;
       if (!keepFixtures || orgs.length > 0) this.organizations = orgs;
       if (!keepFixtures || workflowTemplates.length > 0) this.workflowTemplates = workflowTemplates;
+      if (!keepFixtures || groups.length > 0) this.assignmentGroups = groups;
+      if (!keepFixtures || groupMemberships.length > 0) this.assignmentGroupMemberships = groupMemberships;
 
       this.isHydratedFromDb = true;
       return true;
@@ -406,6 +477,78 @@ class ProjectDeliveryRepository {
 
   getCustomerRequests(): CustomerRequestRecord[] {
     return this.customerRequests;
+  }
+
+  getAssignmentGroups(orgCode?: string): AssignmentGroupRecord[] {
+    if (orgCode) {
+      return this.assignmentGroups.filter((g) => g.orgCode.toUpperCase() === orgCode.toUpperCase());
+    }
+    return this.assignmentGroups;
+  }
+
+  getAssignmentGroupById(groupId: string): AssignmentGroupRecord | undefined {
+    return this.assignmentGroups.find((g) => g.id === groupId);
+  }
+
+  getAssignmentGroupMemberships(groupId?: string): AssignmentGroupMembershipRecord[] {
+    if (groupId) {
+      return this.assignmentGroupMemberships.filter((m) => m.assignmentGroupId === groupId);
+    }
+    return this.assignmentGroupMemberships;
+  }
+
+  getAssignmentGroupMembers(groupId: string): AssignmentGroupMembershipRecord[] {
+    return this.getAssignmentGroupMemberships(groupId);
+  }
+
+  getTicketsByAssignmentGroup(groupId: string): {
+    workstreams: WorkstreamRecord[];
+    customerRequests: CustomerRequestRecord[];
+    tasks: TaskRecord[];
+  } {
+    const workstreams = this.workstreams.filter((w) => w.assignmentGroupId === groupId);
+    const customerRequests = this.customerRequests.filter((c) => c.assignmentGroupId === groupId);
+    const tasks: TaskRecord[] = [];
+    for (const ws of this.workstreams) {
+      for (const t of ws.tasks || []) {
+        if (t.assignmentGroupId === groupId) {
+          tasks.push(t);
+        }
+      }
+    }
+    return { workstreams, customerRequests, tasks };
+  }
+
+  getTicketsByFulfiller(userId: string): {
+    workstreams: WorkstreamRecord[];
+    customerRequests: CustomerRequestRecord[];
+    tasks: TaskRecord[];
+  } {
+    const workstreams = this.workstreams.filter((w) => w.assignedToUserId === userId);
+    const customerRequests = this.customerRequests.filter((c) => c.assignedToUserId === userId);
+    const tasks: TaskRecord[] = [];
+    for (const ws of this.workstreams) {
+      for (const t of ws.tasks || []) {
+        if (t.assignedUserId === userId || t.assignedToUserId === userId) {
+          tasks.push(t);
+        }
+      }
+    }
+    return { workstreams, customerRequests, tasks };
+  }
+
+  private findTicket(ticketType: "workstream" | "customer_request" | "task", ticketId: string): MutableTicket | undefined {
+    if (ticketType === "workstream") {
+      return this.workstreams.find((w) => w.id === ticketId || w.code === ticketId);
+    } else if (ticketType === "customer_request") {
+      return this.customerRequests.find((c) => c.id === ticketId || c.confirmationNumber === ticketId);
+    } else if (ticketType === "task") {
+      for (const ws of this.workstreams) {
+        const t = ws.tasks?.find((task) => task.id === ticketId);
+        if (t) return t;
+      }
+    }
+    return undefined;
   }
 
   async setOrganizationMemberRolePersisted(params: {
@@ -1231,6 +1374,52 @@ class ProjectDeliveryRepository {
     return event;
   }
 
+  updateCommitmentStatus(commitmentId: string, newStatus: "on_track" | "at_risk" | "missed" | "fulfilled", actorName: string) {
+    const commitment = this.commitments.find((c) => c.id === commitmentId);
+    if (!commitment) return null;
+
+    const oldStatus = commitment.status;
+    commitment.status = newStatus;
+
+    const event = createAuditEvent({
+      entityType: "workstream",
+      entityId: commitment.workstreamId,
+      actorName,
+      actorOrgName: commitment.committingOrgCode,
+      actionType: "status_change",
+      previousValue: oldStatus,
+      newValue: newStatus,
+      reason: `Commitment ${commitmentId} status updated from "${oldStatus}" to "${newStatus}" by ${actorName}.`,
+    });
+    this.auditEvents.unshift(event);
+
+    return event;
+  }
+
+  updateWorkstreamOperationalState(workstreamId: string, newState: string, actorName: string) {
+    const ws = this.getWorkstreamById(workstreamId);
+    if (!ws) return null;
+
+    const oldState = ws.operationalState;
+    const oldLabel = ws.operationalStateLabel;
+    ws.operationalState = newState as WorkstreamRecord["operationalState"];
+    ws.operationalStateLabel = newState === "running" ? "In Progress" : newState === "waiting_government" ? "On Hold" : newState === "complete" ? "Completed" : newState === "pending_concurrence" ? "Pending Review" : newState;
+
+    const event = createAuditEvent({
+      entityType: "workstream",
+      entityId: ws.code,
+      actorName,
+      actorOrgName: ws.regulatoryLead?.orgName ?? "State Project Office",
+      actionType: "status_change",
+      previousValue: oldLabel ?? oldState,
+      newValue: ws.operationalStateLabel,
+      reason: `Workstream operational state changed from "${oldLabel ?? oldState}" to "${ws.operationalStateLabel}" by ${actorName}.`,
+    });
+    this.auditEvents.unshift(event);
+
+    return event;
+  }
+
   escalateWorkstream(params: { workstreamId: string; problemType: string; actorName: string; actorOrgName: string }) {
     const ws = this.getWorkstreamById(params.workstreamId);
     if (!ws) return null;
@@ -1786,6 +1975,393 @@ class ProjectDeliveryRepository {
     return full;
   }
 
+  // ==========================================
+  // ITSM TICKET & ASSIGNMENT MUTATIONS
+  // ==========================================
+
+  assignTicket(options: {
+    ticketType: "workstream" | "customer_request" | "task";
+    ticketId: string;
+    assignmentGroupId?: string;
+    assignedToUserId?: string;
+    actorName?: string;
+    actorUserId?: string;
+    reason?: string;
+  }): { success: boolean; ticket: MutableTicket | null } {
+    const ticket = this.findTicket(options.ticketType, options.ticketId);
+    if (!ticket) {
+      return { success: false, ticket: null };
+    }
+
+    const prevGroup = ticket.assignmentGroupId;
+    const prevFulfiller = ticket.assignedToUserId;
+
+    if (options.assignmentGroupId !== undefined) {
+      ticket.assignmentGroupId = options.assignmentGroupId;
+      const grp = this.assignmentGroups.find((g) => g.id === options.assignmentGroupId);
+      if (grp) {
+        ticket.assignmentGroupName = grp.name;
+        ticket.assignedOrgCode = grp.orgCode;
+      }
+    }
+
+    if (options.assignedToUserId !== undefined) {
+      ticket.assignedToUserId = options.assignedToUserId;
+      const profile = this.profiles.find((p) => p.userId === options.assignedToUserId || p.id === options.assignedToUserId);
+      if (profile) {
+        ticket.assignedToUserName = profile.fullName;
+        if (options.ticketType === "task") {
+          ticket.assignedUserName = profile.fullName;
+          ticket.assignedUserId = options.assignedToUserId;
+        }
+      }
+    }
+
+    const isReassignment =
+      (prevGroup && options.assignmentGroupId && prevGroup !== options.assignmentGroupId) ||
+      (prevFulfiller && options.assignedToUserId && prevFulfiller !== options.assignedToUserId);
+
+    const actor = options.actorUserId ? this.getProfileByUserId(options.actorUserId) : undefined;
+    const actorName = options.actorName || actor?.fullName || "System User";
+    const actorOrg = actor?.organizationName || "PATH";
+
+    const auditEvent = createAuditEvent({
+      entityType: options.ticketType,
+      entityId: options.ticketId,
+      actorName,
+      actorOrgName: actorOrg,
+      actionType: isReassignment ? "ticket_reassigned" : "ticket_assigned",
+      oldValue: prevGroup || prevFulfiller ? `Group: ${prevGroup || "none"}, User: ${prevFulfiller || "none"}` : undefined,
+      newValue: `Group: ${ticket.assignmentGroupId || "none"}, User: ${ticket.assignedToUserId || "none"}`,
+      reason: options.reason || "Ticket assigned",
+    });
+    this.auditEvents.unshift(auditEvent);
+
+    if (options.assignedToUserId) {
+      const notif: NotificationRecord = {
+        id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        userId: options.assignedToUserId,
+        title: "Ticket Assigned to You",
+        message: `${options.ticketType.replace("_", " ").toUpperCase()} ${ticket.title || ticket.code || options.ticketId} has been assigned to you.`,
+        type: "assignment",
+        linkUrl: `/workstreams/${ticket.id || ticket.code}`,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      };
+      this.notifications.unshift(notif);
+    }
+
+    return { success: true, ticket };
+  }
+
+  assignTicketToGroup(
+    ticketType: "workstream" | "customer_request" | "task",
+    ticketId: string,
+    assignmentGroupId: string,
+    actorName?: string,
+    reason?: string
+  ) {
+    return this.assignTicket({ ticketType, ticketId, assignmentGroupId, actorName, reason });
+  }
+
+  assignTicketToFulfiller(
+    ticketType: "workstream" | "customer_request" | "task",
+    ticketId: string,
+    assignedToUserId: string,
+    actorName?: string,
+    reason?: string
+  ) {
+    return this.assignTicket({ ticketType, ticketId, assignedToUserId, actorName, reason });
+  }
+
+  updateTicketITSMState(options: {
+    ticketType: "workstream" | "customer_request" | "task";
+    ticketId: string;
+    targetState: ITSMState;
+    actorName?: string;
+    actorUserId?: string;
+    reason?: string;
+    pauseReason?: string;
+  }): { success: boolean; ticket: MutableTicket | null } {
+    const ticket = this.findTicket(options.ticketType, options.ticketId);
+    if (!ticket) {
+      return { success: false, ticket: null };
+    }
+
+    const previousState = ticket.itsmState || "submitted";
+    const newState = parseITSMState(options.targetState);
+    ticket.itsmState = newState;
+
+    // Clock state transition calculation
+    if (newState === "pending_customer" || newState === "pending_agency" || newState === "blocked") {
+      if (ticket.clockStatus !== "paused") {
+        ticket.clockStatus = "paused";
+        ticket.clockPausedAt = new Date().toISOString();
+        ticket.clockPausedReason = options.pauseReason || options.reason || `Clock paused due to state: ${newState}`;
+      }
+    } else if (newState === "resolved" || newState === "closed") {
+      if (ticket.clockStatus === "paused" && ticket.clockPausedAt) {
+        const pStart = new Date(ticket.clockPausedAt).getTime();
+        const diffSeconds = Math.max(0, Math.round((Date.now() - pStart) / 1000));
+        ticket.clockTotalPausedSeconds = (ticket.clockTotalPausedSeconds || 0) + diffSeconds;
+      }
+      ticket.clockStatus = "stopped";
+      ticket.clockPausedAt = undefined;
+      ticket.clockPausedReason = undefined;
+    } else {
+      // in_progress, triaged, draft
+      if (ticket.clockStatus === "paused" && ticket.clockPausedAt) {
+        const pStart = new Date(ticket.clockPausedAt).getTime();
+        const diffSeconds = Math.max(0, Math.round((Date.now() - pStart) / 1000));
+        ticket.clockTotalPausedSeconds = (ticket.clockTotalPausedSeconds || 0) + diffSeconds;
+        ticket.clockPausedAt = undefined;
+        ticket.clockPausedReason = undefined;
+      }
+      ticket.clockStatus = "active";
+    }
+
+    // Bi-directional synchronizations
+    if (options.ticketType === "workstream") {
+      ticket.operationalState = mapITSMStateToOperationalState(newState);
+      if (newState === "blocked") {
+        ticket.ragHealth = "red";
+      } else if (newState === "resolved" || newState === "closed") {
+        ticket.actualCompletionDate = new Date().toISOString().split("T")[0];
+      }
+    } else if (options.ticketType === "customer_request") {
+      if (newState === "triaged") ticket.status = "triage";
+      else if (newState === "in_progress") ticket.status = "in_progress";
+      else if (newState === "resolved") ticket.status = "resolved";
+      else if (newState === "closed") ticket.status = "closed";
+    }
+
+    const actor = options.actorUserId ? this.getProfileByUserId(options.actorUserId) : undefined;
+    const actorName = options.actorName || actor?.fullName || "System User";
+    const actorOrg = actor?.organizationName || "PATH";
+
+    const auditEvent = createAuditEvent({
+      entityType: options.ticketType,
+      entityId: options.ticketId,
+      actorName,
+      actorOrgName: actorOrg,
+      actionType: "itsm_state_changed",
+      oldValue: previousState,
+      newValue: newState,
+      reason: options.reason || (options.pauseReason ? `Pause reason: ${options.pauseReason}` : "ITSM state transition"),
+    });
+    this.auditEvents.unshift(auditEvent);
+
+    return { success: true, ticket };
+  }
+
+  updateStatutoryClock(options: {
+    ticketType: "workstream" | "customer_request" | "task";
+    ticketId: string;
+    clockStatus: ClockStatus;
+    pauseReason?: string;
+    actorName?: string;
+  }): { success: boolean; ticket: MutableTicket | null } {
+    const ticket = this.findTicket(options.ticketType, options.ticketId);
+    if (!ticket) return { success: false, ticket: null };
+
+    const oldStatus = ticket.clockStatus;
+    ticket.clockStatus = options.clockStatus;
+
+    if (options.clockStatus === "paused") {
+      ticket.clockPausedAt = new Date().toISOString();
+      ticket.clockPausedReason = options.pauseReason || "Manual clock pause";
+    } else if (options.clockStatus === "active" && oldStatus === "paused" && ticket.clockPausedAt) {
+      const pStart = new Date(ticket.clockPausedAt).getTime();
+      const diffSeconds = Math.max(0, Math.round((Date.now() - pStart) / 1000));
+      ticket.clockTotalPausedSeconds = (ticket.clockTotalPausedSeconds || 0) + diffSeconds;
+      ticket.clockPausedAt = undefined;
+      ticket.clockPausedReason = undefined;
+    }
+
+    const auditEvent = createAuditEvent({
+      entityType: options.ticketType,
+      entityId: options.ticketId,
+      actorName: options.actorName || "System User",
+      actorOrgName: "PATH",
+      actionType: "clock_status_changed",
+      oldValue: oldStatus,
+      newValue: options.clockStatus,
+      reason: options.pauseReason || "Statutory clock adjustment",
+    });
+    this.auditEvents.unshift(auditEvent);
+
+    return { success: true, ticket };
+  }
+
+  setTicketPriority(options: {
+    ticketType: "workstream" | "customer_request" | "task";
+    ticketId: string;
+    priority: PriorityLevel;
+    actorName?: string;
+    actorUserId?: string;
+    reason?: string;
+  }): { success: boolean; ticket: MutableTicket | null } {
+    const ticket = this.findTicket(options.ticketType, options.ticketId);
+    if (!ticket) return { success: false, ticket: null };
+
+    const oldPriority = ticket.priority;
+    const newPriority = parsePriorityLevel(options.priority);
+    ticket.priority = newPriority;
+
+    const actor = options.actorUserId ? this.getProfileByUserId(options.actorUserId) : undefined;
+    const actorName = options.actorName || actor?.fullName || "System User";
+
+    const auditEvent = createAuditEvent({
+      entityType: options.ticketType,
+      entityId: options.ticketId,
+      actorName,
+      actorOrgName: actor?.organizationName || "PATH",
+      actionType: "priority_changed",
+      oldValue: oldPriority,
+      newValue: newPriority,
+      reason: options.reason || "Priority matrix calculation / adjustment",
+    });
+    this.auditEvents.unshift(auditEvent);
+
+    return { success: true, ticket };
+  }
+
+  createAssignmentGroup(group: Omit<AssignmentGroupRecord, "id" | "createdAt" | "updatedAt"> & { id?: string }): AssignmentGroupRecord {
+    const newGroup: AssignmentGroupRecord = {
+      id: group.id || `grp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      orgCode: group.orgCode,
+      organizationId: group.organizationId,
+      name: group.name,
+      description: group.description,
+      leadUserId: group.leadUserId,
+      leadUserName: group.leadUserName,
+      active: group.active !== undefined ? group.active : true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.assignmentGroups.push(newGroup);
+
+    const auditEvent = createAuditEvent({
+      entityType: "assignment_group",
+      entityId: newGroup.id,
+      actorName: "System Admin",
+      actorOrgName: group.orgCode,
+      actionType: "group_created",
+      newValue: newGroup.name,
+      reason: "New assignment group registered",
+    });
+    this.auditEvents.unshift(auditEvent);
+
+    return newGroup;
+  }
+
+  addAssignmentGroupMember(membership: Omit<AssignmentGroupMembershipRecord, "id" | "createdAt" | "updatedAt"> & { id?: string }): AssignmentGroupMembershipRecord {
+    const newMembership: AssignmentGroupMembershipRecord = {
+      id: membership.id || `mem-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      assignmentGroupId: membership.assignmentGroupId,
+      userId: membership.userId,
+      role: membership.role || "member",
+      userName: membership.userName,
+      userEmail: membership.userEmail,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.assignmentGroupMemberships.push(newMembership);
+    return newMembership;
+  }
+
+  async assignTicketPersisted(options: {
+    ticketType: "workstream" | "customer_request" | "task";
+    ticketId: string;
+    assignmentGroupId?: string;
+    assignedToUserId?: string;
+    actorName?: string;
+    actorUserId?: string;
+    reason?: string;
+  }): Promise<{ data: unknown; error: Error | null }> {
+    if (isSupabaseConfigured()) {
+      const dbResult = await mutateAssignTicket(options);
+      if (dbResult.error) {
+        return { data: null, error: dbResult.error };
+      }
+      const memoryResult = this.assignTicket(options);
+      if (!memoryResult.success) {
+        await this.hydrateFromSupabase();
+        return { data: dbResult.data, error: null };
+      }
+      return { data: memoryResult.ticket, error: null };
+    }
+
+    if (!allowsFixtureData()) {
+      return { data: null, error: new Error("Supabase is required in production mode.") };
+    }
+    const memoryResult = this.assignTicket(options);
+    return memoryResult.success
+      ? { data: memoryResult.ticket, error: null }
+      : { data: null, error: new Error("Ticket not found") };
+  }
+
+  async updateTicketITSMStatePersisted(options: {
+    ticketType: "workstream" | "customer_request" | "task";
+    ticketId: string;
+    targetState: ITSMState;
+    actorName?: string;
+    actorUserId?: string;
+    reason?: string;
+    pauseReason?: string;
+  }): Promise<{ data: unknown; error: Error | null }> {
+    if (isSupabaseConfigured()) {
+      const dbResult = await mutateUpdateTicketITSMState(options);
+      if (dbResult.error) {
+        return { data: null, error: dbResult.error };
+      }
+      const memoryResult = this.updateTicketITSMState(options);
+      if (!memoryResult.success) {
+        await this.hydrateFromSupabase();
+        return { data: dbResult.data, error: null };
+      }
+      return { data: memoryResult.ticket, error: null };
+    }
+
+    if (!allowsFixtureData()) {
+      return { data: null, error: new Error("Supabase is required in production mode.") };
+    }
+    const memoryResult = this.updateTicketITSMState(options);
+    return memoryResult.success
+      ? { data: memoryResult.ticket, error: null }
+      : { data: null, error: new Error("Ticket not found") };
+  }
+
+  async setTicketPriorityPersisted(options: {
+    ticketType: "workstream" | "customer_request" | "task";
+    ticketId: string;
+    priority: PriorityLevel;
+    actorName?: string;
+    actorUserId?: string;
+    reason?: string;
+  }): Promise<{ data: unknown; error: Error | null }> {
+    if (isSupabaseConfigured()) {
+      const dbResult = await mutateSetTicketPriority(options);
+      if (dbResult.error) {
+        return { data: null, error: dbResult.error };
+      }
+      const memoryResult = this.setTicketPriority(options);
+      if (!memoryResult.success) {
+        await this.hydrateFromSupabase();
+        return { data: dbResult.data, error: null };
+      }
+      return { data: memoryResult.ticket, error: null };
+    }
+
+    if (!allowsFixtureData()) {
+      return { data: null, error: new Error("Supabase is required in production mode.") };
+    }
+    const memoryResult = this.setTicketPriority(options);
+    return memoryResult.success
+      ? { data: memoryResult.ticket, error: null }
+      : { data: null, error: new Error("Ticket not found") };
+  }
+
   resetE2EDemo(): void {
     this.project = JSON.parse(JSON.stringify(spacexProjectRecord));
     this.workstreams = JSON.parse(JSON.stringify(workstreamsData));
@@ -1802,6 +2378,8 @@ class ProjectDeliveryRepository {
     this.participants = JSON.parse(JSON.stringify(projectParticipants));
     this.externalFilings = JSON.parse(JSON.stringify(initialExternalFilings));
     this.customerRequests = [];
+    this.assignmentGroups = JSON.parse(JSON.stringify(assignmentGroupsData));
+    this.assignmentGroupMemberships = JSON.parse(JSON.stringify(assignmentGroupMembershipsData));
   }
 }
 

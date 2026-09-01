@@ -3,9 +3,16 @@ import type {
   CoordinationRequestRecord,
   CustomerRequestRecord,
   DocumentRecord,
+  ITSMState,
+  PriorityLevel,
   RFIRecord,
   WorkflowTemplateRecord,
   WorkstreamRecord,
+} from "./domain-models";
+import {
+  mapCustomerRequestStatusToITSMState,
+  mapOperationalStateToITSMState,
+  type ClockStatus,
 } from "./domain-models";
 import {
   demoPersonas,
@@ -32,6 +39,8 @@ export type WorkItemKind = "workflow" | "task" | "rfi" | "coordination" | "docum
 
 export type WorkActionId =
   | "complete_step"
+  | "update_status"
+  | "advance_stage"
   | "request_information"
   | "mark_blocked"
   | "clear_blocker"
@@ -98,6 +107,11 @@ export type OperationalWorkItem = {
   customerVisibleSummary?: string;
   assignedUserId?: string;
   assignedOrganizationId?: string;
+  assignmentGroupId?: string;
+  assignmentGroupName?: string;
+  itsmState?: ITSMState;
+  priority?: PriorityLevel;
+  clockStatus?: ClockStatus;
   requiresCurrentUserAction?: boolean;
   requiresOrganizationAction?: boolean;
   visibilityOnly?: boolean;
@@ -235,14 +249,14 @@ export function getOperationalPersona(persona: DemoPersona | null): OperationalP
 function requestToWorkItem(request: ServiceRequest, persona: OperationalPersona, workstream?: WorkstreamRecord): OperationalWorkItem {
   const sourceDueDate = workstream?.forecastTargetDate ?? request.targetDate;
   const status = workstream?.operationalState ?? (request.blocker ? "blocked" : request.status === "approved" ? "complete" : "running");
+  const itsmState = workstream?.itsmState ?? mapOperationalStateToITSMState(status);
   const isWaiting = ["waiting_government", "waiting_applicant", "waiting_external", "scheduled_hold", "statutory_waiting_period"].includes(status);
   const isComplete = status === "complete" || request.status === "approved";
   const isBlocked = status === "blocked" || Boolean(request.blocker);
   const currentAction = workstream?.currentActionSummary ?? request.blocker?.unblockingAction ?? request.nextSteps[0]?.body ?? "Review the assigned materials and record your determination.";
   const participant = workstream ? participantForTask(request.id, workstream.id) : undefined;
-  const assignedUserId = workstream?.assignedReviewerUserId ?? participant?.userId;
-  const currentUserId = persona.id.startsWith("user-") ? persona.id : `user-${persona.id}`;
-  const personallyAssigned = Boolean(assignedUserId && assignedUserId === currentUserId);
+  const assignedUserId = workstream?.assignedToUserId ?? workstream?.assignedReviewerUserId ?? participant?.userId;
+  const personallyAssigned = Boolean(assignedUserId && (assignedUserId === persona.id || assignedUserId === `user-${persona.id}`));
   const sameOwner = personallyAssigned || includesAny(request.owner.name, [persona.name, persona.name.split(" ")[0]]);
   const whyHere = persona.isCustomer
     ? "Visible because it is part of the SpaceX project status shared with your team."
@@ -253,8 +267,8 @@ function requestToWorkItem(request: ServiceRequest, persona: OperationalPersona,
       : sameOwner
         ? `Assigned to you because you are the ${request.leadAgencyCode} technical reviewer for the current workflow stage.`
         : `Visible in the ${request.leadAgencyCode} agency queue because your team is a participant in this workstream.`;
-  const owner = workstream?.regulatoryLead.assignedReviewerName ?? request.owner.name;
-  const ownerOrg = workstream?.regulatoryLead.orgName ?? request.owner.agency;
+  const owner = workstream?.assignedToUserName ?? workstream?.regulatoryLead.assignedReviewerName ?? request.owner.name;
+  const ownerOrg = workstream?.assignmentGroupName ?? workstream?.regulatoryLead.orgName ?? request.owner.agency;
   const dueRelation = dateRelation(sourceDueDate);
   const priorityScore = isBlocked && request.isCriticalPath ? 100 : dueRelation === "overdue" && request.isCriticalPath ? 90 : dueRelation === "today" ? 80 : isBlocked ? 70 : request.isCriticalPath ? 50 : isComplete ? 10 : 30;
   const requestDocuments = request.id === "TASK-T001" ? [{ id: "doc-v-drainage-v12", label: "LA-82 drainage model", version: "v12.0" }] : request.id === "TASK-T006" ? [{ id: "doc-v-wetland-v4", label: "Wetland delineation package", version: "v4.1" }] : [];
@@ -292,6 +306,11 @@ function requestToWorkItem(request: ServiceRequest, persona: OperationalPersona,
     customerVisibleSummary: customerSummary,
     assignedUserId,
     assignedOrganizationId: participant?.organizationId,
+    assignmentGroupId: workstream?.assignmentGroupId,
+    assignmentGroupName: workstream?.assignmentGroupName,
+    itsmState,
+    priority: workstream?.priority ?? (request.isCriticalPath ? "P1" : "P3"),
+    clockStatus: workstream?.clockStatus,
     requiresCurrentUserAction: persona.isCustomer ? Boolean(workstream?.customerActionRequired && workstream.customerActionRequired.toLowerCase() !== "none") : personallyAssigned,
     requiresOrganizationAction: sameAgency(request.leadAgencyCode, persona.agencyCode),
     visibilityOnly: persona.isCustomer ? !Boolean(workstream?.customerActionRequired && workstream.customerActionRequired.toLowerCase() !== "none") : !personallyAssigned,
@@ -492,6 +511,11 @@ function customerRequestToWorkItem(
     requiredInputs: request.attachmentDocumentVersionIds?.length ? ["Attached document versions verified"] : ["Customer description and requested outcome"],
     documents: [],
     customerVisibleSummary: request.description,
+    assignmentGroupId: request.assignmentGroupId,
+    assignmentGroupName: request.assignmentGroupName,
+    itsmState: request.itsmState ?? mapCustomerRequestStatusToITSMState(request.status),
+    priority: request.priority,
+    clockStatus: request.clockStatus,
     requiresCurrentUserAction: isActionRequired && (isSubmitter || isSupervisorOrAdmin || isTargetAgency),
     requiresOrganizationAction: isTargetAgency || isSupervisorOrAdmin,
     visibilityOnly: false,
@@ -513,6 +537,7 @@ export function getOperationalWorkItems(options: {
   customerRequests?: CustomerRequestRecord[];
 }): { persona: OperationalPersona; items: OperationalWorkItem[] } {
   const persona = getOperationalPersona(options.persona);
+  const personaUserIds = new Set([persona.id, `user-${persona.id}`]);
   const requests = options.requests ?? Object.values(pecanIslandRequests);
   const workstreams = options.workstreams ?? workstreamsData;
   const workstreamById = new Map(workstreams.map((workstream) => [workstream.id, workstream]));
@@ -524,7 +549,7 @@ export function getOperationalWorkItems(options: {
       const item = requestToWorkItem(request, persona, workstream);
       const relevant = persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin"
         || persona.workspace === "agency"
-        || item.assignedUserId === `user-${persona.id}`
+        || Boolean(item.assignedUserId && personaUserIds.has(item.assignedUserId))
         || includesAny(request.owner.name, [persona.name, persona.name.split(" ")[0]]);
       if (relevant) items.push(item);
     }
@@ -538,7 +563,7 @@ export function getOperationalWorkItems(options: {
     }
   }
   for (const rfi of options.rfis ?? rfisData) {
-    const responseReadyForAssignedReviewer = rfi.responses?.some((response) => !response.reviewDecision) && persona.id === (participantForWorkstream(rfi.workstreamId)?.userId ?? "");
+    const responseReadyForAssignedReviewer = rfi.responses?.some((response) => !response.reviewDecision) && personaUserIds.has(participantForWorkstream(rfi.workstreamId)?.userId ?? "");
     if (persona.workspace === "customer" || persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin" || sameAgency(rfi.requestingOrgCode, persona.agencyCode) || Boolean(responseReadyForAssignedReviewer)) {
       items.push(rfiToWorkItem(rfi, persona));
     }
@@ -597,6 +622,8 @@ export function getAvailableActions(item: OperationalWorkItem, persona: Operatio
   }
 
   const actions: WorkActionId[] = [];
+  const isSupervisorOrAbove = persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin";
+
   if (item.kind === "document") {
     if (persona.permissions.includes("edit_workflow") || persona.workspace === "reviewer" || persona.workspace === "agency" || persona.workspace === "supervisor") {
       actions.push("approve_document", "approve_with_comments", "request_revision", "add_note");
@@ -608,12 +635,24 @@ export function getAvailableActions(item: OperationalWorkItem, persona: Operatio
       actions.push("request_information", "add_note");
     }
   } else if (item.kind === "customer_request") {
-    actions.push("complete_step", "request_information", "mark_blocked", "escalate", "transfer", "add_note");
+    actions.push("complete_step", "update_status", "request_information", "mark_blocked", "escalate", "transfer", "add_note");
+  } else if (item.kind === "commitment") {
+    // Commitments need the ability to mark fulfilled, update status, request info, and block
+    if (item.statusTone !== "green") {
+      actions.push("complete_step", "update_status", "mark_blocked");
+      if (item.statusTone === "red" || item.statusLabel.toLowerCase().includes("miss") || item.statusLabel.toLowerCase().includes("risk")) {
+        actions.push("escalate");
+      }
+    }
+    actions.push("request_information", "add_note");
   } else if (item.kind === "coordination") {
+    if (item.statusTone !== "green") {
+      actions.push("update_status", "complete_step", "mark_blocked");
+    }
     actions.push("request_information", "add_note");
   } else if (item.kind === "workflow" || item.kind === "task") {
     if (item.statusTone !== "green") {
-      actions.push("complete_step", "request_information", "mark_blocked");
+      actions.push("complete_step", "update_status", "advance_stage", "request_information", "mark_blocked");
       if (item.statusTone === "red" || item.statusLabel.toLowerCase().includes("block") || item.statusLabel.toLowerCase().includes("wait")) {
         actions.push("clear_blocker");
       }
@@ -621,7 +660,16 @@ export function getAvailableActions(item: OperationalWorkItem, persona: Operatio
     actions.push("escalate", "transfer", "add_note");
   }
 
-  if (persona.permissions.includes("reassign_agency") || persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin") {
+  // Supervisor, state office, and admin always get transfer and escalate on non-green items
+  if (isSupervisorOrAbove) {
+    actions.push("transfer");
+    if (item.statusTone !== "green") {
+      actions.push("escalate");
+      // State office and admin can always update status on anything
+      actions.push("update_status");
+    }
+  }
+  if (persona.permissions.includes("reassign_agency")) {
     actions.push("transfer");
   }
   if (persona.permissions.includes("escalate_liaison") && item.statusTone !== "green") {
