@@ -117,22 +117,20 @@ AS $$
     OR (SELECT app_private.is_system_admin());
 $$;
 
-CREATE OR REPLACE FUNCTION app_private.has_project_access_text(p_project_ref TEXT)
+CREATE OR REPLACE FUNCTION app_private.has_project_access_text(p_project_id TEXT)
 RETURNS BOOLEAN
-LANGUAGE SQL
-STABLE
-SECURITY DEFINER
+LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public, app_private
 AS $$
   SELECT EXISTS (
     SELECT 1
-    FROM public.projects project_record
-    WHERE (project_record.id::TEXT = p_project_ref OR project_record.number = p_project_ref)
-      AND (SELECT app_private.has_project_access(project_record.id))
+    FROM public.projects p
+    WHERE (p.id::text = p_project_id OR p.number = p_project_id)
+      AND (SELECT app_private.has_project_access(p.id))
   );
 $$;
 
-CREATE OR REPLACE FUNCTION app_private.is_organization_admin(p_org_id UUID)
+CREATE OR REPLACE FUNCTION app_private.is_organization_admin(p_organization_id UUID)
 RETURNS BOOLEAN
 LANGUAGE SQL
 STABLE
@@ -143,7 +141,7 @@ AS $$
     OR EXISTS (
       SELECT 1
       FROM public.organization_memberships membership
-      WHERE membership.organization_id = p_org_id
+      WHERE membership.organization_id = p_organization_id
         AND membership.user_id = (SELECT auth.uid())
         AND membership.status = 'active'
         AND membership.effective_from <= now()

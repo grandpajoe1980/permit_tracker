@@ -2,7 +2,7 @@
 -- legacy compound-write functions. The functions remain transaction owners,
 -- but their actor and tenant context now comes from the authenticated JWT.
 
-create or replace function app_private.has_project_access_text(p_project_ref text)
+create or replace function app_private.has_project_access_text(p_project_id text)
 returns boolean
 language sql stable security definer
 set search_path = public, app_private
@@ -10,7 +10,7 @@ as $$
   select exists (
     select 1
     from public.projects p
-    where (p.id::text = p_project_ref or p.number = p_project_ref)
+    where (p.id::text = p_project_id or p.number = p_project_id)
       and (select app_private.has_project_access(p.id))
   );
 $$;

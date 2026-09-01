@@ -730,36 +730,37 @@ GRANT EXECUTE ON FUNCTION public.rpc_manage_assignment_group_membership(UUID, UU
 INSERT INTO public.assignment_groups (id, org_code, organization_id, name, description, active)
 VALUES
   -- SpaceX Internal Queues
-  ('d0000000-0000-0000-0000-000000000001', 'SPACEX', 'c0000000-0000-0000-0000-000000000001', 'SpaceX - Internal Technical Queue', 'Flight hardware, pad civil engineering, and cryogenic infrastructure submittals', true),
-  ('d0000000-0000-0000-0000-000000000002', 'SPACEX', 'c0000000-0000-0000-0000-000000000001', 'SpaceX - Regulatory Affairs Queue', 'Regulatory filings, NEPA environmental reviews, and statutory compliance management', true),
+  ('d0000000-0000-0000-0000-000000000001', 'SPACEX', (SELECT id FROM public.organizations WHERE code = 'SPACEX'), 'SpaceX - Internal Technical Queue', 'Flight hardware, pad civil engineering, and cryogenic infrastructure submittals', true),
+  ('d0000000-0000-0000-0000-000000000002', 'SPACEX', (SELECT id FROM public.organizations WHERE code = 'SPACEX'), 'SpaceX - Regulatory Affairs Queue', 'Regulatory filings, NEPA environmental reviews, and statutory compliance management', true),
 
   -- Louisiana Governor's Project Office (PATH Concierge)
-  ('d0000000-0000-0000-0000-000000000003', 'LA-PROJECTS', 'c0000000-0000-0000-0000-000000000002', 'Governor''s Project Office - Executive Triage & Delivery', 'State-level executive triage, cross-agency bottleneck clearing, and escalation coordination', true),
-  ('d0000000-0000-0000-0000-000000000004', 'LA-PROJECTS', 'c0000000-0000-0000-0000-000000000002', 'Governor''s Project Office - Interagency Concierge', 'Dedicated liaison team assisting applicant submittals and agency concurrent reviews', true),
+  ('d0000000-0000-0000-0000-000000000003', 'LA-PROJECTS', (SELECT id FROM public.organizations WHERE code = 'LA-PROJECTS'), 'Governor''s Project Office - Executive Triage & Delivery', 'State-level executive triage, cross-agency bottleneck clearing, and escalation coordination', true),
+  ('d0000000-0000-0000-0000-000000000004', 'LA-PROJECTS', (SELECT id FROM public.organizations WHERE code = 'LA-PROJECTS'), 'Governor''s Project Office - Interagency Concierge', 'Dedicated liaison team assisting applicant submittals and agency concurrent reviews', true),
 
   -- DOTD
-  ('d0000000-0000-0000-0000-000000000005', 'DOTD', 'c0000000-0000-0000-0000-000000000003', 'DOTD - Structures & Bridge Review', 'Structural load simulations, bridge engineering ratings, and axle distribution approvals', true),
-  ('d0000000-0000-0000-0000-000000000006', 'DOTD', 'c0000000-0000-0000-0000-000000000003', 'DOTD - Highway Access & Heavy-Haul', 'LA-82 superload escort permits, turning radius geometries, and right-of-way access', true),
+  ('d0000000-0000-0000-0000-000000000005', 'DOTD', (SELECT id FROM public.organizations WHERE code = 'DOTD'), 'DOTD - Structures & Bridge Review', 'Structural load simulations, bridge engineering ratings, and axle distribution approvals', true),
+  ('d0000000-0000-0000-0000-000000000006', 'DOTD', (SELECT id FROM public.organizations WHERE code = 'DOTD'), 'DOTD - Highway Access & Heavy-Haul', 'LA-82 superload escort permits, turning radius geometries, and right-of-way access', true),
 
   -- LDEQ
-  ('d0000000-0000-0000-0000-000000000007', 'LDEQ', 'c0000000-0000-0000-0000-000000000004', 'LDEQ - Water Quality & Deluge Permitting', 'LPDES industrial stormwater, deluge wastewater neutralization, and baseline monitoring', true),
-  ('d0000000-0000-0000-0000-000000000008', 'LDEQ', 'c0000000-0000-0000-0000-000000000004', 'LDEQ - Air Quality & Environmental Review', 'Title V air emissions, flare operations, and environmental impact assessments', true),
+  ('d0000000-0000-0000-0000-000000000007', 'LDEQ', (SELECT id FROM public.organizations WHERE code = 'LDEQ'), 'LDEQ - Water Quality & Deluge Permitting', 'LPDES industrial stormwater, deluge wastewater neutralization, and baseline monitoring', true),
+  ('d0000000-0000-0000-0000-000000000008', 'LDEQ', (SELECT id FROM public.organizations WHERE code = 'LDEQ'), 'LDEQ - Air Quality & Environmental Review', 'Title V air emissions, flare operations, and environmental impact assessments', true),
 
   -- CPRA
-  ('d0000000-0000-0000-0000-000000000009', 'CPRA', 'c0000000-0000-0000-0000-000000000005', 'CPRA - Coastal Use & Hydrology Permitting', 'Coastal Use Permits (CUP), coastal zone boundary adherence, and ecological impact', true),
-  ('d0000000-0000-0000-0000-000000000010', 'CPRA', 'c0000000-0000-0000-0000-000000000005', 'CPRA - Drainage & Levee Concurrence', 'Hydrologic storm surge modeling, levee protection buffer, and wetland mitigation plans', true),
+  ('d0000000-0000-0000-0000-000000000009', 'CPRA', (SELECT id FROM public.organizations WHERE code = 'CPRA'), 'CPRA - Coastal Use & Hydrology Permitting', 'Coastal Use Permits (CUP), coastal zone boundary adherence, and ecological impact', true),
+  ('d0000000-0000-0000-0000-000000000010', 'CPRA', (SELECT id FROM public.organizations WHERE code = 'CPRA'), 'CPRA - Drainage & Levee Concurrence', 'Hydrologic storm surge modeling, levee protection buffer, and wetland mitigation plans', true),
 
   -- OSFM
-  ('d0000000-0000-0000-0000-000000000011', 'OSFM', 'c0000000-0000-0000-0000-000000000006', 'OSFM - Life Safety & Plan Review', 'Commercial building codes, blast mitigation setbacks, and emergency exit staging', true),
-  ('d0000000-0000-0000-0000-000000000012', 'OSFM', 'c0000000-0000-0000-0000-000000000006', 'OSFM - Hazardous Materials & Cryogenic Safety', 'Liquid methane, liquid oxygen bulk storage, and high-pressure cryogenic safety systems', true),
+  ('d0000000-0000-0000-0000-000000000011', 'OSFM', (SELECT id FROM public.organizations WHERE code = 'OSFM'), 'OSFM - Life Safety & Plan Review', 'Commercial building codes, blast mitigation setbacks, and emergency exit staging', true),
+  ('d0000000-0000-0000-0000-000000000012', 'OSFM', (SELECT id FROM public.organizations WHERE code = 'OSFM'), 'OSFM - Hazardous Materials & Cryogenic Safety', 'Liquid methane, liquid oxygen bulk storage, and high-pressure cryogenic safety systems', true),
 
   -- LSP
-  ('d0000000-0000-0000-0000-000000000013', 'LSP', 'c0000000-0000-0000-0000-000000000007', 'LSP - Emergency Response & Route Clearance', 'Highway patrol logistics, road closure traffic control, and hazardous cargo escort', true),
+  ('d0000000-0000-0000-0000-000000000013', 'LSP', (SELECT id FROM public.organizations WHERE code = 'LSP'), 'LSP - Emergency Response & Route Clearance', 'Highway patrol logistics, road closure traffic control, and hazardous cargo escort', true),
 
   -- Vermilion Parish
-  ('d0000000-0000-0000-0000-000000000014', 'VERMILION-PARISH', 'c0000000-0000-0000-0000-000000000008', 'Vermilion Parish - Coastal Permitting & Police Jury', 'Local parish development permits, public hearing notices, and parish council coordination', true),
-  ('d0000000-0000-0000-0000-000000000015', 'VERMILION-PARISH', 'c0000000-0000-0000-0000-000000000008', 'Vermilion Parish - Public Works & Drainage', 'Parish canal crossings, culvert sizing, and heavy vehicle roadway impact bonds', true)
+  ('d0000000-0000-0000-0000-000000000014', 'VERMILION-PARISH', (SELECT id FROM public.organizations WHERE code = 'VERMILION-PARISH'), 'Vermilion Parish - Coastal Permitting & Police Jury', 'Local parish development permits, public hearing notices, and parish council coordination', true),
+  ('d0000000-0000-0000-0000-000000000015', 'VERMILION-PARISH', (SELECT id FROM public.organizations WHERE code = 'VERMILION-PARISH'), 'Vermilion Parish - Public Works & Drainage', 'Parish canal crossings, culvert sizing, and heavy vehicle roadway impact bonds', true)
 ON CONFLICT (org_code, name) DO UPDATE SET
+  organization_id = EXCLUDED.organization_id,
   description = EXCLUDED.description,
   active = EXCLUDED.active,
   updated_at = now();
