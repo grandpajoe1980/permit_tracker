@@ -11,10 +11,20 @@ import type {
 } from "./demo-data";
 import { mutateCreateCustomerRequest, mutateCreateCustomerRequestWithDocument } from "./supabase/mutations";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const DEFAULT_SUPABASE_URL = "https://zomzacaxwqfwjstkxbpv.supabase.co";
+const DEFAULT_SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvbXphY2F4d3Fmd2pzdGt4YnB2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MTA0OTMsImV4cCI6MjEwMzA4NjQ5M30.MO84_KXLzxK1yVpEBTyw0L2Jz550VoaEhatpyC2ric0";
+
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.SUPABASE_URL ||
+  DEFAULT_SUPABASE_URL;
+
 const supabaseKey =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+  process.env.SUPABASE_ANON_KEY ??
+  DEFAULT_SUPABASE_ANON_KEY;
 
 let browserClient: ReturnType<typeof createBrowserClient> | null = null;
 

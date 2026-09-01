@@ -177,7 +177,7 @@ export function WorkstreamGraphGantt({
   const [filterState, setFilterState] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [hoveredWorkstreamId, setHoveredWorkstreamId] = useState<string | null>(null);
-  const todayDate = useMemo(() => new Date(), []);
+  const todayDate = useMemo(() => new Date("2026-08-30T12:00:00Z"), []);
 
   // Timeline boundaries include the earliest baseline work and the current forecast.
   const timelineStart = useMemo(() => {

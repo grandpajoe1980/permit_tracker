@@ -37,23 +37,25 @@ const localBindingConfig = {
 export default defineConfig(async ({ mode }) => {
   const fileEnv = loadEnv(mode, process.cwd(), "");
   const runtimeEnv = { ...fileEnv, ...process.env };
+  const defaultSupabaseUrl = "https://zomzacaxwqfwjstkxbpv.supabase.co";
+  const defaultSupabaseKey =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvbXphY2F4d3Fmd2pzdGt4YnB2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MTA0OTMsImV4cCI6MjEwMzA4NjQ5M30.MO84_KXLzxK1yVpEBTyw0L2Jz550VoaEhatpyC2ric0";
   const publicSupabaseUrl =
-    runtimeEnv.NEXT_PUBLIC_SUPABASE_URL ?? runtimeEnv.SUPABASE_URL ?? "";
+    runtimeEnv.NEXT_PUBLIC_SUPABASE_URL ?? runtimeEnv.SUPABASE_URL ?? defaultSupabaseUrl;
   const publicSupabaseKey =
     runtimeEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
     runtimeEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
     runtimeEnv.SUPABASE_ANON_KEY ??
-    "";
+    defaultSupabaseKey;
   const publicEnvDefines = {
     "process.env.NEXT_PUBLIC_SUPABASE_URL": JSON.stringify(publicSupabaseUrl),
     "process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(publicSupabaseKey),
     "process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY": JSON.stringify(publicSupabaseKey),
+    "process.env.SUPABASE_URL": JSON.stringify(publicSupabaseUrl),
+    "process.env.SUPABASE_ANON_KEY": JSON.stringify(publicSupabaseKey),
     "process.env.APP_DATA_MODE": JSON.stringify(runtimeEnv.APP_DATA_MODE ?? runtimeEnv.NEXT_PUBLIC_APP_DATA_MODE ?? "production"),
     "process.env.NEXT_PUBLIC_APP_DATA_MODE": JSON.stringify(runtimeEnv.NEXT_PUBLIC_APP_DATA_MODE ?? runtimeEnv.APP_DATA_MODE ?? "production"),
   };
-  // Keep Wrangler and Miniflare state project-local. These are non-secret tool
-  // settings; application environment belongs in ignored `.env*` files.
-  process.env.WRANGLER_WRITE_LOGS ??= "false";
   process.env.WRANGLER_LOG_PATH ??= ".wrangler/logs";
   process.env.MINIFLARE_REGISTRY_PATH ??= ".wrangler/registry";
 

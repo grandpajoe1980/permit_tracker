@@ -17,7 +17,9 @@ import type {
   UserProfileRecord,
   OrganizationMembershipRecord,
   WorkstreamRecord,
+  TaskRecord,
 } from "../domain-models";
+import { taskRowToDomain } from "./mappings";
 import { allowsFixtureData, requiresSupabase } from "../data-mode";
 import { canonicalProjectReference } from "../project-identifiers";
 import { calculateSHA256, uploadDocumentFile } from "./storage-primitives";
@@ -1576,3 +1578,67 @@ export async function mutateUpdateProjectParticipant(params: {
 
   return { data: { success: true }, error: null };
 }
+
+export async function mutateUpdateTask(params: {
+  taskId: string;
+  updates: Partial<Pick<TaskRecord, "title" | "description" | "status" | "assignedOrgCode" | "assignedUserId" | "assignedUserName" | "isCriticalPath" | "durationDays" | "floatDays" | "actualCompletionDate">>;
+  actorName?: string;
+  actorOrgName?: string;
+}): Promise<MutationResult<TaskRecord>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+
+  const payload: Record<string, unknown> = {};
+  if (params.updates.title !== undefined) payload.title = params.updates.title;
+  if (params.updates.description !== undefined) payload.description = params.updates.description;
+  if (params.updates.status !== undefined) {
+    payload.status = params.updates.status;
+    payload.itsm_state = params.updates.status === "completed" ? "resolved" : params.updates.status === "in_progress" ? "work_in_progress" : "open";
+  }
+  if (params.updates.assignedOrgCode !== undefined) payload.assigned_org_code = params.updates.assignedOrgCode;
+  if (params.updates.assignedUserId !== undefined) payload.assigned_to_user_id = params.updates.assignedUserId;
+  if (params.updates.isCriticalPath !== undefined) payload.is_critical_path = params.updates.isCriticalPath;
+  if (params.updates.durationDays !== undefined) payload.duration_days = params.updates.durationDays;
+  if (params.updates.floatDays !== undefined) payload.float_days = params.updates.floatDays;
+  if (params.updates.actualCompletionDate !== undefined) payload.actual_completion_date = params.updates.actualCompletionDate;
+
+  const { data, error } = await client
+    .from("tasks")
+    .update(payload)
+    .eq("id", params.taskId)
+    .select()
+    .single();
+
+  if (error) return { data: null, error: new Error(error.message) };
+
+  if (params.actorName) {
+    await insertAuditEvent({
+      entityType: "task",
+      entityId: params.taskId,
+      actorName: params.actorName,
+      actorOrgName: params.actorOrgName ?? "PATH",
+      actionType: "task_updated",
+      newValue: params.updates.status ?? "Updated",
+      reason: "Task record updated in PATH database.",
+    });
+  }
+
+  return { data: taskRowToDomain(data as Record<string, unknown>), error: null };
+}
+
+export async function mutateCompleteTask(params: {
+  taskId: string;
+  actorName?: string;
+  actorOrgName?: string;
+}): Promise<MutationResult<TaskRecord>> {
+  return mutateUpdateTask({
+    taskId: params.taskId,
+    updates: {
+      status: "completed",
+      actualCompletionDate: new Date().toISOString().split("T")[0],
+    },
+    actorName: params.actorName,
+    actorOrgName: params.actorOrgName,
+  });
+}
+

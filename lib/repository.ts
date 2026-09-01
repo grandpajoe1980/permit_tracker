@@ -20,6 +20,7 @@ import type {
   WorkstreamRecord,
   UserProfileRecord,
   OrganizationMembershipRecord,
+  TaskRecord,
 } from "./domain-models";
 import {
   commitmentsData,
@@ -78,6 +79,8 @@ import {
   mutateUpdateProjectParticipant,
   mutateUpdateUserProfile,
   mutateSetOrganizationMemberRole,
+  mutateUpdateTask,
+  mutateCompleteTask,
 } from "./supabase/mutations";
 import { mutateReviewDocumentVersion, mutateUploadDocumentVersion } from "./supabase/storage";
 import { isSupabaseConfigured } from "./supabase/client";
@@ -1139,6 +1142,76 @@ class ProjectDeliveryRepository {
     if (result.error || !result.data) return { success: false, error: result.error ?? new Error("The workflow transition was not confirmed by the database.") };
     await this.hydrateFromSupabase();
     return { success: true, error: null, nextStageName: result.data.nextStageName };
+  }
+
+  updateTask(params: {
+    taskId: string;
+    updates: Partial<Pick<TaskRecord, "title" | "description" | "status" | "assignedOrgCode" | "assignedUserId" | "assignedUserName" | "isCriticalPath" | "durationDays" | "floatDays" | "actualCompletionDate">>;
+    actorName?: string;
+    actorOrgName?: string;
+  }): TaskRecord | null {
+    for (const ws of this.workstreams) {
+      const task = ws.tasks?.find((t) => t.id === params.taskId);
+      if (task) {
+        Object.assign(task, params.updates);
+        if (params.actorName) {
+          this.auditEvents.unshift(
+            createAuditEvent({
+              entityType: "task",
+              entityId: task.id,
+              actorName: params.actorName,
+              actorOrgName: params.actorOrgName ?? ws.regulatoryLead?.orgCode ?? "PATH",
+              actionType: "task_updated",
+              newValue: params.updates.status ?? "Updated",
+              reason: "Task record updated.",
+            })
+          );
+        }
+        return task;
+      }
+    }
+    return null;
+  }
+
+  async updateTaskPersisted(params: {
+    taskId: string;
+    updates: Partial<Pick<TaskRecord, "title" | "description" | "status" | "assignedOrgCode" | "assignedUserId" | "assignedUserName" | "isCriticalPath" | "durationDays" | "floatDays" | "actualCompletionDate">>;
+    actorName?: string;
+    actorOrgName?: string;
+  }): Promise<{ data: TaskRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      const task = this.updateTask(params);
+      return { data: task, error: task ? null : new Error("Task not found.") };
+    }
+    const result = await mutateUpdateTask(params);
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Task update was not confirmed by the database.") };
+    await this.hydrateFromSupabase();
+    return { data: result.data, error: null };
+  }
+
+  completeTask(params: { taskId: string; actorName?: string; actorOrgName?: string }): TaskRecord | null {
+    return this.updateTask({
+      taskId: params.taskId,
+      updates: {
+        status: "completed",
+        actualCompletionDate: new Date().toISOString().split("T")[0],
+      },
+      actorName: params.actorName,
+      actorOrgName: params.actorOrgName,
+    });
+  }
+
+  async completeTaskPersisted(params: { taskId: string; actorName?: string; actorOrgName?: string }): Promise<{ data: TaskRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      const task = this.completeTask(params);
+      return { data: task, error: task ? null : new Error("Task not found.") };
+    }
+    const result = await mutateCompleteTask(params);
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Task completion was not confirmed by the database.") };
+    await this.hydrateFromSupabase();
+    return { data: result.data, error: null };
   }
 
   addWorkstreamNote(params: { workstreamId: string; note: string; actorName: string; actorOrgName: string }) {
