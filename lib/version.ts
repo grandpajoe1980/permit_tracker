@@ -1,5 +1,6 @@
 // ==========================================
 // PATH ITSM PLATFORM - BUILD & VERSION INFO
+// Auto-generated during build/dev startup
 // ==========================================
 
 export interface BuildInfo {
@@ -15,11 +16,11 @@ export interface BuildInfo {
 
 export const BUILD_INFO: BuildInfo = {
   version: "1.1.0-itsm",
-  commitHash: "dc9c34a8e52a46c1a8e5a7b6c3e9d8f1a2b3c4d5",
-  commitShort: "dc9c34a",
-  commitDate: "2026-08-31 09:25:53 CDT",
-  buildDate: "2026-08-31 09:26:00 CDT",
+  commitHash: "ae2186769b0d1fa135bccd0221f39722cbfc9803",
+  commitShort: "ae21867",
+  commitDate: "2026-09-01 18:24:25 CDT",
+  buildDate: "2026-09-01 23:26:41 UTC",
   branch: "main",
-  environment: "production",
+  environment: "development",
   repositoryUrl: "https://github.com/grandpajoe1980/permit_tracker",
 };

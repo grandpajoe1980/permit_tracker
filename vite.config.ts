@@ -3,6 +3,14 @@ import { nitro } from "nitro/vite";
 import { defineConfig, loadEnv } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { sites } from "./build/sites-vite-plugin";
+import { generateVersionFile } from "./scripts/generate-version.mjs";
+
+// Ensure build and commit version metadata is up-to-date on each build/start
+try {
+  generateVersionFile();
+} catch (e) {
+  // Ignore in environments where git is restricted
+}
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";

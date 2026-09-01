@@ -7,6 +7,9 @@
   },
   "scripts": {
     "install:ci": "bash scripts/install-ci.sh",
+    "prebuild": "node scripts/generate-version.mjs",
+    "predev": "node scripts/generate-version.mjs",
+    "version:gen": "node scripts/generate-version.mjs",
     "dev": "vite",
     "build": "vinext build",
     "start": "vinext start",
