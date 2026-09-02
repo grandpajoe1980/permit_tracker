@@ -8,6 +8,23 @@ documentation that persistence and cross-browser verification were complete
 were not reproducible from the current source and have been replaced with the
 findings below.
 
+## Flow visibility checkpoint (2026-09-02)
+
+- Added a shared past/current/next workflow journey model and reusable UI.
+- Project overview rows now show step progress; the project page also has a
+  "Project right now" strip for attention, active work, and next milestone.
+- Customer and worker work surfaces use the same ordered journey, with
+  customer-safe labels and no internal assignee or completion-note leakage.
+- Authenticated workstream routes hydrate tasks, pinned workflow stages, and
+  persisted `stage_runs`; completed stages show their authoritative completion
+  timestamp and internal completion note to workers.
+- Added journey-model and role-safety tests. The serial full suite passes 344
+  tests; the parallel suite has a known live-row-count race, while its isolated
+  database test passes.
+
+CHECKPOINT:
+"checkpoint: workflow flow visibility and persisted history"
+
 ## Completed in this checkpoint
 
 - Read the repository protocol, PRD, plan, execution docs, operational UX,
