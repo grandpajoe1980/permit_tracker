@@ -37,10 +37,10 @@ const workstreamColumns = [
   "regulatory_lead", "state_concierge",
 ].join(", ");
 
-function decodeRouteSegment(value: string | undefined): string {
+export function normalizeRouteSegment(value: string | undefined): string {
   if (!value) return "";
   try {
-    return decodeURIComponent(value).trim();
+    return decodeURIComponent(value).trim().normalize("NFKC");
   } catch {
     return "";
   }
@@ -50,7 +50,7 @@ export async function resolveProjectRoute(
   client: SupabaseClient,
   rawKey: string | undefined,
 ): Promise<RouteProject | null> {
-  const key = decodeRouteSegment(rawKey);
+  const key = normalizeRouteSegment(rawKey);
   if (!key) return null;
 
   const byId = await client.from("projects").select(projectColumns).eq("id", key).maybeSingle();
@@ -68,7 +68,7 @@ export async function resolveWorkstreamRoute(
   projectId: string | undefined,
   rawKey: string | undefined,
 ): Promise<RouteWorkstream | null> {
-  const key = decodeRouteSegment(rawKey);
+  const key = normalizeRouteSegment(rawKey);
   if (!key) return null;
 
   const byIdQuery = client.from("workstreams").select(workstreamColumns);

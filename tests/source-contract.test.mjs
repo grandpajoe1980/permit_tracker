@@ -38,6 +38,7 @@ const [page, layout, css, readme, productCopy, navigation, portalMigration, hard
 ]);
 const workflowQueries = await readFile(new URL("../lib/supabase/queries.ts", import.meta.url), "utf8");
 const operationalUx = await readFile(new URL("../lib/operational-ux.ts", import.meta.url), "utf8");
+const routeResolvers = await readFile(new URL("../lib/supabase/route-resolvers.ts", import.meta.url), "utf8");
 const [workItemPage, nextActionPanel, workItemFacts, activityFeed] = await Promise.all([
   readFile(new URL("../components/path/work/WorkItemPage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../components/path/work/NextActionPanel.tsx", import.meta.url), "utf8"),
@@ -131,6 +132,12 @@ test("refreshes the canonical work item after persisted actions", () => {
   assert.match(page, /await repository\.hydrateFromSupabase\(\)/);
   assert.match(page, /canonicalItem/);
   assert.match(page, /setSaveStatus\("saving"\)/);
+});
+
+test("normalizes encoded project and workstream route identities", () => {
+  assert.match(routeResolvers, /export function normalizeRouteSegment/);
+  assert.match(routeResolvers, /normalize\("NFKC"\)/);
+  assert.match(routeResolvers, /normalizeRouteSegment\(rawKey\)/);
 });
 
 test("includes responsive, focus, reduced-motion, and print protections", () => {

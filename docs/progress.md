@@ -140,6 +140,20 @@ Next ready task: UX-07 — make mutations refresh in place.
 
 Next ready task: UX-08 — repair workstream navigation and journey hydration.
 
+## UX-08 — workstream route identity and hydration (2026-09-02)
+
+- Centralized route-segment normalization with URL decoding, trimming, and
+  Unicode normalization before project/workstream identity resolution.
+- Preserved project scope on workstream resolution and the existing
+  project-scoped compatibility redirect from `/workstreams/{id}`.
+- Existing authenticated route hydration continues to load tasks, the pinned
+  workflow-version stages, and persisted stage runs in parallel and renders
+  unknown history honestly.
+- Focused route/source tests — 22 passed; `npm run build` — PASS.
+- Supabase query shape, RLS, audit, notifications, uploads, and downloads were not changed.
+
+Next ready task: UX-09 — rebuild the project workstream interaction.
+
 ## Flow visibility checkpoint (2026-09-02)
 
 - Added a shared past/current/next workflow journey model and reusable UI.
