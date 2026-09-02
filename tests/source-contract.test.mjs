@@ -37,6 +37,7 @@ const [page, layout, css, readme, productCopy, navigation, portalMigration, hard
   readFile(new URL("../scripts/test-supabase-rls-isolation.mjs", import.meta.url), "utf8"),
 ]);
 const workflowQueries = await readFile(new URL("../lib/supabase/queries.ts", import.meta.url), "utf8");
+const operationalUx = await readFile(new URL("../lib/operational-ux.ts", import.meta.url), "utf8");
 const loginPage = await readFile(new URL("../components/path/LoginPage.tsx", import.meta.url), "utf8");
 const [customerHome, customerRequestList, submitRequestLauncher] = await Promise.all([
   readFile(new URL("../components/path/customer/CustomerHome.tsx", import.meta.url), "utf8"),
@@ -100,6 +101,13 @@ test("gives the customer home a fast request path and truthful request states", 
   assert.match(submitRequestLauncher, /CustomerRequestIntent/);
   assert.match(customerRequestList, /No requests submitted yet/);
   assert.match(page, /setRoute\(getOperationalPersona\(persona\)\.isCustomer \? "project"/);
+});
+
+test("keeps My Work groups exclusive and counts structured actionable items", () => {
+  assert.match(operationalUx, /requiresCurrentUserAction/);
+  assert.match(operationalUx, /"due_soon"/);
+  assert.match(operationalUx, /QueueSectionId = "needs_action" \| "due_soon" \| "waiting" \| "recently_completed"/);
+  assert.match(page, /const actionableCount = activeQueueItems\.filter/);
 });
 
 test("includes responsive, focus, reduced-motion, and print protections", () => {

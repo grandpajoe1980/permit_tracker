@@ -56,7 +56,7 @@ export type WorkActionId =
   | "respond"
   | "upload_documents";
 
-export type QueueSectionId = "needs_action" | "due_today" | "overdue" | "waiting" | "upcoming" | "recently_completed";
+export type QueueSectionId = "needs_action" | "due_soon" | "waiting" | "recently_completed";
 
 export type OperationalPersona = {
   id: string;
@@ -597,21 +597,24 @@ export function groupMyWork(items: OperationalWorkItem[]): QueueGroup[] {
   const actionItems = items.filter((item) => item.kind !== "workflow" || !item.statusLabel.toLowerCase().includes("complete"));
   const sections: Array<[QueueSectionId, string, string]> = [
     ["needs_action", "Needs my action", "The work that can move forward when you act."],
-    ["due_today", "Due today", "Commitments and decisions due before the end of today."],
-    ["overdue", "Overdue", "Past the expected date and needing a recovery decision."],
+    ["due_soon", "Due soon", "Upcoming work with a near-term date or schedule impact."],
     ["waiting", "Waiting on others", "The next move belongs to another person or agency."],
-    ["upcoming", "Upcoming", "Next actions with time remaining."],
     ["recently_completed", "Recently completed", "Work that recently left your active queue."],
   ];
   const assigned = new Map<QueueSectionId, OperationalWorkItem[]>();
   for (const [id] of sections) assigned.set(id, []);
   for (const item of actionItems) {
-    const isActionable = item.requiresCurrentUserAction ?? (item.statusTone === "red" || item.priorityScore >= 70 && !item.waitLabel?.toLowerCase().includes("waiting"));
+    const isActionable = requiresCurrentUserAction(item);
     const isWaiting = !isActionable && (Boolean(item.waitingOn) || Boolean(item.waitLabel));
-    const bucket: QueueSectionId = dateRelation(item.dueDate) === "overdue" && item.statusTone !== "green" ? "overdue" : dateRelation(item.dueDate) === "today" ? "due_today" : isActionable ? "needs_action" : isWaiting ? "waiting" : item.statusTone === "green" ? "recently_completed" : "upcoming";
+    const relation = dateRelation(item.dueDate);
+    const bucket: QueueSectionId = item.statusTone === "green" || item.itsmState === "resolved" || item.itsmState === "closed" ? "recently_completed" : isWaiting ? "waiting" : relation === "overdue" || relation === "today" || isActionable ? "needs_action" : "due_soon";
     assigned.get(bucket)?.push(item);
   }
-  return sections.map(([id, label, description]) => ({ id, label, description, items: (assigned.get(id) ?? []).slice(0, 6) }));
+  return sections.map(([id, label, description]) => ({ id, label, description, items: assigned.get(id) ?? [] }));
+}
+
+export function requiresCurrentUserAction(item: OperationalWorkItem) {
+  return Boolean(item.requiresCurrentUserAction ?? (item.statusTone === "red" || item.priorityScore >= 70 && !item.waitLabel?.toLowerCase().includes("waiting")));
 }
 
 export function getAvailableActions(item: OperationalWorkItem, persona: OperationalPersona): WorkActionId[] {

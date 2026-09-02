@@ -96,6 +96,21 @@ Next ready task: UX-04 — rebuild the customer landing experience.
 
 Next ready task: UX-05 — simplify My Work and correct counts.
 
+## UX-05 — actionable My Work grouping (2026-09-02)
+
+- Centralized actionable classification in `requiresCurrentUserAction` and
+  changed the queue to four mutually exclusive groups: Needs my action, Due
+  soon, Waiting on others, and Recently completed.
+- Removed the six-item group truncation so visible cards and the navigation
+  badge use the complete actionable projection.
+- Made work titles semantic exact-item links and removed the duplicate generic
+  Project button from collapsed cards.
+- Focused operational/source tests — 21 passed; focused ESLint — 0 errors
+  (existing warnings only); `npm run build` — PASS.
+- Supabase, RLS, audit, notifications, uploads, and downloads were not changed.
+
+Next ready task: UX-06 — build the unified work item page.
+
 ## Flow visibility checkpoint (2026-09-02)
 
 - Added a shared past/current/next workflow journey model and reusable UI.

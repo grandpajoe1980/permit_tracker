@@ -98,6 +98,7 @@ import {
   groupMyWork,
   isAdministrator,
   requestWorkstreamMap,
+  requiresCurrentUserAction,
   sanitizeCustomerItem,
   type OperationalWorkItem,
   type QueueSectionId,
@@ -392,6 +393,7 @@ export default function Home() {
   });
   const selectedItem = selectedItemId ? workItems.find((item) => item.id === selectedItemId) ?? null : null;
   const queueGroups = groupMyWork(activeQueueItems);
+  const actionableCount = activeQueueItems.filter((item) => requiresCurrentUserAction(item)).length;
   const ragSummary = calculateRAGSummary(userPermits);
   const intakePreview = intakeText.trim() ? parsePlainEnglishIntake(intakeText) : null;
   const loggedIn = Boolean(currentUser && currentPersona);
@@ -1331,8 +1333,8 @@ export default function Home() {
 
   const canAdmin = activePersona.workspace === "admin" || activePersona.workspace === "supervisor" || activePersona.workspace === "state_office";
   const primaryNav: Array<{ id: Route; label: string; icon: ReactNode; count?: number }> = activePersona.isCustomer
-    ? [{ id: "project", label: "Home / Project overview", icon: <Building2 className="size-4" /> }, { id: "my-work", label: "My actions", icon: <LayoutList className="size-4" />, count: queueGroups[0]?.items.length }, { id: "requests", label: "Requests & permits", icon: <FilePlus2 className="size-4" /> }, { id: "schedule", label: "Schedule", icon: <CalendarClock className="size-4" /> }, { id: "documents", label: "Documents", icon: <FileCheck2 className="size-4" /> }, { id: "contacts", label: "Contacts", icon: <Users className="size-4" /> }, { id: "help", label: "Help & escalation", icon: <ShieldAlert className="size-4" /> }, { id: "notifications", label: "Notifications", icon: <Bell className="size-4" /> }]
-    : [{ id: "my-work", label: "My Work", icon: <LayoutList className="size-4" />, count: queueGroups[0]?.items.length }, { id: "agency-queue", label: activePersona.workspace === "supervisor" ? "Supervisor queue" : "My agency queue", icon: <Building2 className="size-4" /> }, { id: "rfis", label: "RFIs", icon: <HelpCircle className="size-4" /> }, { id: "coordination", label: "Coordination requests", icon: <Users className="size-4" /> }, { id: "documents", label: "Documents to review", icon: <FileCheck2 className="size-4" /> }, { id: "project", label: "Project", icon: <Route className="size-4" /> }, { id: "notifications", label: "Notifications", icon: <Bell className="size-4" /> }];
+    ? [{ id: "project", label: "Home / Project overview", icon: <Building2 className="size-4" /> }, { id: "my-work", label: "My actions", icon: <LayoutList className="size-4" />, count: actionableCount }, { id: "requests", label: "Requests & permits", icon: <FilePlus2 className="size-4" /> }, { id: "schedule", label: "Schedule", icon: <CalendarClock className="size-4" /> }, { id: "documents", label: "Documents", icon: <FileCheck2 className="size-4" /> }, { id: "contacts", label: "Contacts", icon: <Users className="size-4" /> }, { id: "help", label: "Help & escalation", icon: <ShieldAlert className="size-4" /> }, { id: "notifications", label: "Notifications", icon: <Bell className="size-4" /> }]
+    : [{ id: "my-work", label: "My Work", icon: <LayoutList className="size-4" />, count: actionableCount }, { id: "agency-queue", label: activePersona.workspace === "supervisor" ? "Supervisor queue" : "My agency queue", icon: <Building2 className="size-4" /> }, { id: "rfis", label: "RFIs", icon: <HelpCircle className="size-4" /> }, { id: "coordination", label: "Coordination requests", icon: <Users className="size-4" /> }, { id: "documents", label: "Documents to review", icon: <FileCheck2 className="size-4" /> }, { id: "project", label: "Project", icon: <Route className="size-4" /> }, { id: "notifications", label: "Notifications", icon: <Bell className="size-4" /> }];
 
   function renderWorkCard(item: OperationalWorkItem) {
     const tone = toneClasses(item.statusTone);
@@ -1368,7 +1370,7 @@ export default function Home() {
         {priorityLabel} {item.isCriticalPath ? "Critical Path" : "Standard"}
               </span>
             </div>
-            <h3 className="mt-1 text-lg font-black leading-tight text-[#00284d]">{item.title}</h3>
+            <button type="button" onClick={() => openItem(item)} className="mt-1 block text-left text-lg font-black leading-tight text-[#00284d] hover:text-teal-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600">{item.title}</button>
             <button type="button" onClick={(e) => { e.stopPropagation(); openProject(item.workstreamId); }} className="mt-1 text-sm font-semibold text-slate-600 hover:text-teal-800 hover:underline text-left cursor-pointer transition-colors" title="View in project page">{item.workstreamTitle}</button>
             {item.sourceWorkstream && <WorkflowMiniStepper source={item.sourceWorkstream} templates={repository.getWorkflowTemplates()} customerSafe={activePersona.isCustomer} />}
           </div>
@@ -1391,9 +1393,6 @@ export default function Home() {
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={() => openItem(item)} className="bg-[#00284d] text-xs font-bold hover:bg-[#003c70]">
             Open Work & Workflow <ArrowRight className="size-3.5" aria-hidden="true" />
-          </Button>
-          <Button type="button" variant="ghost" onClick={() => openProject(item.workstreamId)} className="text-xs font-bold text-teal-800 hover:bg-teal-50" title="Open project page">
-            <Building2 className="size-3.5 mr-1" /> Project
           </Button>
           {compactActions.map((action) => {
             const isActionPermitted = isAdministrator(activePersona) || canUserPerformAction(item, action, activePersona);
@@ -1423,8 +1422,7 @@ export default function Home() {
     if (!activePersona.isCustomer) return group.label;
     if (group.id === "needs_action") return "Needs SpaceX";
     if (group.id === "waiting") return "Needs Government";
-    if (group.id === "overdue") return "Blocked";
-    if (group.id === "upcoming") return "Upcoming decisions";
+    if (group.id === "due_soon") return "Due soon";
     return group.label;
   }
 

@@ -35,8 +35,10 @@ test("role-aware projection gives an environmental reviewer a focused My Work qu
 test("My Work groups preserve priority and expose the requested operational sections", () => {
   const { items } = ux.getOperationalWorkItems({ persona: reviewerPersona });
   const groups = ux.groupMyWork(items);
-  assert.deepEqual(groups.map((group) => group.id), ["needs_action", "due_today", "overdue", "waiting", "upcoming", "recently_completed"]);
+  assert.deepEqual(groups.map((group) => group.id), ["needs_action", "due_soon", "waiting", "recently_completed"]);
   assert.ok(groups.find((group) => group.id === "needs_action").items.length > 0);
+  const groupedIds = groups.flatMap((group) => group.items.map((item) => item.id));
+  assert.equal(new Set(groupedIds).size, groupedIds.length);
   const ordered = items.map((item) => item.priorityScore);
   assert.deepEqual(ordered, [...ordered].sort((a, b) => b - a));
 });
