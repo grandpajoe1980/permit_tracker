@@ -692,6 +692,7 @@ export default function Home() {
         const hydratedPermits = loaded.permits.length > 0 || !allowsFixtureData() ? loaded.permits : pecanIslandRequests;
         setUserPermits(hydratedPermits);
         setCurrentUser((current) => current ? { ...current, applicationIds: hydratedPermits.map((item) => item.id) } : current);
+        setMutationVersion((value) => value + 1);
       })();
     }
   }

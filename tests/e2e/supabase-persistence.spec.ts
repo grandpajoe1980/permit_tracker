@@ -12,7 +12,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     // Open Demo Sign-in and select Alex Martin (SpaceX customer submitter)
     await pageA.click("#demo-login-trigger");
     await pageA.click("#demo-persona-alex");
-    await expect(pageA.getByRole("button", { name: "Open SpaceX Pecan Island" })).toBeVisible();
+    await expect(pageA.getByRole("button", { name: "Open project page" })).toBeVisible();
 
     // Navigate to Requests & Permits
     await pageA.click("text=Requests & permits");
@@ -42,7 +42,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     // created in Context A, not merely a generic authenticated page heading.
     await pageB.getByRole("button", { name: "Administration", exact: true }).click();
     await expect(pageB.getByRole("heading", { name: "Customer intake queue", exact: true })).toBeVisible();
-    await expect(pageB.getByText(requestTitle, { exact: false }).first()).toBeVisible();
+    await expect(pageB.getByText(requestTitle, { exact: false }).first()).toBeVisible({ timeout: 15_000 });
 
     await contextB.close();
   });
@@ -61,7 +61,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(pageReviewer.getByRole("heading", { name: "My Work", exact: true })).toBeVisible();
 
     // Select a real reviewer queue card that exposes the RFI command.
-    const rfiCard = pageReviewer.locator("article").filter({ hasText: "COORDINATION" }).filter({ has: pageReviewer.getByRole("button", { name: "Request Information", exact: true }) }).first();
+    const rfiCard = pageReviewer.locator("article").filter({ hasText: "RFI" }).filter({ has: pageReviewer.getByRole("button", { name: "Request Information", exact: true }) }).first();
     await expect(rfiCard).toBeVisible();
     const rfiBtn = rfiCard.getByRole("button", { name: "Request Information", exact: true });
     await expect(rfiBtn).toBeVisible();

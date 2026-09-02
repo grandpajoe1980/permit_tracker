@@ -123,7 +123,8 @@ const profileByEmail = {
 for (const user of authUsers) {
   const profile = profileByEmail[user.email];
   if (!profile) continue;
-  await one(supabase.from("user_profiles").upsert({ id: `profile-${user.email.split("@")[0].replaceAll(".", "-")}`, user_id: user.id, full_name: user.name, organization_id: profile.organizationId, organization_name: profile.organizationName, display_title: profile.title, organizational_unit: profile.unit, work_email: user.email, project_role: profile.projectRole, is_customer_visible: profile.visible, is_active: true }, { onConflict: "user_id" }), `portal profile ${user.email}`);
+  const existingProfile = await one(supabase.from("user_profiles").select("id").eq("user_id", user.id).maybeSingle(), `find portal profile ${user.email}`);
+  await one(supabase.from("user_profiles").upsert({ id: existingProfile?.id ?? stableUuid(`profile:${user.email}`), user_id: user.id, full_name: user.name, organization_id: profile.organizationId, organization_name: profile.organizationName, display_title: profile.title, organizational_unit: profile.unit, work_email: user.email, project_role: profile.projectRole, is_customer_visible: profile.visible, is_active: true }, { onConflict: "user_id" }), `portal profile ${user.email}`);
 }
 
 const userByEmail = Object.fromEntries(authUsers.map((user) => [user.email, user]));
@@ -196,11 +197,12 @@ const airTasks = [
   ["TASK-AIR-005", "Record construction-release decision", "submitted", "LED:PATH Administration", "joe.skaggs@demo.permit.local", false],
 ];
 for (const [id, title, status, groupKey, assigneeEmail, critical] of airTasks) {
-  await one(supabase.from("tasks").upsert({ id, workstream_id: "WS-AIR-TITLE-V", task_code: id, title, duration_days: 10, float_days: critical ? 0 : 5, early_start: "2026-08-01", early_finish: "2026-08-15", late_start: "2026-08-01", late_finish: "2026-08-20", is_critical_path: critical, status, assignment_group_id: groupByKey[groupKey], assigned_to_user_id: userByEmail[assigneeEmail].id, assigned_org_code: groupKey.split(":")[0], itsm_state: status, priority: critical ? "P1" : "P2", clock_status: status === "blocked" ? "paused" : "active" }, { onConflict: "id" }), `Title V task ${id}`);
+  await one(supabase.from("tasks").upsert({ id, workstream_id: "WS-AIR-TITLE-V", task_code: id, title, duration_days: 10, float_days: critical ? 0 : 5, early_start: "2026-08-01", early_finish: "2026-08-15", late_start: "2026-08-01", late_finish: "2026-08-20", is_critical_path: critical, status, assignment_group_id: groupByKey[groupKey], assigned_to_user_id: userByEmail[assigneeEmail].id, assigned_org_code: groupKey.split(":")[0], itsm_state: status === "completed" ? "resolved" : status, priority: critical ? "P1" : "P2", clock_status: status === "blocked" ? "paused" : "active" }, { onConflict: "id" }), `Title V task ${id}`);
 }
 for (const [predecessor, successor, controlling] of [["TASK-AIR-001", "TASK-AIR-002", true], ["TASK-AIR-002", "TASK-AIR-003", true], ["TASK-AIR-003", "TASK-AIR-004", true], ["TASK-AIR-004", "TASK-AIR-005", false]]) {
   await one(supabase.from("task_dependencies").upsert({ id: `dep-${predecessor}-${successor}`, predecessor_task_id: predecessor, successor_task_id: successor, dependency_type: "finish_to_start", gate_type: "statutory_mandatory", lag_days: 0, is_controlling: controlling }, { onConflict: "id" }), `dependency ${predecessor} ${successor}`);
 }
+await one(supabase.from("rfis").upsert({ id: "rfi-demo-title-v", code: "RFI-DEMO-TITLE-V", workstream_id: "WS-AIR-TITLE-V", workstream_title: "Liquefaction and combustion source air permit", requesting_org_id: orgByCode.LDEQ, requesting_org_code: "LDEQ", recipient_org_id: orgByCode.SPACEPORT, recipient_org_code: "SPACEPORT", title: "Confirm control-technology assumptions", question_text: "Please confirm the control-technology assumptions used in the revised Title V emissions inventory.", technical_reason: "The agency reviewer needs the assumptions before the technical review can resume.", required_document_types: ["emissions inventory", "control technology memo"], issued_date: "2026-08-28", response_deadline: "2026-09-12", clock_impact: "pauses_clock", schedule_impact_days: 12, status: "issued", is_consolidated_cycle: false }, { onConflict: "id" }), "Title V RFI");
 
 const participantSpecs = [
   ["participant-alex", "alex.martin@demo.permit.local", "SPACEPORT", "lead", "customer", ["WS-LA82-HEAVYHAUL", "WS-WETLANDS-PAD-A", "WS-UTILITY-INTERCONNECT"], [], [], ["customer_updates"]],

@@ -100,6 +100,39 @@ Next ready task: Appended Task 5 — verify the complete seeded path end to end 
 
 Task 5 implementation is complete locally; final regression and UX journey verification remains below.
 
+## Final UX-13 verification — 2026-09-02
+
+- `npm test`: PASS; production build plus 368 Node tests passed, 0 failed,
+  0 skipped. This includes live Supabase hydration, Storage byte/hash checks,
+  mutation persistence, RLS/RPC authorization, routing, workflow execution,
+  and cross-feature journeys.
+- `npm run supabase:rls`: PASS; isolated project/document reads were hidden,
+  anonymous project reads were hidden, and unauthorized Storage upload was
+  rejected by RLS.
+- The supplemental `node scripts/seed-spacex-demo.mjs` run completed after two
+  seed-only fixes: preserve existing `user_profiles.id` values on conflict and
+  map display status `completed` to valid ITSM state `resolved`. The final run
+  reported 13 fictional personas, 6 assignment groups, 5 workflow stages, the
+  Title V workstream, 5 tasks, 13 participants, 2 external filings, and 8
+  requests. A Title V RFI was added for the LDEQ reviewer journey.
+- `npx playwright test --project=chromium tests/e2e/supabase-persistence.spec.ts`:
+  BLOCKED. Stale selectors were corrected (`Open project page` and `RFI`),
+  and the cross-context wait was extended. The customer-created request is
+  visible through direct authenticated Supabase reads but not in the browser's
+  rendered state-office queue; the reviewer-created RFI likewise is not
+  rendered after the mutation. This indicates a remaining browser hydration
+  or fixture-runtime issue, not an RLS denial.
+- `npx playwright test --project=chromium tests/e2e/document-management.spec.ts`:
+  BLOCKED. Upload reports `Upload failed: the selected document is no longer
+  available`; the seeded `la82-drainage-hydrodynamic-demo-v1.pdf` row does not
+  produce a browser download before timeout. Direct live Node Storage checks
+  pass, so this remains a protected browser fixture/rendering blocker.
+
+No migration, RLS policy, RPC authorization, authentication, audit contract,
+notification contract, or download implementation was weakened to bypass the
+browser blockers. The user-supplied UX plan remains an unstaged working-tree
+change by design.
+
 ## UX recovery baseline — 2026-09-02
 
 - Branch/commit: `main` at `680b441b0a491cc43e17287a7e610d9360ff462a`.
