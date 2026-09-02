@@ -716,7 +716,7 @@ export function canUserModifyItem(item: OperationalWorkItem, persona: Operationa
   const personaId = String(p.id ?? "");
 
   if (isCustomer) {
-    if (item.kind === "customer_request" && (item.ownerName?.includes("SpaceX") || item.sourceRequest?.submittedByName?.includes("SpaceX"))) {
+    if (item.kind === "customer_request" && (item.ownerName?.includes("SpaceX") || item.sourceRequest?.applicant?.includes("SpaceX"))) {
       return true;
     }
     if (item.kind === "rfi" && (item.statusTone === "red" || item.statusLabel.toLowerCase().includes("waiting") || !item.hasRfiResponse)) {

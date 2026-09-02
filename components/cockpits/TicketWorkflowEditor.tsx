@@ -24,6 +24,7 @@ import {
   Workflow,
   X,
   Zap,
+  ShieldCheck,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -31,18 +32,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { repository } from "@/lib/repository";
-import { isAdministrator, canUserModifyItem, type OperationalWorkItem } from "@/lib/operational-ux";
-import type { DemoPersona, WorkflowStageRecord } from "@/lib/domain-models";
+import { getOperationalPersona, isAdministrator, canUserModifyItem, type OperationalPersona, type OperationalWorkItem } from "@/lib/operational-ux";
+import type { WorkflowStageRecord } from "@/lib/domain-models";
+import type { DemoPersona } from "@/lib/demo-data";
 
 interface TicketWorkflowEditorProps {
   item: OperationalWorkItem;
-  persona: DemoPersona;
+  persona: DemoPersona | OperationalPersona;
   onWorkflowUpdated?: () => void;
 }
 
 export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: TicketWorkflowEditorProps) {
-  const isAdmin = isAdministrator(persona);
-  const isAuthorized = isAdmin || (!persona.isCustomer && canUserModifyItem(item, persona));
+  const operationalPersona = "permissions" in persona ? persona : getOperationalPersona(persona);
+  const isAdmin = isAdministrator(operationalPersona);
+  const isAuthorized = isAdmin || (!operationalPersona.isCustomer && canUserModifyItem(item, operationalPersona));
   const canEditWorkflow = item.kind === "workflow" || item.kind === "task";
 
   const workstream = item.workstreamId ? repository.getWorkstreamById(item.workstreamId) : undefined;
@@ -51,9 +54,10 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
 
   // Find or generate stages for this ticket
   const initialStages: WorkflowStageRecord[] = React.useMemo(() => {
-    if (workstream?.stages && workstream.stages.length > 0) {
-      return workstream.stages;
-    }
+    const persistedStages = workstream?.workflowVersionId
+      ? repository.getWorkflowTemplates().flatMap((template) => template.versions).find((version) => version.id === workstream.workflowVersionId)?.stages
+      : undefined;
+    if (persistedStages?.length) return persistedStages;
     // Fallback standard 5-stage ITSM lifecycle for this workstream
     const leadOrg = workstream?.regulatoryLead?.orgCode ?? "DOTD";
     return [
@@ -63,6 +67,8 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
         stageKey: "intake_validation",
         name: "Intake & Completeness Check",
         customerVisibilityLabel: "Application Received & Verification",
+        sequenceOrder: 1,
+        responsibleOrgId: "org-state-office",
         responsibleOrgCode: "STATE_OFFICE",
         targetDurationDays: 3,
         minimumStatutoryDays: 0,
@@ -78,6 +84,8 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
         stageKey: "technical_review",
         name: "Technical Agency Review",
         customerVisibilityLabel: "Technical Review by Reviewing Agency",
+        sequenceOrder: 2,
+        responsibleOrgId: workstream?.regulatoryLead?.orgCode ?? "org-agency",
         responsibleOrgCode: leadOrg,
         targetDurationDays: 14,
         minimumStatutoryDays: 5,
@@ -93,6 +101,8 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
         stageKey: "interagency_concurrence",
         name: "Inter-Agency Concurrence",
         customerVisibilityLabel: "Inter-Agency Alignment & Cross-Review",
+        sequenceOrder: 3,
+        responsibleOrgId: "org-coordination",
         responsibleOrgCode: leadOrg === "DOTD" ? "CPRA" : "DOTD",
         targetDurationDays: 7,
         minimumStatutoryDays: 0,
@@ -108,6 +118,8 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
         stageKey: "final_determination",
         name: "Final Statutory Determination & Issuance",
         customerVisibilityLabel: "Final Permit Determination",
+        sequenceOrder: 4,
+        responsibleOrgId: workstream?.regulatoryLead?.orgCode ?? "org-agency",
         responsibleOrgCode: leadOrg,
         targetDurationDays: 5,
         minimumStatutoryDays: 0,
@@ -176,6 +188,8 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
       name: newStageName.trim(),
       customerVisibilityLabel: newStageName.trim(),
       responsibleOrgCode: newStageOrg,
+      sequenceOrder: stages.length + 1,
+      responsibleOrgId: newStageOrg,
       targetDurationDays: Number(newStageDuration) || 5,
       minimumStatutoryDays: 0,
       requiredInputs: ["Supporting technical submittal"],
@@ -242,19 +256,6 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
   }
 
   function triggerSaveNotification(message: string) {
-    // Record audit event in repository
-    repository.recordAuditEvent({
-      entityType: "workstream",
-      entityId: item.workstreamId || item.id,
-      actionType: "workflow_modified",
-      actorId: persona.id,
-      actorName: persona.name,
-      actorRole: persona.roleLabel,
-      actorOrganization: persona.organization,
-      reason: message,
-      occurredAt: new Date().toISOString(),
-    });
-
     setSaveSuccess(message);
     setTimeout(() => setSaveSuccess(null), 4000);
     if (onWorkflowUpdated) onWorkflowUpdated();

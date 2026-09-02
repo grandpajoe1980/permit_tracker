@@ -701,7 +701,7 @@ export interface NotificationRecord {
   userId: string;
   title: string;
   message: string;
-  type: "action_required" | "mention" | "status_update" | "escalation" | "deadline_warning" | "completion" | "system";
+  type: "action_required" | "assignment" | "mention" | "status_update" | "escalation" | "deadline_warning" | "completion" | "system";
   linkUrl?: string;
   urgency: "info" | "high" | "critical";
   metadata?: Record<string, unknown>;

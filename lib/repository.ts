@@ -529,7 +529,7 @@ class ProjectDeliveryRepository {
     const tasks: TaskRecord[] = [];
     for (const ws of this.workstreams) {
       for (const t of ws.tasks || []) {
-        if (t.assignedUserId === userId || t.assignedToUserId === userId) {
+        if (t.assignedUserId === userId) {
           tasks.push(t);
         }
       }
@@ -1389,7 +1389,7 @@ class ProjectDeliveryRepository {
       actorName,
       actorOrgName: ws.regulatoryLead?.orgName ?? "State Project Office",
       actionType: "status_change",
-      previousValue: oldLabel ?? oldState,
+      oldValue: oldLabel ?? oldState,
       newValue: ws.operationalStateLabel,
       reason: `Workstream operational state changed from "${oldLabel ?? oldState}" to "${ws.operationalStateLabel}" by ${actorName}.`,
     });
@@ -1948,6 +1948,7 @@ class ProjectDeliveryRepository {
       id,
       createdAt: new Date().toISOString(),
       isRead: false,
+      urgency: "info",
     };
     this.notifications.unshift(full);
 
@@ -2025,6 +2026,7 @@ class ProjectDeliveryRepository {
         type: "assignment",
         linkUrl: `/workstreams/${ticket.id || ticket.code}`,
         isRead: false,
+        urgency: "info",
         createdAt: new Date().toISOString(),
       };
       this.notifications.unshift(notif);
