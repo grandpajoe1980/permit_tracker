@@ -121,10 +121,21 @@ import { SystemVersionFooter } from "@/components/SystemVersionFooter";
 import { TicketWorkflowEditor } from "@/components/cockpits/TicketWorkflowEditor";
 import { PRODUCT_NAME, PROGRAM_SUBTITLE, PROJECT_DISPLAY_NAME } from "@/lib/product-copy";
 import { LoginPage } from "@/components/path/LoginPage";
+import { buildShellPath, buildWorkItemPath, parseShellPath, parseWorkItemPath, type AppRoute } from "@/lib/navigation";
 
-type Route = "my-work" | "agency-queue" | "rfis" | "coordination" | "documents" | "project" | "notifications" | "secondary" | "admin" | "detail" | "requests" | "schedule" | "contacts" | "help" | "profile";
+type Route = AppRoute;
 type SecondaryTool = "schedule" | "vault" | "catalog";
 type DialogState = { action: WorkActionId; itemId: string } | null;
+type ShellHistoryState = {
+  route: Route;
+  selectedItemId: string | null;
+  selectedProjectWorkstreamId: string | null;
+  queueSearch: string;
+  queueKind: string;
+  queueState: string;
+  queueGroup: string;
+  scrollY: number;
+};
 
 function userIdForPersona(id: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
@@ -352,6 +363,8 @@ export default function Home() {
   const [viewerModalVer, setViewerModalVer] = useState<DocumentVersionRecord | undefined>(undefined);
   const usernameRef = useRef<HTMLInputElement>(null);
   const demoHydrationRef = useRef<Promise<void> | null>(null);
+  const restoringScrollRef = useRef<number | null>(null);
+  const [requestedWorkItemPath, setRequestedWorkItemPath] = useState<string | null>(null);
 
   const activePersona = getOperationalPersona(currentPersona);
   const operationalData = getOperationalWorkItems({
@@ -463,7 +476,53 @@ export default function Home() {
   }, [teamUsers]);
 
   useEffect(() => {
+    if (!loggedIn || typeof window === "undefined") return;
+
+    const restore = (state?: ShellHistoryState | null) => {
+      if (state?.route) {
+        setRoute(state.route);
+        setSelectedItemId(state.selectedItemId);
+        setSelectedProjectWorkstreamId(state.selectedProjectWorkstreamId);
+        setQueueSearch(state.queueSearch);
+        setQueueKind(state.queueKind);
+        setQueueState(state.queueState);
+        setQueueGroup(state.queueGroup);
+        setRequestedWorkItemPath(null);
+        restoringScrollRef.current = state.scrollY;
+        return;
+      }
+
+      const workPath = parseWorkItemPath(window.location.pathname);
+      if (workPath) {
+        const item = workItems.find((candidate) => candidate.kind === workPath.kind && (candidate.sourceId === workPath.id || candidate.id === workPath.id));
+        setRoute("detail");
+        setSelectedItemId(item?.id ?? null);
+        setSelectedProjectWorkstreamId(null);
+        setRequestedWorkItemPath(item ? null : window.location.pathname);
+        return;
+      }
+
+      const shell = parseShellPath(new URL(window.location.href));
+      setRoute(shell.route);
+      setSelectedItemId(null);
+      setSelectedProjectWorkstreamId(shell.workstreamId ?? null);
+      setRequestedWorkItemPath(null);
+    };
+
+    const handlePopState = () => restore(window.history.state as ShellHistoryState | null);
+    restore(window.history.state as ShellHistoryState | null);
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [loggedIn]);
+
+  useEffect(() => {
     if (!loggedIn) return;
+    const restoredScroll = restoringScrollRef.current;
+    restoringScrollRef.current = null;
+    if (restoredScroll !== null) {
+      window.requestAnimationFrame(() => window.scrollTo({ top: restoredScroll, behavior: "auto" }));
+      return;
+    }
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
   }, [route, selectedItemId, loggedIn]);
@@ -474,22 +533,38 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  function currentHistoryState(): ShellHistoryState {
+    return { route, selectedItemId, selectedProjectWorkstreamId, queueSearch, queueKind, queueState, queueGroup, scrollY: typeof window === "undefined" ? 0 : window.scrollY };
+  }
+
+  function pushNavigation(path: string, state: ShellHistoryState) {
+    if (typeof window === "undefined") return;
+    window.history.replaceState(currentHistoryState(), "", window.location.href);
+    window.history.pushState(state, "", path);
+  }
+
   function navigate(nextRoute: Route) {
+    pushNavigation(buildShellPath(nextRoute), { ...currentHistoryState(), route: nextRoute, selectedItemId: null, selectedProjectWorkstreamId: nextRoute === "project" ? selectedProjectWorkstreamId : null, scrollY: 0 });
     setRoute(nextRoute);
     setSelectedItemId(null);
     if (nextRoute !== "project") setSelectedProjectWorkstreamId(null);
+    setRequestedWorkItemPath(null);
     setMobileNavOpen(false);
   }
 
   function openProject(workstreamId?: string) {
+    pushNavigation(buildShellPath("project", workstreamId), { ...currentHistoryState(), route: "project", selectedItemId: null, selectedProjectWorkstreamId: workstreamId ?? null, scrollY: 0 });
     setSelectedItemId(null);
     setSelectedProjectWorkstreamId(workstreamId ?? null);
+    setRequestedWorkItemPath(null);
     setRoute("project");
     setMobileNavOpen(false);
   }
 
   function openItem(item: OperationalWorkItem) {
+    pushNavigation(buildWorkItemPath(item.kind, item.sourceId), { ...currentHistoryState(), route: "detail", selectedItemId: item.id, selectedProjectWorkstreamId: null, scrollY: 0 });
     setSelectedItemId(item.id);
+    setRequestedWorkItemPath(null);
     setRoute("detail");
     setMobileNavOpen(false);
   }
@@ -1536,7 +1611,7 @@ export default function Home() {
   }
 
   function renderDetail() {
-    if (!selectedItem) return <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center"><p className="font-bold text-slate-600">Choose a work item to open its assignment.</p><Button type="button" onClick={() => navigate("my-work")} className="mt-4 bg-[#00284d] font-bold">Back to My Work</Button></div>;
+    if (!selectedItem) return <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center"><p className="font-bold text-slate-600">{requestedWorkItemPath ? "This work item is not available to your signed-in account." : "Choose a work item to open its assignment."}</p><Button type="button" onClick={() => navigate("my-work")} className="mt-4 bg-[#00284d] font-bold">Back to My Work</Button></div>;
     const actions = getAvailableActions(selectedItem, activePersona);
     const completionPreview = getCompletionPreview(selectedItem);
     const customer = activePersona.isCustomer;

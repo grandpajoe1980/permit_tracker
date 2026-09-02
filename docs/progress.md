@@ -66,6 +66,21 @@ Next ready task: UX-02 — simplify the logged-out sign-in experience.
 
 Next ready task: UX-03 — stable navigation and return-context contract.
 
+## UX-03 — stable navigation and return context (2026-09-02)
+
+- Added `lib/navigation.ts` as the single route vocabulary and canonical
+  `/work/{kind}/{id}` work-item URL contract.
+- Root-shell navigation now writes browser history, preserves queue filters and
+  scroll position, restores them on Back, and shows an inline unavailable-item
+  state for an unauthorized or missing canonical work URL.
+- Project and work-item actions now use the shared navigation contract while
+  retaining existing authenticated data and physical route resolvers.
+- Focused source, project-navigation, and rendered-shell tests — 18 passed;
+  focused ESLint — 0 errors (existing warnings only); `npm run build` — PASS.
+- Supabase, RLS, audit, notifications, uploads, and downloads were not changed.
+
+Next ready task: UX-04 — rebuild the customer landing experience.
+
 ## Flow visibility checkpoint (2026-09-02)
 
 - Added a shared past/current/next workflow journey model and reusable UI.

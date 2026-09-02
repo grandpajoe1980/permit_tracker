@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [page, layout, css, readme, productCopy, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, triageMigration, versionedCompletionMigration, requestActorMigration, attachmentMigration, workflowAdminScopeMigration, roleMigration, dependencyMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, requestApi, workflowPanel, seedScript, commandSeedScript, repository, rlsScript] = await Promise.all([
+const [page, layout, css, readme, productCopy, navigation, portalMigration, hardeningMigration, policyMigration, actionMigration, actionNotificationMigration, workflowRlsMigration, catalogAdminMigration, triageMigration, versionedCompletionMigration, requestActorMigration, attachmentMigration, workflowAdminScopeMigration, roleMigration, dependencyMigration, identifierModule, mutations, dataMode, projectRoute, workstreamRoute, requestRoute, requestApi, workflowPanel, seedScript, commandSeedScript, repository, rlsScript] = await Promise.all([
   readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   readFile(new URL("../README.md", import.meta.url), "utf8"),
   readFile(new URL("../lib/product-copy.ts", import.meta.url), "utf8"),
+  readFile(new URL("../lib/navigation.ts", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830120000_customer_portal_delivery.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830150635_harden_command_system_rls_and_seed_portal_support.sql", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260830152028_consolidate_customer_request_update_policy.sql", import.meta.url), "utf8"),
@@ -67,6 +68,15 @@ test("centralizes PATH product and project display copy", () => {
   assert.match(productCopy, /PRODUCT_NAME\s*=\s*[\"']PATH[\"']/);
   assert.match(productCopy, /PROGRAM_SUBTITLE\s*=\s*[\"']Starbase Louisiana/);
   assert.match(productCopy, /PROJECT_DISPLAY_NAME\s*=\s*[\"']SpaceX/);
+});
+
+test("defines canonical shell and work-item navigation contracts", () => {
+  assert.match(navigation, /buildWorkItemPath/);
+  assert.match(navigation, /\/work\//);
+  assert.match(navigation, /parseWorkItemPath/);
+  assert.match(page, /window\.history\.pushState/);
+  assert.match(page, /window\.addEventListener\("popstate"/);
+  assert.match(page, /requestedWorkItemPath/);
 });
 
 test("keeps the login surface focused and preserves demo access", () => {
