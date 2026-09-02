@@ -8,6 +8,33 @@ documentation that persistence and cross-browser verification were complete
 were not reproducible from the current source and have been replaced with the
 findings below.
 
+## UX recovery baseline — 2026-09-02
+
+- Branch/commit: `main` at `680b441b0a491cc43e17287a7e610d9360ff462a`.
+- Pre-existing worktree state: the supplied
+  `docs/PATH_UX_LUNA_IMPLEMENTATION_PLAN.md` is untracked; it is preserved
+  without modification.
+- Deployed/generated footer evidence currently reports `0fe54e2`, which does
+  not match the checked-out commit. This is a metadata-generation defect to
+  repair within the UX shell work; it is not treated as source authority.
+- `npm run build`: PASS when executed outside the sandbox; Vinext completed
+  and generated route metadata.
+- `npm run test` / Node suite: PASS, 344 tests passed, 0 failed; repeated
+  WebSocket port-in-use warnings remain non-fatal.
+- `npm run supabase:rls`: PASS; isolated project/document reads were hidden
+  and an unauthorized Storage upload was rejected by RLS.
+- `npx tsc --noEmit`: FAIL on pre-existing type errors in
+  `TicketWorkflowEditor.tsx`, `operational-ux.ts`, `repository.ts`, route
+  resolvers, and missing `@playwright/test` types.
+- `npm run lint`: FAIL before UX changes because generated `.vercel` output is
+  linted and contains dependency errors; the repository also has existing
+  warning debt.
+- Protected Playwright suites: BLOCKED because `@playwright/test` is not
+  installed/resolvable in the current checkout.
+
+Persistence and document download checks are regression gates for every
+stateful/navigation change; no UX-00 source behavior was changed.
+
 ## Flow visibility checkpoint (2026-09-02)
 
 - Added a shared past/current/next workflow journey model and reusable UI.
