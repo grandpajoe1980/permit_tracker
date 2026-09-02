@@ -8,6 +8,35 @@ documentation that persistence and cross-browser verification were complete
 were not reproducible from the current source and have been replaced with the
 findings below.
 
+## UX appended-work baseline — 2026-09-02
+
+- Branch/commit: `main` at `0940e6a`.
+- Pre-existing user change: `docs/PATH_UX_LUNA_IMPLEMENTATION_PLAN.md` is
+  modified and is preserved without editing or staging.
+- Checked-in footer metadata before this baseline reported `beb0663`; the
+  protected build regenerated it to the current `0940e6a` commit through the
+  existing version-generation path.
+- `npm run build`: PASS under the elevated Windows runner; Vinext emitted the
+  root, Admin, project, workstream, request, API, and demo-resource routes.
+- `npx tsc --noEmit`: PASS.
+- `npm run lint`: PASS with 304 existing warnings and 0 errors.
+- `npm test`: PASS; build plus 360 Node tests passed, 0 failed, 0 skipped.
+  Existing non-fatal Vite WebSocket port-in-use warnings remain.
+- `npm run supabase:rls`: PASS; isolated project/document reads were hidden and
+  unauthorized Storage upload was rejected by RLS.
+- `npx playwright test --project=chromium
+  tests/e2e/supabase-persistence.spec.ts`: BLOCKED by current browser
+  expectations: the Alex flow could not find `Open SpaceX Pecan Island`, and
+  the reviewer flow could not find a `COORDINATION` card with `Request
+  Information`.
+- `npx playwright test --project=chromium
+  tests/e2e/document-management.spec.ts`: BLOCKED by current browser fixture
+  state: upload reported `the selected document is no longer available`, and
+  the seeded PDF download row was unavailable before timeout.
+
+Persistence, RLS, audit, notifications, uploads, and downloads remain
+regression gates for every stateful or navigation change.
+
 ## UX recovery baseline — 2026-09-02
 
 - Branch/commit: `main` at `680b441b0a491cc43e17287a7e610d9360ff462a`.
