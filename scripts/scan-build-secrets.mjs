@@ -14,6 +14,7 @@ const textExtensions = new Set([
   ".js", ".mjs", ".cjs", ".ts", ".tsx", ".json", ".html", ".css", ".map", ".txt",
 ]);
 const jwtPattern = /\b([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]{20,})\.([A-Za-z0-9_-]{20,})\b/g;
+const supabaseSecretKeyPattern = /\bsb_secret_[A-Za-z0-9_-]{20,}\b/;
 
 function filesUnder(directory) {
   if (!existsSync(directory)) return [];
@@ -46,6 +47,10 @@ for (const directory of artifactDirectories) {
       } catch {
         // Ignore ordinary dotted strings and non-JWT values.
       }
+    }
+
+    if (supabaseSecretKeyPattern.test(content)) {
+      matches.push(`${relative(projectRoot, file)} contains a Supabase secret key`);
     }
   }
 }

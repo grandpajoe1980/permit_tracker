@@ -29,6 +29,12 @@ test("shared Supabase client contains no service-role fallback or credential", a
     assert.doesNotMatch(source, /service_role/i);
     assert.doesNotMatch(source, /eyJ[A-Za-z0-9_-]{20,}/);
   }
+
+  assert.match(clientSource, /process\.env\.NEXT_PUBLIC_SUPABASE_URL/);
+  assert.match(clientSource, /process\.env\.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY/);
+  assert.doesNotMatch(clientSource, /runtimeEnv\("NEXT_PUBLIC_SUPABASE_URL"\)/);
+  assert.doesNotMatch(clientSource, /runtimeEnv\("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"\)/);
+  assert.doesNotMatch(clientSource, /import\.meta\.env/);
 });
 
 test("document validation rejects unsafe and oversized uploads", async () => {

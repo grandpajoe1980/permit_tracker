@@ -12,28 +12,29 @@ function runtimeEnv(name: string): string {
   if (typeof process !== "undefined" && process.env?.[name]) {
     return process.env[name] ?? "";
   }
-
-  if (typeof import.meta !== "undefined" && import.meta.env) {
-    const value = (import.meta.env as Record<string, string | undefined>)[name];
-    if (value) return value;
-  }
-
   return "";
 }
 
+// Vite's `define` replacement is intentionally static. Do not route these
+// names through runtimeEnv(): dynamic property access is not replaced in the
+// browser bundle, which leaves production clients unconfigured even though
+// server-side readiness checks succeed.
+const buildTimePublicSupabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
+
+const buildTimePublicSupabaseKey =
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  "";
+
 export function getSupabaseUrl(): string {
-  return (
-    runtimeEnv("NEXT_PUBLIC_SUPABASE_URL") ||
-    runtimeEnv("SUPABASE_URL") ||
-    runtimeEnv("VITE_SUPABASE_URL")
-  );
+  return buildTimePublicSupabaseUrl || runtimeEnv("VITE_SUPABASE_URL");
 }
 
 export function getSupabaseAnonKey(): string {
   return (
-    runtimeEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") ||
-    runtimeEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY") ||
-    runtimeEnv("SUPABASE_ANON_KEY") ||
+    buildTimePublicSupabaseKey ||
     runtimeEnv("PATH_TEST_ANON_KEY") ||
     runtimeEnv("VITE_SUPABASE_ANON_KEY")
   );
