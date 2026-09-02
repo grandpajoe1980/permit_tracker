@@ -438,7 +438,6 @@ export default function Home() {
       setProfileDraft(profileDraftForPersona(persona));
       setCurrentUser({ username: user.email ?? "", name: persona.name, agencyId: "spaceport", applicationIds: permits.map((item) => item.id), scenario: persona.role });
       setUserPermits(permits);
-      setRoute("my-work");
     });
     const { data: listener } = client.auth.onAuthStateChange((event: string, session: { user?: { email?: string | null; user_metadata?: Record<string, unknown> } } | null) => {
       if (event === "SIGNED_OUT") {

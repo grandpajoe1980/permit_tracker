@@ -1,5 +1,6 @@
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 
@@ -20,6 +21,8 @@ const { getProjectOverview } = await vite.ssrLoadModule("/lib/customer-portal.ts
 const { getOperationalWorkItems } = await vite.ssrLoadModule("/lib/operational-ux.ts");
 const { demoPersonas } = await vite.ssrLoadModule("/lib/demo-data.ts");
 const { buildShellPath, parseShellPath, NAVIGATION_DEFINITIONS } = await vite.ssrLoadModule("/lib/navigation.ts");
+const rootPageSource = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+const projectOverviewSource = await readFile(new URL("../components/cockpits/ProjectOverviewPage.tsx", import.meta.url), "utf8");
 
 test("spacexProjectRecord provides authoritative project page metadata", () => {
   assert.equal(spacexProjectRecord.id, "proj-spacex-pecan");
@@ -105,6 +108,18 @@ test("deep project links preserve the exact workstream identifier", () => {
   assert.equal(parsed.route, "project");
   assert.equal(parsed.workstreamId, "WS-AIR-TITLE-V");
   assert.ok(NAVIGATION_DEFINITIONS.some((entry) => entry.id === "intake"));
+});
+
+test("fresh authenticated project links are not overwritten by hydration defaults", () => {
+  const hydration = rootPageSource.slice(rootPageSource.indexOf("void getBrowserUser"), rootPageSource.indexOf("const { data: listener"));
+  assert.doesNotMatch(hydration, /setRoute\("my-work"\)/);
+  assert.match(rootPageSource, /setSelectedProjectWorkstreamId\(shell\.workstreamId \?\? null\)/);
+});
+
+test("project summary cards open the selected workstream workspace", () => {
+  assert.match(projectOverviewSource, /aria-label=\{attentionWorkstream \? `Open workstream workspace/);
+  assert.match(projectOverviewSource, /onFocusWorkstream\(attentionWorkstream\.id\)/);
+  assert.match(projectOverviewSource, /aria-label=\{`Open workstream workspace for \$\{workstream\.title\}`\}/);
 });
 
 test("workstream resolution supports code, lowercase, URL-encoded, and ID lookup", () => {

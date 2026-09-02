@@ -37,6 +37,22 @@ findings below.
 Persistence, RLS, audit, notifications, uploads, and downloads remain
 regression gates for every stateful or navigation change.
 
+## Appended Task 1 — project-card navigation (2026-09-02)
+
+- Removed the post-authentication route reset that could overwrite a direct
+  project/workstream URL before the URL-backed restore completed.
+- Project summary rows and the Needs attention / Happening now / Next milestone
+  cards now expose a large, keyboard-accessible workstream workspace target and
+  retain the stable workstream identifier in the focus callback.
+- Added focused tests for fresh-load URL preservation and clickable project
+  summary cards.
+- Verification: `node --test tests/project-navigation.test.mjs` — 10 passed;
+  focused ESLint — 0 errors (existing warnings only); `npm run build` — PASS.
+- Supabase, RLS, audit, notifications, uploads, and downloads were not changed.
+
+Next ready task: Appended Task 2 — separate administrative configuration from
+the public Permit Catalog.
+
 ## UX recovery baseline — 2026-09-02
 
 - Branch/commit: `main` at `680b441b0a491cc43e17287a7e610d9360ff462a`.
