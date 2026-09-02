@@ -74,12 +74,12 @@ export async function resolveWorkstreamRoute(
   const byIdQuery = client.from("workstreams").select(workstreamColumns);
   if (projectId) byIdQuery.eq("project_id", projectId);
   const byId = await byIdQuery.eq("id", key).maybeSingle();
-  if (byId.data) return byId.data as RouteWorkstream;
+  if (byId.data) return byId.data as unknown as RouteWorkstream;
 
   const byCodeQuery = client.from("workstreams").select(workstreamColumns);
   if (projectId) byCodeQuery.eq("project_id", projectId);
   const byCode = await byCodeQuery.eq("code", key).maybeSingle();
-  if (byCode.data) return byCode.data as RouteWorkstream;
+  if (byCode.data) return byCode.data as unknown as RouteWorkstream;
 
   const byCodeInsensitiveQuery = client.from("workstreams").select(workstreamColumns);
   if (projectId) byCodeInsensitiveQuery.eq("project_id", projectId);

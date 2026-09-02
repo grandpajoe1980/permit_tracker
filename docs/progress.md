@@ -205,6 +205,31 @@ Next ready task: UX-12 — remove noise and finish the shell.
 
 Next ready task: UX-13 — full regression and usability proof.
 
+## UX-13 — full regression and usability proof (2026-09-02)
+
+- Full protected Node regression: `npm test` PASS — 356 tests passed, 0 failed,
+  0 skipped. Existing non-fatal Vite WebSocket port warnings remain.
+- Supabase isolation: `npm run supabase:rls` PASS — isolated reads were hidden
+  and unauthorized Storage upload was rejected.
+- Production build: `npm run build` PASS; footer metadata regenerated.
+- Focused UX source/render/Gantt/operational suites pass, including canonical
+  work-item navigation, customer request entry, queue exclusivity, mutation
+  refresh, route normalization, project focus, escalation targeting, and shell
+  status placement.
+- Full `npx tsc --noEmit` remains blocked by pre-existing repository type debt
+  in TicketWorkflowEditor, operational-ux/repository models, and missing
+  `@playwright/test` types. The route-resolver cast introduced during UX-08 was
+  corrected; remaining errors are outside the UX changes.
+- Full `npm run lint` remains blocked by generated `.vercel` output: 124 errors
+  and existing warning debt. Focused UX lint has 0 errors.
+- UX-13 browser journeys are externally blocked: both existing Playwright
+  suites fail before collection because `@playwright/test` is absent from
+  `node_modules`; no credentials or source-level workaround can safely replace
+  this protected browser gate.
+
+Definition-of-done status: all implementation tasks are checkpointed locally;
+the only unresolved items are the documented environment/debt blockers above.
+
 ## Flow visibility checkpoint (2026-09-02)
 
 - Added a shared past/current/next workflow journey model and reusable UI.

@@ -8,6 +8,18 @@ false-success and fixture behavior with verified Supabase-backed behavior.
 
 ## Current state after Wave 0 rebaseline
 
+## UX recovery status — 2026-09-02
+
+- UX-00 through UX-12 have been implemented in narrow local checkpoints on
+  `main`, including PATH copy, focused sign-in, customer request entry,
+  canonical navigation, actionable queues, work-item summaries, mutation
+  refresh, normalized workstream routing, visible project focus, Gantt clock
+  controls, escalation association, and shell cleanup.
+- UX-13 full Node regression passes 356 tests; Supabase RLS isolation passes.
+- Browser journey execution remains externally blocked because the checkout's
+  declared `@playwright/test` package is not installed and the Playwright
+  config cannot load it. The blocker is recorded in `docs/progress.md`.
+
 - Next.js App Router/Vinext, React, TypeScript, Supabase Auth/Postgres/Storage.
 - The main UI is still concentrated in `app/page.tsx` and uses internal route
   state; only `/api/health` and `/api/requests` are physical routes.
