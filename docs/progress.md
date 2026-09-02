@@ -71,6 +71,15 @@ the public Permit Catalog.
 Next ready task: Appended Task 3 — make each Permit Catalog resource actionable
 without placeholder links or dead routes.
 
+## Appended Task 3 — resource catalog completeness (2026-09-02)
+
+- The public Permit Catalog now presents each permit as an actionable resource: purpose and trigger, responsible agency and reviewing group, prerequisites, configured review stages, submission guidance, official filing links, form/instructions/checklist links, related permits, and contact/escalation guidance.
+- Internal fallback resources use stable, labeled demo-resource URLs with explicit resource variants (`form_pdf`, `guidance_doc`, and `checklist`); the demo page identifies them as fictional demonstration material. No dead `#` links were introduced, and the request action continues to preselect the catalog permit before opening the request flow.
+- Verification: focused `node --test tests/admin-catalog.test.mjs` passed (2/2); `npm run build` passed and regenerated version metadata; prior protected baseline typecheck, lint, full Node suite, and RLS checks remain passing.
+- Supabase persistence, RLS/RPC authorization, audit behavior, notifications, uploads, and downloads were not changed.
+
+Next ready task: Appended Task 4 — expand the self-contained deterministic SpaceX demo seed environment.
+
 ## UX recovery baseline — 2026-09-02
 
 - Branch/commit: `main` at `680b441b0a491cc43e17287a7e610d9360ff462a`.
