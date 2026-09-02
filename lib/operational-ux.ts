@@ -33,6 +33,7 @@ import {
 } from "./spacex-megaproject-fixture";
 import { participantForTask, participantForWorkstream, projectProfiles } from "./customer-portal";
 import { PROJECT_DISPLAY_NAME } from "./product-copy";
+import { asOfDate } from "./time";
 
 export type WorkspaceMode = "reviewer" | "agency" | "supervisor" | "state_office" | "customer" | "admin";
 
@@ -131,7 +132,7 @@ export type RecipientPreview = {
 };
 
 const PROJECT_NAME = PROJECT_DISPLAY_NAME;
-const AS_OF_DATE = "2026-08-30";
+const AS_OF_DATE = asOfDate();
 
 const requestWorkstreamMap: Record<string, string> = {
   "TASK-T001": "WS-LA82-HEAVYHAUL",

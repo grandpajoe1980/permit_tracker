@@ -27,6 +27,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getFullProjectRecord } from "@/lib/permit-utils";
 import { evaluateProjectSchedule } from "@/lib/engines/schedule-engine";
 import type { OperationalState, ProjectRecord, WorkstreamRecord } from "@/lib/domain-models";
+import { asOfDateTime } from "@/lib/time";
 
 import { InteractiveScheduleSimulator } from "./InteractiveScheduleSimulator";
 
@@ -164,11 +165,13 @@ export function WorkstreamGraphGantt({
   onSelectWorkstream,
   onSelectProject,
   project: projectOverride,
+  asOfDate,
 }: {
   customerSafe?: boolean;
   onSelectWorkstream?: (workstreamId: string) => void;
   onSelectProject?: (workstreamId?: string) => void;
   project?: ProjectRecord;
+  asOfDate?: string | Date;
 }) {
   const project = projectOverride ?? getFullProjectRecord();
   const schedule = evaluateProjectSchedule(project.workstreams);
@@ -177,7 +180,8 @@ export function WorkstreamGraphGantt({
   const [filterState, setFilterState] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [hoveredWorkstreamId, setHoveredWorkstreamId] = useState<string | null>(null);
-  const todayDate = useMemo(() => new Date("2026-08-30T12:00:00Z"), []);
+  const [zoom, setZoom] = useState<"day" | "week" | "month">("week");
+  const todayDate = useMemo(() => asOfDateTime(asOfDate), [asOfDate]);
 
   // Timeline boundaries include the earliest baseline work and the current forecast.
   const timelineStart = useMemo(() => {
@@ -198,7 +202,7 @@ export function WorkstreamGraphGantt({
     return Math.max(1, Math.round((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24)));
   }, [timelineStart, timelineEnd]);
 
-  // Today marker (August 30, 2026)
+  // Today marker is injected for deterministic tests and defaults to the current date.
   const todayPositionPercent = useMemo(() => {
     const elapsed = (todayDate.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24);
     return Math.max(0, Math.min(100, (elapsed / totalTimelineDays) * 100));
@@ -426,6 +430,7 @@ export function WorkstreamGraphGantt({
                 placeholder="Search permit or agency..."
                 className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:border-teal-600 focus:bg-white focus:outline-none"
               />
+              <div className="flex items-center gap-1" aria-label="Schedule controls"><Button type="button" variant="outline" size="sm" onClick={() => setZoom("day")} aria-pressed={zoom === "day"}>Day</Button><Button type="button" variant="outline" size="sm" onClick={() => setZoom("week")} aria-pressed={zoom === "week"}>Week</Button><Button type="button" variant="outline" size="sm" onClick={() => setZoom("month")} aria-pressed={zoom === "month"}>Month</Button><Button type="button" variant="outline" size="sm" onClick={() => setFilterState("all")}>Fit project</Button><Button type="button" variant="outline" size="sm" onClick={() => window.scrollTo({ top: document.querySelector("[aria-label='Timeline horizons']")?.getBoundingClientRect().top ?? 0, behavior: "smooth" })}>Today</Button></div>
             </div>
           </div>
 

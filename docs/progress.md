@@ -165,6 +165,19 @@ Next ready task: UX-09 — rebuild the project workstream interaction.
 
 Next ready task: UX-10 — make the Gantt truthful and usable.
 
+## UX-10 — truthful schedule clock and controls (2026-09-02)
+
+- Added shared `lib/time.ts` date normalization and replaced the hard-coded
+  August 30 queue/Gantt clock with the current date by default.
+- Gantt accepts an injected as-of date for deterministic tests and now exposes
+  Day, Week, Month, Fit project, and Today controls while retaining the full
+  table alternative and exact row activation.
+- Focused Gantt/source tests — 19 passed; focused lint — 0 errors (existing
+  warnings only); `npm run build` — PASS.
+- Schedule state taxonomy, Supabase, RLS, audit, notifications, uploads, and downloads were not changed.
+
+Next ready task: UX-11 — improve escalation selection.
+
 ## Flow visibility checkpoint (2026-09-02)
 
 - Added a shared past/current/next workflow journey model and reusable UI.

@@ -16,10 +16,10 @@ export interface BuildInfo {
 
 export const BUILD_INFO: BuildInfo = {
   version: "1.1.0-itsm",
-  commitHash: "2973747b0b3fe373de3e571da0d300ae70cc71f6",
-  commitShort: "2973747",
-  commitDate: "2026-09-02 10:37:14 CDT",
-  buildDate: "2026-09-02 15:39:00 UTC",
+  commitHash: "519761773def26029c117b9dfd3223573ded62f9",
+  commitShort: "5197617",
+  commitDate: "2026-09-02 10:39:33 CDT",
+  buildDate: "2026-09-02 15:41:27 UTC",
   branch: "main",
   environment: "development",
   repositoryUrl: "https://github.com/grandpajoe1980/permit_tracker",

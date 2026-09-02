@@ -146,6 +146,16 @@ test("keeps focused project workstreams visibly in view", async () => {
   assert.match(projectOverviewPage, /scrollIntoView/);
 });
 
+test("uses an injected current date and explicit Gantt viewport controls", async () => {
+  const gantt = await readFile(new URL("../components/cockpits/WorkstreamGraphGantt.tsx", import.meta.url), "utf8");
+  const time = await readFile(new URL("../lib/time.ts", import.meta.url), "utf8");
+  assert.match(time, /export function asOfDate/);
+  assert.match(gantt, /asOfDateTime\(asOfDate\)/);
+  assert.match(gantt, />Day<|>Week<|>Month</);
+  assert.match(gantt, /Fit project/);
+  assert.match(gantt, />Today</);
+});
+
 test("includes responsive, focus, reduced-motion, and print protections", () => {
   assert.match(css, /\.skip-link:focus/);
   assert.match(css, /:focus-visible/);
