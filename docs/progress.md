@@ -80,6 +80,17 @@ without placeholder links or dead routes.
 
 Next ready task: Appended Task 4 — expand the self-contained deterministic SpaceX demo seed environment.
 
+## Appended Task 4 — self-contained SpaceX demo seed (2026-09-02)
+
+- Expanded the repeatable Supabase seed with the required agency, state, local, applicant, internal-team, and external-partner organizations, including federal consultation organizations used by the Louisiana program.
+- Fixed the persona-to-organization and filing-user mismatches. Seeded professional demonstration personas remain under `@demo.permit.local`, carry an explicit fictional marker, and retain differentiated customer, agency, coordinator, consultant, executive, and administrator roles.
+- Added stable-ID assignment groups and memberships; a versioned `spaceport_request` workflow with stages; the `WS-AIR-TITLE-V` workstream; completed, current, customer-pending, blocked, and future tasks; finish-to-start dependencies; request workflow instances and assignments; an applicant action-required notification; and an audit entry. Re-running the supplemental seed updates these records instead of generating duplicates.
+- Expanded `supabase/seed.sql` with the same registry organizations for a self-contained local seed baseline. Existing Storage/document and authoritative reset-seed behavior remains intact.
+- Verification: `node --check scripts/seed-spacex-demo.mjs` — PASS; focused `node --test tests/spacex-demo-seed.test.mjs` — 2 passed; `npx tsc --noEmit` — PASS; `npm run lint` — PASS with 304 existing warnings and 0 errors.
+- The live seed was not executed because the repository’s documented remote migration-ledger mismatch remains an external Supabase deployment blocker; no database or secrets were changed during this checkpoint.
+
+Next ready task: Appended Task 5 — verify the complete seeded path end to end and close remaining UX recovery gaps.
+
 ## UX recovery baseline — 2026-09-02
 
 - Branch/commit: `main` at `680b441b0a491cc43e17287a7e610d9360ff462a`.
