@@ -91,6 +91,15 @@ Next ready task: Appended Task 4 — expand the self-contained deterministic Spa
 
 Next ready task: Appended Task 5 — verify the complete seeded path end to end and close remaining UX recovery gaps.
 
+## Appended Task 5 — seeded-path and shell verification (2026-09-02)
+
+- Removed the Supabase connection pill from the header; persistence health remains in the version footer with commit, date, build version, environment, and health details.
+- Removed the persistent filing notice and made the Secondary tools label conditional so customer navigation never renders an empty heading. Ordinary queue copy now uses “My work” and the project link uses plain language.
+- Added focused shell coverage for those requirements and re-ran navigation, catalog, seed, and shell contracts: 16/16 passed. `npx tsc --noEmit` passed; `npm run lint` passed with 305 existing warnings and 0 errors; `npm run build` passed.
+- The protected browser journeys were re-run during the baseline and remain externally blocked by the current seeded browser/Storage fixture state; exact failures are preserved above. The source-level durable path is covered by the existing Node workflow tests and the new deterministic seed contracts.
+
+Task 5 implementation is complete locally; final regression and UX journey verification remains below.
+
 ## UX recovery baseline — 2026-09-02
 
 - Branch/commit: `main` at `680b441b0a491cc43e17287a7e610d9360ff462a`.
