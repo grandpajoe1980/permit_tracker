@@ -1,0 +1,3276 @@
+{
+  "tableColumns": {
+    "organizations": {
+      "id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "code": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "name": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "organization_type": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "jurisdiction_level": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "active": {
+        "type": "boolean",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "contacts": {
+        "type": "jsonb",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "updated_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "customer_organizations": {
+      "id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "name": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "legal_name": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "active": {
+        "type": "boolean",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "updated_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "profiles": {
+      "id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": true,
+        "references": "auth.users(id)"
+      },
+      "full_name": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "email": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "status": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "customer_organization_id": {
+        "type": "uuid",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "customer_organizations(id)"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "updated_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "organization_memberships": {
+      "id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "user_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "auth.users(id)"
+      },
+      "organization_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "organizations(id)"
+      },
+      "role": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "status": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "effective_from": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "effective_to": {
+        "type": "timestamptz",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "projects": {
+      "id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "number": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "name": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "customer_organization_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "customer_organizations(id)"
+      },
+      "lead_organization_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "organizations(id)"
+      },
+      "project_type": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "location": {
+        "type": "jsonb",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "status": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "risk": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "start_date": {
+        "type": "date",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "target_date": {
+        "type": "date",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_by": {
+        "type": "uuid",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "auth.users(id)"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "updated_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "project_participants": {
+      "id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "project_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "projects(id)"
+      },
+      "organization_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "organizations(id)"
+      },
+      "participation_role": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "access_scope": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "expires_at": {
+        "type": "timestamptz",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "workflow_definitions": {
+      "id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "organization_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "organizations(id)"
+      },
+      "case_type": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "version": {
+        "type": "integer",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "active": {
+        "type": "boolean",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "workflow_stages": {
+      "id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "workflow_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "workflow_definitions(id)"
+      },
+      "stage_key": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "label": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "sort_order": {
+        "type": "integer",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "allowed_transitions": {
+        "type": "jsonb",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "required_documents": {
+        "type": "jsonb",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "service_target_days": {
+        "type": "integer",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "minimum_processing_days": {
+        "type": "integer",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "requests": {
+      "id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "number": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "project_id": {
+        "type": "uuid",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "projects(id)"
+      },
+      "submitter_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "auth.users(id)"
+      },
+      "owning_organization_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "organizations(id)"
+      },
+      "request_type": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "title": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "description": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "status": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "current_stage": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "next_action": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "submitted_at": {
+        "type": "timestamptz",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "due_date": {
+        "type": "date",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "target_date": {
+        "type": "date",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "updated_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "case_workflows": {
+      "id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "request_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "requests(id)"
+      },
+      "workflow_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "workflow_definitions(id)"
+      },
+      "stage_key": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "clock_state": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "minimum_completion_date": {
+        "type": "date",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "target_completion_date": {
+        "type": "date",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "updated_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "assignments": {
+      "id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "request_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "requests(id)"
+      },
+      "assignee_user_id": {
+        "type": "uuid",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "auth.users(id)"
+      },
+      "assignee_organization_id": {
+        "type": "uuid",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "organizations(id)"
+      },
+      "assignment_role": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "due_date": {
+        "type": "date",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "status": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "documents": {
+      "id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "request_id": {
+        "type": "uuid",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "requests(id)"
+      },
+      "project_id": {
+        "type": "uuid",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "projects(id)"
+      },
+      "owner_organization_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "organizations(id)"
+      },
+      "storage_path": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "document_type": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "visibility": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "version": {
+        "type": "integer",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "scan_status": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "retention_category": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_by": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "auth.users(id)"
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "notifications": {
+      "id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "recipient_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "auth.users(id)"
+      },
+      "request_id": {
+        "type": "uuid",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "requests(id)"
+      },
+      "event_type": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "title": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "body": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "channel": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "delivery_status": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "dedupe_key": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "audit_events": {
+      "id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "actor_id": {
+        "type": "uuid",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "auth.users(id)"
+      },
+      "organization_id": {
+        "type": "uuid",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "organizations(id)"
+      },
+      "action": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "resource_type": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "resource_id": {
+        "type": "uuid",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "before_data": {
+        "type": "jsonb",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "after_data": {
+        "type": "jsonb",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "correlation_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "permit_types": {
+      "id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "code": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "name": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "category": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "responsible_org_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "responsible_org_code": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "trigger_explanation": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "statutory_citation": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "official_filing_url": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "application_form_url": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "instructions_url": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "expected_lead_time_days": {
+        "type": "INTEGER",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "minimum_statutory_days": {
+        "type": "INTEGER",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "public_notice_required": {
+        "type": "BOOLEAN",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "public_notice_days": {
+        "type": "INTEGER",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "prerequisites": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "related_permit_type_ids": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "last_verified_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "verification_status": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "updated_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "requirement_resources": {
+      "id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "permit_type_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "permit_types(id)"
+      },
+      "resource_name": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "resource_type": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "url": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "version_tag": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "verified_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "verified_by": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "is_stale": {
+        "type": "BOOLEAN",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "workflow_versions": {
+      "id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "workflow_id": {
+        "type": "UUID",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "workflow_definitions(id)"
+      },
+      "version_number": {
+        "type": "INTEGER",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "version_label": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "change_summary": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "is_active": {
+        "type": "BOOLEAN",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "effective_date": {
+        "type": "DATE",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "workstreams": {
+      "id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "project_id": {
+        "type": "UUID",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "projects(id)"
+      },
+      "code": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "title": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "category": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "permit_type_id": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "permit_types(id)"
+      },
+      "current_stage_name": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "operational_state": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "operational_state_label": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "rag_status": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "rag_label": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "is_critical_path": {
+        "type": "BOOLEAN",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "baseline_target_date": {
+        "type": "DATE",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "forecast_target_date": {
+        "type": "DATE",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "schedule_variance_days": {
+        "type": "INTEGER",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "remaining_float_days": {
+        "type": "INTEGER",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "state_concierge": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "regulatory_lead": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "six_questions": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "waiting_reason": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "waiting_on_entity": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "current_action_summary": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "escalation_level": {
+        "type": "INTEGER",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "escalation_triggered_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "escalation_summary": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "stage_history": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "active_blockers": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "updated_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "tasks": {
+      "id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "workstream_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "workstreams(id)"
+      },
+      "task_code": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "title": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "duration_days": {
+        "type": "INTEGER",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "float_days": {
+        "type": "INTEGER",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "early_start": {
+        "type": "DATE",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "early_finish": {
+        "type": "DATE",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "late_start": {
+        "type": "DATE",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "late_finish": {
+        "type": "DATE",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "is_critical_path": {
+        "type": "BOOLEAN",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "status": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "predecessors": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "task_dependencies": {
+      "id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "predecessor_task_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "tasks(id)"
+      },
+      "successor_task_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "tasks(id)"
+      },
+      "dependency_type": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "gate_type": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "lag_days": {
+        "type": "INTEGER",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "is_controlling": {
+        "type": "BOOLEAN",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "coordination_requests": {
+      "id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "code": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "workstream_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "workstreams(id)"
+      },
+      "workstream_title": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "requesting_org_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "requesting_org_code": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "target_org_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "target_org_code": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "requesting_user_name": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "assigned_to_user_name": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "title": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "need_description": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "requested_date": {
+        "type": "DATE",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "due_date": {
+        "type": "DATE",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "response_date": {
+        "type": "DATE",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "concurred_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "attached_document_version_ids": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "blocks_workstream_title": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "priority": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "status": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "response_summary": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "rfis": {
+      "id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "code": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "workstream_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "workstreams(id)"
+      },
+      "workstream_title": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "requesting_org_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "requesting_org_code": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "recipient_org_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "recipient_org_code": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "title": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "question_text": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "technical_reason": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "required_document_types": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "issued_date": {
+        "type": "DATE",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "response_deadline": {
+        "type": "DATE",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "clock_impact": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "schedule_impact_days": {
+        "type": "INTEGER",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "status": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "is_consolidated_cycle": {
+        "type": "BOOLEAN",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "consolidated_batch_id": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "lead_reviewer_approved_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "rfi_responses": {
+      "id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "rfi_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "rfis(id)"
+      },
+      "submitted_by_user_name": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "response_text": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "attached_document_version_ids": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "submitted_date": {
+        "type": "DATE",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "review_status": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "reviewer_feedback": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "document_versions": {
+      "id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "document_id": {
+        "type": "UUID",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "documents(id)"
+      },
+      "document_ref_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "version_number": {
+        "type": "INTEGER",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "version_label": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "storage_path": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "sha256_hash": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "file_size_bytes": {
+        "type": "BIGINT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "uploaded_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "uploaded_by_name": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "uploaded_by_org_name": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "change_notes": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "status": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "document_agency_reviews": {
+      "id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "document_version_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "document_versions(id)"
+      },
+      "reviewing_org_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "reviewing_org_code": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "reviewed_by_user_name": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "reviewed_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "status": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "comments": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "commitments": {
+      "id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "workstream_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "workstreams(id)"
+      },
+      "workstream_title": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "committing_org_id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "committing_org_code": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "made_by_person_name": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "committed_action": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "origin_context": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "committed_date": {
+        "type": "DATE",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "promised_due_date": {
+        "type": "DATE",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "fulfilled_date": {
+        "type": "DATE",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "status": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "impact_if_missed": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "is_critical_path_impact": {
+        "type": "BOOLEAN",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "decisions": {
+      "id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "project_id": {
+        "type": "UUID",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "projects(id)"
+      },
+      "title": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "decision_date": {
+        "type": "DATE",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "decision_summary": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "decision_maker_name": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "decision_maker_title": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "organizations_represented": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "statutory_authority": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "affected_workstream_ids": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "affected_workstream_titles": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "referenced_document_version_ids": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "required_follow_ups": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "meetings": {
+      "id": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "project_id": {
+        "type": "UUID",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "projects(id)"
+      },
+      "title": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "meeting_date": {
+        "type": "DATE",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "location_or_link": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "attendee_list": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "meeting_notes": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "related_workstream_ids": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "action_items_converted": {
+        "type": "JSONB",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "user_profiles": {
+      "id": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "user_id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "auth.users(id)"
+      },
+      "full_name": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "organization_id": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "organization_name": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "display_title": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "organizational_unit": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "work_email": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "office_phone": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "mobile_phone": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "office_location": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "preferred_contact_method": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "availability_status": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "project_role": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "avatar_url": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "is_customer_visible": {
+        "type": "boolean",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "is_active": {
+        "type": "boolean",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "updated_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "external_filings": {
+      "id": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "project_id": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "workstream_id": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "permit_type_id": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "authority_organization_id": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "authority_organization_name": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "filing_method": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "official_portal_url": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "external_reference_number": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "external_record_url": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "external_status": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "submitted_at": {
+        "type": "timestamptz",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "submitted_by_user_id": {
+        "type": "uuid",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "auth.users(id)"
+      },
+      "last_status_verified_at": {
+        "type": "timestamptz",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "last_status_verified_by": {
+        "type": "uuid",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "auth.users(id)"
+      },
+      "authoritative_system_name": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "notes": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "receipt_document_version_ids": {
+        "type": "jsonb",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "updated_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "customer_requests": {
+      "id": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "confirmation_number": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "project_id": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "request_type": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "title": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "description": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "requested_outcome": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "location_or_affected_area": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "desired_date": {
+        "type": "date",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "schedule_importance": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "known_agency_code": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "known_permit_type_id": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "submitted_by_user_id": {
+        "type": "uuid",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "auth.users(id)"
+      },
+      "submitted_by_name": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "related_workstream_id": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "blocks_active_work": {
+        "type": "boolean",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "status": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "attachment_document_version_ids": {
+        "type": "jsonb",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "updated_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "workflow_transitions": {
+      "id": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "workflow_version_id": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "workflow_versions(id)"
+      },
+      "from_stage_key": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "to_stage_key": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "label": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "required_capability": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "stage_runs": {
+      "id": {
+        "type": "uuid",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "workstream_id": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "workstreams(id)"
+      },
+      "workflow_version_id": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "stage_id": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "stage_key": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "status": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "started_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "completed_at": {
+        "type": "timestamptz",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "completed_checklist_items": {
+        "type": "jsonb",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "provided_document_categories": {
+        "type": "jsonb",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "completed_by": {
+        "type": "uuid",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "auth.users(id)"
+      },
+      "completion_notes": {
+        "type": "text",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "workflow_checklist_items": {
+      "id": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "workflow_version_id": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "workflow_versions(id)"
+      },
+      "stage_key": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "item_key": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "label": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "required": {
+        "type": "boolean",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "sort_order": {
+        "type": "integer",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "workflow_version_stages": {
+      "id": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "workflow_version_id": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "workflow_versions(id)"
+      },
+      "stage_key": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "sequence_order": {
+        "type": "integer",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "label": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "customer_visibility_label": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "responsible_org_code": {
+        "type": "text",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "target_duration_days": {
+        "type": "integer",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "minimum_statutory_days": {
+        "type": "integer",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "required_inputs": {
+        "type": "jsonb",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "completion_requirements": {
+        "type": "jsonb",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "permitted_transitions": {
+        "type": "jsonb",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "can_run_in_parallel": {
+        "type": "boolean",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "is_milestone_gate": {
+        "type": "boolean",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "updated_at": {
+        "type": "timestamptz",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "assignment_groups": {
+      "id": {
+        "type": "UUID",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "org_code": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "organization_id": {
+        "type": "UUID",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "organizations(id)"
+      },
+      "name": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "description": {
+        "type": "TEXT",
+        "notNull": false,
+        "isPrimary": false,
+        "references": null
+      },
+      "lead_user_id": {
+        "type": "UUID",
+        "notNull": false,
+        "isPrimary": false,
+        "references": "auth.users(id)"
+      },
+      "active": {
+        "type": "BOOLEAN",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "updated_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    },
+    "assignment_group_memberships": {
+      "id": {
+        "type": "UUID",
+        "notNull": true,
+        "isPrimary": true,
+        "references": null
+      },
+      "assignment_group_id": {
+        "type": "UUID",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "assignment_groups(id)"
+      },
+      "user_id": {
+        "type": "UUID",
+        "notNull": true,
+        "isPrimary": false,
+        "references": "auth.users(id)"
+      },
+      "role": {
+        "type": "TEXT",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "created_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      },
+      "updated_at": {
+        "type": "TIMESTAMPTZ",
+        "notNull": true,
+        "isPrimary": false,
+        "references": null
+      }
+    }
+  },
+  "foreignKeys": [
+    {
+      "fromTable": "profiles",
+      "fromCol": "id",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "profiles",
+      "fromCol": "customer_organization_id",
+      "toTable": "customer_organizations",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "organization_memberships",
+      "fromCol": "user_id",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "organization_memberships",
+      "fromCol": "organization_id",
+      "toTable": "organizations",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "projects",
+      "fromCol": "customer_organization_id",
+      "toTable": "customer_organizations",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "projects",
+      "fromCol": "lead_organization_id",
+      "toTable": "organizations",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "projects",
+      "fromCol": "created_by",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "project_participants",
+      "fromCol": "project_id",
+      "toTable": "projects",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "project_participants",
+      "fromCol": "organization_id",
+      "toTable": "organizations",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "workflow_definitions",
+      "fromCol": "organization_id",
+      "toTable": "organizations",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "workflow_stages",
+      "fromCol": "workflow_id",
+      "toTable": "workflow_definitions",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "requests",
+      "fromCol": "project_id",
+      "toTable": "projects",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "requests",
+      "fromCol": "submitter_id",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "requests",
+      "fromCol": "owning_organization_id",
+      "toTable": "organizations",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "case_workflows",
+      "fromCol": "request_id",
+      "toTable": "requests",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "case_workflows",
+      "fromCol": "workflow_id",
+      "toTable": "workflow_definitions",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "assignments",
+      "fromCol": "request_id",
+      "toTable": "requests",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "assignments",
+      "fromCol": "assignee_user_id",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "assignments",
+      "fromCol": "assignee_organization_id",
+      "toTable": "organizations",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "documents",
+      "fromCol": "request_id",
+      "toTable": "requests",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "documents",
+      "fromCol": "project_id",
+      "toTable": "projects",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "documents",
+      "fromCol": "owner_organization_id",
+      "toTable": "organizations",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "documents",
+      "fromCol": "created_by",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "notifications",
+      "fromCol": "recipient_id",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "notifications",
+      "fromCol": "request_id",
+      "toTable": "requests",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "audit_events",
+      "fromCol": "actor_id",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "audit_events",
+      "fromCol": "organization_id",
+      "toTable": "organizations",
+      "toCol": "id",
+      "file": "20260828170355_initial_path_mvp.sql"
+    },
+    {
+      "fromTable": "requirement_resources",
+      "fromCol": "permit_type_id",
+      "toTable": "permit_types",
+      "toCol": "id",
+      "file": "20260830071223_command_system_relational_schema.sql"
+    },
+    {
+      "fromTable": "workflow_versions",
+      "fromCol": "workflow_id",
+      "toTable": "workflow_definitions",
+      "toCol": "id",
+      "file": "20260830071223_command_system_relational_schema.sql"
+    },
+    {
+      "fromTable": "workstreams",
+      "fromCol": "project_id",
+      "toTable": "projects",
+      "toCol": "id",
+      "file": "20260830071223_command_system_relational_schema.sql"
+    },
+    {
+      "fromTable": "workstreams",
+      "fromCol": "permit_type_id",
+      "toTable": "permit_types",
+      "toCol": "id",
+      "file": "20260830071223_command_system_relational_schema.sql"
+    },
+    {
+      "fromTable": "tasks",
+      "fromCol": "workstream_id",
+      "toTable": "workstreams",
+      "toCol": "id",
+      "file": "20260830071223_command_system_relational_schema.sql"
+    },
+    {
+      "fromTable": "task_dependencies",
+      "fromCol": "predecessor_task_id",
+      "toTable": "tasks",
+      "toCol": "id",
+      "file": "20260830071223_command_system_relational_schema.sql"
+    },
+    {
+      "fromTable": "task_dependencies",
+      "fromCol": "successor_task_id",
+      "toTable": "tasks",
+      "toCol": "id",
+      "file": "20260830071223_command_system_relational_schema.sql"
+    },
+    {
+      "fromTable": "coordination_requests",
+      "fromCol": "workstream_id",
+      "toTable": "workstreams",
+      "toCol": "id",
+      "file": "20260830071223_command_system_relational_schema.sql"
+    },
+    {
+      "fromTable": "rfis",
+      "fromCol": "workstream_id",
+      "toTable": "workstreams",
+      "toCol": "id",
+      "file": "20260830071223_command_system_relational_schema.sql"
+    },
+    {
+      "fromTable": "rfi_responses",
+      "fromCol": "rfi_id",
+      "toTable": "rfis",
+      "toCol": "id",
+      "file": "20260830071223_command_system_relational_schema.sql"
+    },
+    {
+      "fromTable": "document_versions",
+      "fromCol": "document_id",
+      "toTable": "documents",
+      "toCol": "id",
+      "file": "20260830071223_command_system_relational_schema.sql"
+    },
+    {
+      "fromTable": "document_agency_reviews",
+      "fromCol": "document_version_id",
+      "toTable": "document_versions",
+      "toCol": "id",
+      "file": "20260830071223_command_system_relational_schema.sql"
+    },
+    {
+      "fromTable": "commitments",
+      "fromCol": "workstream_id",
+      "toTable": "workstreams",
+      "toCol": "id",
+      "file": "20260830071223_command_system_relational_schema.sql"
+    },
+    {
+      "fromTable": "decisions",
+      "fromCol": "project_id",
+      "toTable": "projects",
+      "toCol": "id",
+      "file": "20260830071223_command_system_relational_schema.sql"
+    },
+    {
+      "fromTable": "meetings",
+      "fromCol": "project_id",
+      "toTable": "projects",
+      "toCol": "id",
+      "file": "20260830071223_command_system_relational_schema.sql"
+    },
+    {
+      "fromTable": "user_profiles",
+      "fromCol": "user_id",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260830120000_customer_portal_delivery.sql"
+    },
+    {
+      "fromTable": "external_filings",
+      "fromCol": "submitted_by_user_id",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260830120000_customer_portal_delivery.sql"
+    },
+    {
+      "fromTable": "external_filings",
+      "fromCol": "last_status_verified_by",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260830120000_customer_portal_delivery.sql"
+    },
+    {
+      "fromTable": "customer_requests",
+      "fromCol": "submitted_by_user_id",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260830120000_customer_portal_delivery.sql"
+    },
+    {
+      "fromTable": "workflow_transitions",
+      "fromCol": "workflow_version_id",
+      "toTable": "workflow_versions",
+      "toCol": "id",
+      "file": "20260830200000_workflow_execution_engine.sql"
+    },
+    {
+      "fromTable": "stage_runs",
+      "fromCol": "workstream_id",
+      "toTable": "workstreams",
+      "toCol": "id",
+      "file": "20260830200000_workflow_execution_engine.sql"
+    },
+    {
+      "fromTable": "stage_runs",
+      "fromCol": "completed_by",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260830200000_workflow_execution_engine.sql"
+    },
+    {
+      "fromTable": "workflow_checklist_items",
+      "fromCol": "workflow_version_id",
+      "toTable": "workflow_versions",
+      "toCol": "id",
+      "file": "20260830200000_workflow_execution_engine.sql"
+    },
+    {
+      "fromTable": "workflow_version_stages",
+      "fromCol": "workflow_version_id",
+      "toTable": "workflow_versions",
+      "toCol": "id",
+      "file": "20260830203000_workflow_designer_transactions.sql"
+    },
+    {
+      "fromTable": "assignment_groups",
+      "fromCol": "organization_id",
+      "toTable": "organizations",
+      "toCol": "id",
+      "file": "20260831140000_itsm_assignment_groups_and_states.sql"
+    },
+    {
+      "fromTable": "assignment_groups",
+      "fromCol": "lead_user_id",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260831140000_itsm_assignment_groups_and_states.sql"
+    },
+    {
+      "fromTable": "assignment_group_memberships",
+      "fromCol": "assignment_group_id",
+      "toTable": "assignment_groups",
+      "toCol": "id",
+      "file": "20260831140000_itsm_assignment_groups_and_states.sql"
+    },
+    {
+      "fromTable": "assignment_group_memberships",
+      "fromCol": "user_id",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260831140000_itsm_assignment_groups_and_states.sql"
+    },
+    {
+      "fromTable": "assignment_groups",
+      "fromCol": "organization_id",
+      "toTable": "organizations",
+      "toCol": "id",
+      "file": "20260831165904_itsm_production_forward.sql"
+    },
+    {
+      "fromTable": "assignment_groups",
+      "fromCol": "lead_user_id",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260831165904_itsm_production_forward.sql"
+    },
+    {
+      "fromTable": "assignment_group_memberships",
+      "fromCol": "assignment_group_id",
+      "toTable": "assignment_groups",
+      "toCol": "id",
+      "file": "20260831165904_itsm_production_forward.sql"
+    },
+    {
+      "fromTable": "assignment_group_memberships",
+      "fromCol": "user_id",
+      "toTable": "auth.users",
+      "toCol": "id",
+      "file": "20260831165904_itsm_production_forward.sql"
+    }
+  ],
+  "graph": {
+    "auth.users": [
+      "profiles",
+      "organization_memberships",
+      "projects",
+      "requests",
+      "assignments",
+      "documents",
+      "notifications",
+      "audit_events",
+      "user_profiles",
+      "external_filings",
+      "customer_requests",
+      "stage_runs",
+      "assignment_groups",
+      "assignment_group_memberships"
+    ],
+    "customer_organizations": [
+      "profiles",
+      "projects"
+    ],
+    "organizations": [
+      "organization_memberships",
+      "projects",
+      "project_participants",
+      "workflow_definitions",
+      "requests",
+      "assignments",
+      "documents",
+      "audit_events",
+      "assignment_groups"
+    ],
+    "projects": [
+      "project_participants",
+      "requests",
+      "documents",
+      "workstreams",
+      "decisions",
+      "meetings"
+    ],
+    "workflow_definitions": [
+      "workflow_stages",
+      "case_workflows",
+      "workflow_versions"
+    ],
+    "requests": [
+      "case_workflows",
+      "assignments",
+      "documents",
+      "notifications"
+    ],
+    "permit_types": [
+      "requirement_resources",
+      "workstreams"
+    ],
+    "workstreams": [
+      "tasks",
+      "coordination_requests",
+      "rfis",
+      "commitments",
+      "stage_runs"
+    ],
+    "tasks": [
+      "task_dependencies"
+    ],
+    "rfis": [
+      "rfi_responses"
+    ],
+    "documents": [
+      "document_versions"
+    ],
+    "document_versions": [
+      "document_agency_reviews"
+    ],
+    "workflow_versions": [
+      "workflow_transitions",
+      "workflow_checklist_items",
+      "workflow_version_stages"
+    ],
+    "assignment_groups": [
+      "assignment_group_memberships"
+    ]
+  }
+}

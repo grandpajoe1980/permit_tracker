@@ -1,0 +1,1183 @@
+{
+  "migrationFilesCount": 31,
+  "migrationFiles": [
+    "20260828170355_initial_path_mvp.sql",
+    "20260828190000_spacex_louisiana_workspace.sql",
+    "20260830071223_command_system_relational_schema.sql",
+    "20260830120000_customer_portal_delivery.sql",
+    "20260830150635_harden_command_system_rls_and_seed_portal_support.sql",
+    "20260830152028_consolidate_customer_request_update_policy.sql",
+    "20260830152923_tighten_admin_and_request_scope.sql",
+    "20260830180000_supabase_authoritative_persistence.sql",
+    "20260830180001_harden_document_storage_lifecycle.sql",
+    "20260830180521_backfill_document_version_ownership.sql",
+    "20260830180623_normalize_document_version_numbers.sql",
+    "20260830190000_authoritative_access_boundary.sql",
+    "20260830191500_secure_rpc_actor_context.sql",
+    "20260830200000_workflow_execution_engine.sql",
+    "20260830203000_workflow_designer_transactions.sql",
+    "20260830210000_customer_triage_workstream_transactions.sql",
+    "20260830213000_workstream_coordination_transactions.sql",
+    "20260830214000_workstream_action_transactions.sql",
+    "20260830220000_workstream_action_notifications.sql",
+    "20260830221000_project_reference_compatibility.sql",
+    "20260830222000_scope_workflow_metadata_rls.sql",
+    "20260830223000_catalog_admin_transactions.sql",
+    "20260830225000_atomic_multi_workstream_triage.sql",
+    "20260830231000_pin_legacy_workflows_and_enforce_versioned_completion.sql",
+    "20260830232000_secure_customer_request_actor.sql",
+    "20260830233000_customer_request_first_attachment.sql",
+    "20260830234000_scope_workflow_admin_by_organization.sql",
+    "20260830235000_persist_organization_member_roles.sql",
+    "20260830240000_enforce_mandatory_task_dependencies.sql",
+    "20260831140000_itsm_assignment_groups_and_states.sql",
+    "20260831165904_itsm_production_forward.sql"
+  ],
+  "tablesCount": 37,
+  "tables": {
+    "public.organizations": [
+      "20260828170355_initial_path_mvp.sql"
+    ],
+    "public.customer_organizations": [
+      "20260828170355_initial_path_mvp.sql"
+    ],
+    "public.profiles": [
+      "20260828170355_initial_path_mvp.sql"
+    ],
+    "public.organization_memberships": [
+      "20260828170355_initial_path_mvp.sql"
+    ],
+    "public.projects": [
+      "20260828170355_initial_path_mvp.sql"
+    ],
+    "public.project_participants": [
+      "20260828170355_initial_path_mvp.sql"
+    ],
+    "public.workflow_definitions": [
+      "20260828170355_initial_path_mvp.sql"
+    ],
+    "public.workflow_stages": [
+      "20260828170355_initial_path_mvp.sql"
+    ],
+    "public.requests": [
+      "20260828170355_initial_path_mvp.sql"
+    ],
+    "public.case_workflows": [
+      "20260828170355_initial_path_mvp.sql"
+    ],
+    "public.assignments": [
+      "20260828170355_initial_path_mvp.sql"
+    ],
+    "public.documents": [
+      "20260828170355_initial_path_mvp.sql"
+    ],
+    "public.notifications": [
+      "20260828170355_initial_path_mvp.sql"
+    ],
+    "public.audit_events": [
+      "20260828170355_initial_path_mvp.sql"
+    ],
+    "public.permit_types": [
+      "20260830071223_command_system_relational_schema.sql"
+    ],
+    "public.requirement_resources": [
+      "20260830071223_command_system_relational_schema.sql"
+    ],
+    "public.workflow_versions": [
+      "20260830071223_command_system_relational_schema.sql"
+    ],
+    "public.workstreams": [
+      "20260830071223_command_system_relational_schema.sql"
+    ],
+    "public.tasks": [
+      "20260830071223_command_system_relational_schema.sql"
+    ],
+    "public.task_dependencies": [
+      "20260830071223_command_system_relational_schema.sql"
+    ],
+    "public.coordination_requests": [
+      "20260830071223_command_system_relational_schema.sql"
+    ],
+    "public.rfis": [
+      "20260830071223_command_system_relational_schema.sql"
+    ],
+    "public.rfi_responses": [
+      "20260830071223_command_system_relational_schema.sql"
+    ],
+    "public.document_versions": [
+      "20260830071223_command_system_relational_schema.sql"
+    ],
+    "public.document_agency_reviews": [
+      "20260830071223_command_system_relational_schema.sql"
+    ],
+    "public.commitments": [
+      "20260830071223_command_system_relational_schema.sql"
+    ],
+    "public.decisions": [
+      "20260830071223_command_system_relational_schema.sql"
+    ],
+    "public.meetings": [
+      "20260830071223_command_system_relational_schema.sql"
+    ],
+    "public.user_profiles": [
+      "20260830120000_customer_portal_delivery.sql"
+    ],
+    "public.external_filings": [
+      "20260830120000_customer_portal_delivery.sql"
+    ],
+    "public.customer_requests": [
+      "20260830120000_customer_portal_delivery.sql"
+    ],
+    "public.workflow_transitions": [
+      "20260830200000_workflow_execution_engine.sql"
+    ],
+    "public.stage_runs": [
+      "20260830200000_workflow_execution_engine.sql"
+    ],
+    "public.workflow_checklist_items": [
+      "20260830200000_workflow_execution_engine.sql"
+    ],
+    "public.workflow_version_stages": [
+      "20260830203000_workflow_designer_transactions.sql"
+    ],
+    "public.assignment_groups": [
+      "20260831140000_itsm_assignment_groups_and_states.sql",
+      "20260831165904_itsm_production_forward.sql"
+    ],
+    "public.assignment_group_memberships": [
+      "20260831140000_itsm_assignment_groups_and_states.sql",
+      "20260831165904_itsm_production_forward.sql"
+    ]
+  },
+  "viewsCount": 0,
+  "views": {},
+  "functionsCount": 55,
+  "functions": {
+    "app_private.is_org_member": [
+      {
+        "file": "20260828170355_initial_path_mvp.sql",
+        "args": "p_org_id uuid"
+      }
+    ],
+    "app_private.is_customer_org_member": [
+      {
+        "file": "20260828170355_initial_path_mvp.sql",
+        "args": "p_customer_org_id uuid"
+      }
+    ],
+    "app_private.can_access_project": [
+      {
+        "file": "20260828170355_initial_path_mvp.sql",
+        "args": "p_project_id uuid"
+      }
+    ],
+    "app_private.can_access_request": [
+      {
+        "file": "20260828170355_initial_path_mvp.sql",
+        "args": "p_request_id uuid"
+      }
+    ],
+    "app_private.handle_new_user": [
+      {
+        "file": "20260828170355_initial_path_mvp.sql",
+        "args": ""
+      }
+    ],
+    "app_private.default_request_team": [
+      {
+        "file": "20260828190000_spacex_louisiana_workspace.sql",
+        "args": ""
+      }
+    ],
+    "app_private.is_system_admin": [
+      {
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql",
+        "args": ""
+      },
+      {
+        "file": "20260830152923_tighten_admin_and_request_scope.sql",
+        "args": ""
+      }
+    ],
+    "public.rpc_create_customer_request": [
+      {
+        "file": "20260830180000_supabase_authoritative_persistence.sql",
+        "args": "p_id text, p_confirmation_number text, p_project_id text, p_request_type text, p_title text, p_description text, p_requested_outcome text DEFAULT NULL, p_location_or_affected_area text DEFAULT NULL, p_desired_date date DEFAULT NULL, p_schedule_importance text DEFAULT 'normal', p_known_agency_code text DEFAULT NULL, p_known_permit_type_id text DEFAULT NULL, p_submitted_by_user_id uuid DEFAULT NULL, p_submitted_by_name text DEFAULT 'SpaceX Representative', p_related_workstream_id text DEFAULT NULL, p_blocks_active_work boolean DEFAULT false, p_status text DEFAULT 'submitted', p_attachment_document_version_ids jsonb DEFAULT '[]'::jsonb"
+      },
+      {
+        "file": "20260830232000_secure_customer_request_actor.sql",
+        "args": "p_id text, p_confirmation_number text, p_project_id text, p_request_type text, p_title text, p_description text, p_requested_outcome text default null, p_location_or_affected_area text default null, p_desired_date date default null, p_schedule_importance text default 'normal', p_known_agency_code text default null, p_known_permit_type_id text default null, p_submitted_by_user_id uuid default null, p_submitted_by_name text default 'SpaceX Representative', p_related_workstream_id text default null, p_blocks_active_work boolean default false, p_status text default 'submitted', p_attachment_document_version_ids jsonb default '[]'::jsonb"
+      }
+    ],
+    "public.rpc_create_rfi": [
+      {
+        "file": "20260830180000_supabase_authoritative_persistence.sql",
+        "args": "p_id text, p_code text, p_workstream_id text, p_workstream_title text, p_requesting_org_id text, p_requesting_org_code text, p_recipient_org_id text, p_recipient_org_code text, p_title text, p_question_text text, p_technical_reason text, p_required_document_types jsonb, p_response_deadline date, p_clock_impact text, p_schedule_impact_days integer, p_actor_name text, p_actor_id uuid DEFAULT NULL"
+      }
+    ],
+    "public.rpc_submit_rfi_response": [
+      {
+        "file": "20260830180000_supabase_authoritative_persistence.sql",
+        "args": "p_id text, p_rfi_id text, p_submitted_by_user_name text, p_response_text text, p_actor_org_name text, p_attached_document_version_ids jsonb DEFAULT '[]'::jsonb, p_actor_id uuid DEFAULT NULL"
+      }
+    ],
+    "public.rpc_accept_rfi_response": [
+      {
+        "file": "20260830180000_supabase_authoritative_persistence.sql",
+        "args": "p_rfi_id text, p_actor_name text, p_actor_org_name text, p_notes text DEFAULT 'Response accepted and linked review resumed.', p_actor_id uuid DEFAULT NULL"
+      }
+    ],
+    "public.rpc_create_document_version": [
+      {
+        "file": "20260830180000_supabase_authoritative_persistence.sql",
+        "args": "p_version_id text, p_document_id text, p_version_number integer, p_version_label text, p_storage_path text, p_file_name text, p_mime_type text, p_file_size_bytes bigint, p_sha256_hash text, p_uploaded_by_name text, p_uploaded_by_org_name text, p_change_notes text, p_reviewing_agency_codes text[], p_project_id uuid DEFAULT NULL, p_actor_id uuid DEFAULT NULL"
+      }
+    ],
+    "public.rpc_review_document_version": [
+      {
+        "file": "20260830180000_supabase_authoritative_persistence.sql",
+        "args": "p_version_id text, p_agency_code text, p_decision text, p_actor_name text, p_comments text, p_actor_id uuid DEFAULT NULL"
+      }
+    ],
+    "app_private.has_project_access": [
+      {
+        "file": "20260830190000_authoritative_access_boundary.sql",
+        "args": "p_project_id uuid"
+      },
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": "p_project_id UUID"
+      }
+    ],
+    "app_private.has_project_access_text": [
+      {
+        "file": "20260830190000_authoritative_access_boundary.sql",
+        "args": "p_project_id text"
+      },
+      {
+        "file": "20260830191500_secure_rpc_actor_context.sql",
+        "args": "p_project_id text"
+      },
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": "p_project_id TEXT"
+      }
+    ],
+    "app_private.enforce_customer_request_actor": [
+      {
+        "file": "20260830191500_secure_rpc_actor_context.sql",
+        "args": ""
+      },
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": ""
+      }
+    ],
+    "app_private.normalize_audit_actor": [
+      {
+        "file": "20260830191500_secure_rpc_actor_context.sql",
+        "args": ""
+      }
+    ],
+    "app_private.normalize_notification_recipient": [
+      {
+        "file": "20260830191500_secure_rpc_actor_context.sql",
+        "args": ""
+      },
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": ""
+      }
+    ],
+    "app_private.enforce_rfi_access": [
+      {
+        "file": "20260830191500_secure_rpc_actor_context.sql",
+        "args": ""
+      }
+    ],
+    "app_private.enforce_rfi_response_access": [
+      {
+        "file": "20260830191500_secure_rpc_actor_context.sql",
+        "args": ""
+      }
+    ],
+    "app_private.enforce_document_version_access": [
+      {
+        "file": "20260830191500_secure_rpc_actor_context.sql",
+        "args": ""
+      }
+    ],
+    "app_private.enforce_document_review_access": [
+      {
+        "file": "20260830191500_secure_rpc_actor_context.sql",
+        "args": ""
+      }
+    ],
+    "public.rpc_complete_workstream_stage": [
+      {
+        "file": "20260830200000_workflow_execution_engine.sql",
+        "args": "p_workstream_id text, p_completed_checklists text[] default '{}', p_provided_document_categories text[] default '{}', p_actor_name text default 'PATH user', p_completion_notes text default null"
+      },
+      {
+        "file": "20260830231000_pin_legacy_workflows_and_enforce_versioned_completion.sql",
+        "args": "p_workstream_id text, p_completed_checklists text[] default '{}', p_provided_document_categories text[] default '{}', p_actor_name text default 'PATH user', p_completion_notes text default null"
+      }
+    ],
+    "app_private.require_workflow_admin": [
+      {
+        "file": "20260830203000_workflow_designer_transactions.sql",
+        "args": ""
+      },
+      {
+        "file": "20260830234000_scope_workflow_admin_by_organization.sql",
+        "args": "p_organization_id uuid default null"
+      }
+    ],
+    "public.rpc_create_workflow_draft": [
+      {
+        "file": "20260830203000_workflow_designer_transactions.sql",
+        "args": "p_source_version_id text, p_change_summary text"
+      },
+      {
+        "file": "20260830234000_scope_workflow_admin_by_organization.sql",
+        "args": "p_source_version_id text, p_change_summary text"
+      }
+    ],
+    "public.rpc_update_workflow_draft_stage": [
+      {
+        "file": "20260830203000_workflow_designer_transactions.sql",
+        "args": "p_version_id text, p_stage_key text, p_label text, p_customer_visibility_label text, p_responsible_org_code text, p_target_duration_days integer, p_minimum_statutory_days integer, p_required_inputs jsonb, p_completion_requirements jsonb, p_permitted_transitions jsonb, p_can_run_in_parallel boolean, p_is_milestone_gate boolean"
+      },
+      {
+        "file": "20260830234000_scope_workflow_admin_by_organization.sql",
+        "args": "p_version_id text, p_stage_key text, p_label text, p_customer_visibility_label text, p_responsible_org_code text, p_target_duration_days integer, p_minimum_statutory_days integer, p_required_inputs jsonb, p_completion_requirements jsonb, p_permitted_transitions jsonb, p_can_run_in_parallel boolean, p_is_milestone_gate boolean"
+      }
+    ],
+    "public.rpc_validate_workflow_draft": [
+      {
+        "file": "20260830203000_workflow_designer_transactions.sql",
+        "args": "p_version_id text"
+      },
+      {
+        "file": "20260830234000_scope_workflow_admin_by_organization.sql",
+        "args": "p_version_id text"
+      }
+    ],
+    "public.rpc_publish_workflow_version": [
+      {
+        "file": "20260830203000_workflow_designer_transactions.sql",
+        "args": "p_version_id text"
+      },
+      {
+        "file": "20260830234000_scope_workflow_admin_by_organization.sql",
+        "args": "p_version_id text"
+      }
+    ],
+    "app_private.require_project_admin": [
+      {
+        "file": "20260830210000_customer_triage_workstream_transactions.sql",
+        "args": "p_project_ref text"
+      },
+      {
+        "file": "20260830221000_project_reference_compatibility.sql",
+        "args": "p_project_ref text"
+      }
+    ],
+    "public.rpc_create_workstream_from_request": [
+      {
+        "file": "20260830210000_customer_triage_workstream_transactions.sql",
+        "args": "p_request_id text, p_code text, p_title text, p_category text, p_permit_type_id text default null, p_lead_org_code text default 'STATEPO', p_lead_org_name text default 'Louisiana Governor''s Office of Major Projects & Delivery', p_workflow_version_id text default null"
+      }
+    ],
+    "public.rpc_clear_workstream_blocker": [
+      {
+        "file": "20260830213000_workstream_coordination_transactions.sql",
+        "args": "p_workstream_id text, p_resolution_notes text, p_actor_name text, p_actor_org_name text"
+      }
+    ],
+    "public.rpc_create_coordination_request": [
+      {
+        "file": "20260830213000_workstream_coordination_transactions.sql",
+        "args": "p_id text, p_code text, p_workstream_id text, p_workstream_title text, p_requesting_org_id text, p_requesting_org_code text, p_target_org_id text, p_target_org_code text, p_requesting_user_name text, p_assigned_to_user_name text, p_title text, p_need_description text, p_due_date date, p_attached_document_version_ids jsonb, p_priority text"
+      }
+    ],
+    "public.rpc_mark_workstream_blocked": [
+      {
+        "file": "20260830214000_workstream_action_transactions.sql",
+        "args": "p_workstream_id text, p_reason text, p_waiting_on text, p_pause_clock boolean, p_actor_name text, p_actor_org_name text"
+      }
+    ],
+    "public.rpc_escalate_workstream": [
+      {
+        "file": "20260830214000_workstream_action_transactions.sql",
+        "args": "p_workstream_id text, p_problem_type text, p_actor_name text, p_actor_org_name text"
+      }
+    ],
+    "public.rpc_transfer_workstream": [
+      {
+        "file": "20260830214000_workstream_action_transactions.sql",
+        "args": "p_workstream_id text, p_transfer_type text, p_target_name text, p_note text, p_actor_name text, p_actor_org_name text"
+      }
+    ],
+    "app_private.notify_workstream_action_audit": [
+      {
+        "file": "20260830220000_workstream_action_notifications.sql",
+        "args": ""
+      }
+    ],
+    "public.rpc_register_organization": [
+      {
+        "file": "20260830223000_catalog_admin_transactions.sql",
+        "args": "p_code text, p_name text, p_organization_type text default 'agency', p_jurisdiction_level text default 'state', p_abbreviation text default null, p_website_url text default null, p_general_contact_email text default null"
+      }
+    ],
+    "public.rpc_create_permit_type": [
+      {
+        "file": "20260830223000_catalog_admin_transactions.sql",
+        "args": "p_id text, p_code text, p_name text, p_category text, p_responsible_org_code text, p_trigger_explanation text, p_statutory_citation text, p_expected_lead_time_days integer default 30, p_minimum_statutory_days integer default 0, p_official_filing_url text default null"
+      },
+      {
+        "file": "20260830234000_scope_workflow_admin_by_organization.sql",
+        "args": "p_id text, p_code text, p_name text, p_category text, p_responsible_org_code text, p_trigger_explanation text, p_statutory_citation text, p_expected_lead_time_days integer default 30, p_minimum_statutory_days integer default 0, p_official_filing_url text default null"
+      }
+    ],
+    "public.rpc_triage_customer_request": [
+      {
+        "file": "20260830225000_atomic_multi_workstream_triage.sql",
+        "args": "p_request_id text, p_workstreams jsonb"
+      }
+    ],
+    "public.rpc_create_customer_request_with_document": [
+      {
+        "file": "20260830233000_customer_request_first_attachment.sql",
+        "args": "p_request jsonb, p_document jsonb"
+      }
+    ],
+    "app_private.is_organization_admin": [
+      {
+        "file": "20260830234000_scope_workflow_admin_by_organization.sql",
+        "args": "p_organization_id uuid"
+      },
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": "p_organization_id UUID"
+      }
+    ],
+    "public.rpc_set_organization_member_role": [
+      {
+        "file": "20260830235000_persist_organization_member_roles.sql",
+        "args": "p_user_id uuid, p_organization_id uuid, p_role text"
+      }
+    ],
+    "app_private.enforce_mandatory_task_dependencies": [
+      {
+        "file": "20260830240000_enforce_mandatory_task_dependencies.sql",
+        "args": ""
+      }
+    ],
+    "app_private.is_assignment_group_member": [
+      {
+        "file": "20260831140000_itsm_assignment_groups_and_states.sql",
+        "args": "p_group_id UUID, p_user_id UUID DEFAULT auth.uid()"
+      },
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": "p_group_id UUID, p_user_id UUID DEFAULT auth.uid()"
+      }
+    ],
+    "app_private.is_fulfiller": [
+      {
+        "file": "20260831140000_itsm_assignment_groups_and_states.sql",
+        "args": "p_user_id UUID DEFAULT auth.uid()"
+      }
+    ],
+    "app_private.can_fulfill_group": [
+      {
+        "file": "20260831140000_itsm_assignment_groups_and_states.sql",
+        "args": "p_group_id UUID, p_user_id UUID DEFAULT auth.uid()"
+      },
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": "p_group_id UUID, p_user_id UUID DEFAULT auth.uid()"
+      }
+    ],
+    "public.rpc_assign_ticket": [
+      {
+        "file": "20260831140000_itsm_assignment_groups_and_states.sql",
+        "args": "p_ticket_id TEXT, p_ticket_type TEXT, p_assignment_group_id UUID, p_assigned_to_user_id UUID DEFAULT NULL, p_assignment_notes TEXT DEFAULT NULL"
+      },
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": "p_ticket_id TEXT, p_ticket_type TEXT, p_assignment_group_id UUID, p_assigned_to_user_id UUID DEFAULT NULL, p_assignment_notes TEXT DEFAULT NULL"
+      }
+    ],
+    "public.rpc_update_ticket_itsm_state": [
+      {
+        "file": "20260831140000_itsm_assignment_groups_and_states.sql",
+        "args": "p_ticket_id TEXT, p_ticket_type TEXT, p_new_state TEXT, p_reason TEXT DEFAULT NULL, p_pause_reason TEXT DEFAULT NULL"
+      },
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": "p_ticket_id TEXT, p_ticket_type TEXT, p_new_state TEXT, p_reason TEXT DEFAULT NULL, p_pause_reason TEXT DEFAULT NULL"
+      }
+    ],
+    "public.rpc_set_ticket_priority": [
+      {
+        "file": "20260831140000_itsm_assignment_groups_and_states.sql",
+        "args": "p_ticket_id TEXT, p_ticket_type TEXT, p_priority TEXT, p_reason TEXT DEFAULT NULL"
+      },
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": "p_ticket_id TEXT, p_ticket_type TEXT, p_priority TEXT, p_reason TEXT DEFAULT NULL"
+      }
+    ],
+    "public.rpc_manage_assignment_group": [
+      {
+        "file": "20260831140000_itsm_assignment_groups_and_states.sql",
+        "args": "p_id UUID DEFAULT NULL, p_org_code TEXT DEFAULT NULL, p_name TEXT DEFAULT NULL, p_description TEXT DEFAULT NULL, p_lead_user_id UUID DEFAULT NULL, p_active BOOLEAN DEFAULT true"
+      },
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": "p_id UUID DEFAULT NULL, p_org_code TEXT DEFAULT NULL, p_name TEXT DEFAULT NULL, p_description TEXT DEFAULT NULL, p_lead_user_id UUID DEFAULT NULL, p_active BOOLEAN DEFAULT true"
+      }
+    ],
+    "public.rpc_manage_assignment_group_membership": [
+      {
+        "file": "20260831140000_itsm_assignment_groups_and_states.sql",
+        "args": "p_assignment_group_id UUID, p_user_id UUID, p_role TEXT DEFAULT 'member', p_action TEXT DEFAULT 'upsert'"
+      },
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": "p_assignment_group_id UUID, p_user_id UUID, p_role TEXT DEFAULT 'member', p_action TEXT DEFAULT 'upsert'"
+      }
+    ],
+    "app_private.can_dispatch_project": [
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": "p_project_id UUID"
+      }
+    ],
+    "app_private.can_assign_group": [
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": "p_group_id UUID, p_project_id UUID"
+      }
+    ],
+    "app_private.normalize_audit_event": [
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": ""
+      }
+    ],
+    "app_private.can_mutate_ticket": [
+      {
+        "file": "20260831165904_itsm_production_forward.sql",
+        "args": "p_ticket_id TEXT, p_ticket_type TEXT"
+      }
+    ]
+  },
+  "policiesCount": 120,
+  "policiesByTable": {
+    "public.organizations": [
+      {
+        "name": "organizations_select",
+        "file": "20260828170355_initial_path_mvp.sql"
+      }
+    ],
+    "public.customer_organizations": [
+      {
+        "name": "customer_org_select",
+        "file": "20260828170355_initial_path_mvp.sql"
+      }
+    ],
+    "public.profiles": [
+      {
+        "name": "profiles_select",
+        "file": "20260828170355_initial_path_mvp.sql"
+      },
+      {
+        "name": "profiles_insert",
+        "file": "20260828170355_initial_path_mvp.sql"
+      },
+      {
+        "name": "profiles_update",
+        "file": "20260828170355_initial_path_mvp.sql"
+      }
+    ],
+    "public.organization_memberships": [
+      {
+        "name": "memberships_select",
+        "file": "20260828170355_initial_path_mvp.sql"
+      }
+    ],
+    "public.projects": [
+      {
+        "name": "projects_select",
+        "file": "20260828170355_initial_path_mvp.sql"
+      }
+    ],
+    "public.requests": [
+      {
+        "name": "requests_select",
+        "file": "20260828170355_initial_path_mvp.sql"
+      },
+      {
+        "name": "requests_insert",
+        "file": "20260828170355_initial_path_mvp.sql"
+      },
+      {
+        "name": "requests_update",
+        "file": "20260828170355_initial_path_mvp.sql"
+      },
+      {
+        "name": "requests_insert",
+        "file": "20260828190000_spacex_louisiana_workspace.sql"
+      }
+    ],
+    "public.workflow_definitions": [
+      {
+        "name": "workflows_select",
+        "file": "20260828170355_initial_path_mvp.sql"
+      }
+    ],
+    "public.workflow_stages": [
+      {
+        "name": "stages_select",
+        "file": "20260828170355_initial_path_mvp.sql"
+      }
+    ],
+    "public.case_workflows": [
+      {
+        "name": "case_workflows_select",
+        "file": "20260828170355_initial_path_mvp.sql"
+      }
+    ],
+    "public.assignments": [
+      {
+        "name": "assignments_select",
+        "file": "20260828170355_initial_path_mvp.sql"
+      }
+    ],
+    "public.documents": [
+      {
+        "name": "documents_select",
+        "file": "20260828170355_initial_path_mvp.sql"
+      }
+    ],
+    "public.notifications": [
+      {
+        "name": "notifications_select",
+        "file": "20260828170355_initial_path_mvp.sql"
+      },
+      {
+        "name": "notifications_insert",
+        "file": "20260828190000_spacex_louisiana_workspace.sql"
+      },
+      {
+        "name": "notifications_insert",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "notifications_select_user",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "notifications_update_user",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "notifications_select_recipient",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      },
+      {
+        "name": "notifications_update_recipient",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      },
+      {
+        "name": "notifications_select",
+        "file": "20260831165904_itsm_production_forward.sql"
+      },
+      {
+        "name": "notifications_update",
+        "file": "20260831165904_itsm_production_forward.sql"
+      }
+    ],
+    "public.audit_events": [
+      {
+        "name": "audit_select",
+        "file": "20260828170355_initial_path_mvp.sql"
+      },
+      {
+        "name": "audit_events_insert",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "audit_events_select_all",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "audit_events_insert_actor",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      },
+      {
+        "name": "audit_events_select_project",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      },
+      {
+        "name": "audit_events_select",
+        "file": "20260831165904_itsm_production_forward.sql"
+      }
+    ],
+    "storage.objects": [
+      {
+        "name": "path_documents_read",
+        "file": "20260828170355_initial_path_mvp.sql"
+      },
+      {
+        "name": "path_documents_insert",
+        "file": "20260828170355_initial_path_mvp.sql"
+      },
+      {
+        "name": "path_documents_update",
+        "file": "20260828170355_initial_path_mvp.sql"
+      },
+      {
+        "name": "path_documents_delete",
+        "file": "20260828170355_initial_path_mvp.sql"
+      },
+      {
+        "name": "Authenticated users can upload documents",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "Authenticated users can read documents",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "Authenticated users can update documents",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "path_documents_read",
+        "file": "20260830180001_harden_document_storage_lifecycle.sql"
+      },
+      {
+        "name": "path_documents_insert",
+        "file": "20260830180001_harden_document_storage_lifecycle.sql"
+      },
+      {
+        "name": "path_documents_delete",
+        "file": "20260830180001_harden_document_storage_lifecycle.sql"
+      },
+      {
+        "name": "path_documents_read",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      },
+      {
+        "name": "path_documents_insert",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      },
+      {
+        "name": "path_documents_delete",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      }
+    ],
+    "public.": [
+      {
+        "name": "Public full access policy",
+        "file": "20260830071223_command_system_relational_schema.sql"
+      }
+    ],
+    "public.user_profiles": [
+      {
+        "name": "project users can read visible profiles",
+        "file": "20260830120000_customer_portal_delivery.sql"
+      },
+      {
+        "name": "users can update their contact fields",
+        "file": "20260830120000_customer_portal_delivery.sql"
+      },
+      {
+        "name": "user_profiles_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      },
+      {
+        "name": "user_profiles_update",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      }
+    ],
+    "public.project_participants": [
+      {
+        "name": "participants are visible to authorized users",
+        "file": "20260830120000_customer_portal_delivery.sql"
+      },
+      {
+        "name": "project_participants_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      },
+      {
+        "name": "project_participants_update",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "project_participants_update_project",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      }
+    ],
+    "public.external_filings": [
+      {
+        "name": "filings are visible to authenticated users",
+        "file": "20260830120000_customer_portal_delivery.sql"
+      },
+      {
+        "name": "external_filings_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      },
+      {
+        "name": "external_filings_insert",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "external_filings_update",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "external_filings_update_project",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      }
+    ],
+    "public.customer_requests": [
+      {
+        "name": "customers can submit requests",
+        "file": "20260830120000_customer_portal_delivery.sql"
+      },
+      {
+        "name": "request submitters and government users can read requests",
+        "file": "20260830120000_customer_portal_delivery.sql"
+      },
+      {
+        "name": "customer_requests_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      },
+      {
+        "name": "customer_requests_insert",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      },
+      {
+        "name": "customer_requests_update_government",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      },
+      {
+        "name": "customer_requests_update_own_draft",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      },
+      {
+        "name": "customer_requests_update",
+        "file": "20260830152028_consolidate_customer_request_update_policy.sql"
+      },
+      {
+        "name": "customer_requests_select",
+        "file": "20260830152923_tighten_admin_and_request_scope.sql"
+      },
+      {
+        "name": "customer_requests_update",
+        "file": "20260830152923_tighten_admin_and_request_scope.sql"
+      },
+      {
+        "name": "customer_requests_select_project",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      },
+      {
+        "name": "customer_requests_insert_project",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      },
+      {
+        "name": "customer_requests_update_project",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      },
+      {
+        "name": "customer_requests_select_fulfiller",
+        "file": "20260831140000_itsm_assignment_groups_and_states.sql"
+      },
+      {
+        "name": "customer_requests_select",
+        "file": "20260831165904_itsm_production_forward.sql"
+      }
+    ],
+    "public.permit_types": [
+      {
+        "name": "permit_types_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      }
+    ],
+    "public.requirement_resources": [
+      {
+        "name": "requirement_resources_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      }
+    ],
+    "public.workflow_versions": [
+      {
+        "name": "workflow_versions_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      }
+    ],
+    "public.workstreams": [
+      {
+        "name": "workstreams_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      },
+      {
+        "name": "workstreams_update",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "workstreams_update_project",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      },
+      {
+        "name": "workstreams_select",
+        "file": "20260831165904_itsm_production_forward.sql"
+      }
+    ],
+    "public.tasks": [
+      {
+        "name": "tasks_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      },
+      {
+        "name": "tasks_insert",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "tasks_update",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "tasks_update_project",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      },
+      {
+        "name": "tasks_select",
+        "file": "20260831165904_itsm_production_forward.sql"
+      }
+    ],
+    "public.task_dependencies": [
+      {
+        "name": "task_dependencies_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      }
+    ],
+    "public.coordination_requests": [
+      {
+        "name": "coordination_requests_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      },
+      {
+        "name": "coordination_requests_insert",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "coordination_requests_update",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "coordination_requests_update_project",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      }
+    ],
+    "public.rfis": [
+      {
+        "name": "rfis_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      },
+      {
+        "name": "rfis_insert",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "rfis_update",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "rfis_update_project",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      }
+    ],
+    "public.rfi_responses": [
+      {
+        "name": "rfi_responses_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      },
+      {
+        "name": "rfi_responses_insert",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "rfi_responses_update",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "rfi_responses_update_project",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      }
+    ],
+    "public.document_versions": [
+      {
+        "name": "document_versions_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      },
+      {
+        "name": "document_versions_insert",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "document_versions_update",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      }
+    ],
+    "public.document_agency_reviews": [
+      {
+        "name": "document_agency_reviews_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      },
+      {
+        "name": "document_agency_reviews_insert",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "document_agency_reviews_update",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      }
+    ],
+    "public.commitments": [
+      {
+        "name": "commitments_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      },
+      {
+        "name": "commitments_insert",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "commitments_update",
+        "file": "20260830180000_supabase_authoritative_persistence.sql"
+      },
+      {
+        "name": "commitments_update_project",
+        "file": "20260830190000_authoritative_access_boundary.sql"
+      }
+    ],
+    "public.decisions": [
+      {
+        "name": "decisions_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      }
+    ],
+    "public.meetings": [
+      {
+        "name": "meetings_select",
+        "file": "20260830150635_harden_command_system_rls_and_seed_portal_support.sql"
+      }
+    ],
+    "public.workflow_transitions": [
+      {
+        "name": "workflow_transitions_select",
+        "file": "20260830200000_workflow_execution_engine.sql"
+      },
+      {
+        "name": "workflow_transitions_select_project",
+        "file": "20260830222000_scope_workflow_metadata_rls.sql"
+      }
+    ],
+    "public.stage_runs": [
+      {
+        "name": "stage_runs_select_project",
+        "file": "20260830200000_workflow_execution_engine.sql"
+      }
+    ],
+    "public.workflow_checklist_items": [
+      {
+        "name": "workflow_checklist_items_select",
+        "file": "20260830200000_workflow_execution_engine.sql"
+      },
+      {
+        "name": "workflow_checklist_items_select_project",
+        "file": "20260830222000_scope_workflow_metadata_rls.sql"
+      }
+    ],
+    "public.workflow_version_stages": [
+      {
+        "name": "workflow_version_stages_select_admin",
+        "file": "20260830203000_workflow_designer_transactions.sql"
+      },
+      {
+        "name": "workflow_version_stages_select_admin",
+        "file": "20260830234000_scope_workflow_admin_by_organization.sql"
+      }
+    ],
+    "public.assignment_groups": [
+      {
+        "name": "assignment_groups_select",
+        "file": "20260831140000_itsm_assignment_groups_and_states.sql"
+      },
+      {
+        "name": "assignment_groups_select",
+        "file": "20260831165904_itsm_production_forward.sql"
+      }
+    ],
+    "public.assignment_group_memberships": [
+      {
+        "name": "assignment_group_memberships_select",
+        "file": "20260831140000_itsm_assignment_groups_and_states.sql"
+      },
+      {
+        "name": "assignment_group_memberships_select",
+        "file": "20260831165904_itsm_production_forward.sql"
+      }
+    ]
+  },
+  "triggersCount": 12,
+  "triggers": {
+    "on_auth_user_created": [
+      "20260828170355_initial_path_mvp.sql"
+    ],
+    "requests_assign_team": [
+      "20260828190000_spacex_louisiana_workspace.sql"
+    ],
+    "customer_requests_enforce_actor": [
+      "20260830191500_secure_rpc_actor_context.sql",
+      "20260831165904_itsm_production_forward.sql"
+    ],
+    "audit_events_normalize_actor": [
+      "20260830191500_secure_rpc_actor_context.sql"
+    ],
+    "notifications_normalize_recipient": [
+      "20260830191500_secure_rpc_actor_context.sql",
+      "20260831165904_itsm_production_forward.sql"
+    ],
+    "rfis_enforce_access": [
+      "20260830191500_secure_rpc_actor_context.sql"
+    ],
+    "rfi_responses_enforce_access": [
+      "20260830191500_secure_rpc_actor_context.sql"
+    ],
+    "document_versions_enforce_access": [
+      "20260830191500_secure_rpc_actor_context.sql"
+    ],
+    "document_agency_reviews_enforce_access": [
+      "20260830191500_secure_rpc_actor_context.sql"
+    ],
+    "audit_events_workstream_action_notification": [
+      "20260830220000_workstream_action_notifications.sql"
+    ],
+    "enforce_mandatory_task_dependencies": [
+      "20260830240000_enforce_mandatory_task_dependencies.sql"
+    ],
+    "audit_events_normalize_compat": [
+      "20260831165904_itsm_production_forward.sql"
+    ]
+  },
+  "typesCount": 0,
+  "types": {}
+}

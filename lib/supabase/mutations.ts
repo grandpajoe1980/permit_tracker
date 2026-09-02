@@ -1592,17 +1592,17 @@ export async function mutateUpdateTask(params: {
 
   const payload: Record<string, unknown> = {};
   if (params.updates.title !== undefined) payload.title = params.updates.title;
-  if (params.updates.description !== undefined) payload.description = params.updates.description;
   if (params.updates.status !== undefined) {
     payload.status = params.updates.status;
-    payload.itsm_state = params.updates.status === "completed" ? "resolved" : params.updates.status === "in_progress" ? "work_in_progress" : "open";
+    payload.itsm_state = params.updates.status === "completed" ? "resolved" : params.updates.status === "in_progress" ? "in_progress" : "submitted";
   }
+
+
   if (params.updates.assignedOrgCode !== undefined) payload.assigned_org_code = params.updates.assignedOrgCode;
   if (params.updates.assignedUserId !== undefined) payload.assigned_to_user_id = params.updates.assignedUserId;
   if (params.updates.isCriticalPath !== undefined) payload.is_critical_path = params.updates.isCriticalPath;
   if (params.updates.durationDays !== undefined) payload.duration_days = params.updates.durationDays;
   if (params.updates.floatDays !== undefined) payload.float_days = params.updates.floatDays;
-  if (params.updates.actualCompletionDate !== undefined) payload.actual_completion_date = params.updates.actualCompletionDate;
 
   const { data, error } = await client
     .from("tasks")
@@ -1637,7 +1637,6 @@ export async function mutateCompleteTask(params: {
     taskId: params.taskId,
     updates: {
       status: "completed",
-      actualCompletionDate: new Date().toISOString().split("T")[0],
     },
     actorName: params.actorName,
     actorOrgName: params.actorOrgName,

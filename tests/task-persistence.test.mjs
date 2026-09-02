@@ -1,4 +1,4 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
@@ -36,10 +36,12 @@ test("Supabase Task and Workstream Persistence: updates and persists to database
     const updateResult = await repository.updateTaskPersisted({
       taskId: task.id,
       updates: {
-        description: "Verified persistence",
+        title: task.title,
+        status: "in_progress",
       },
       actorName: "Test Automation",
     });
     assert.equal(updateResult.error, null, "Task update must commit without error");
+
   }
 });

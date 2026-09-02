@@ -105,9 +105,27 @@ async function seed() {
     }
   }
 
-  // 2. Find or match project
-  const { data: projects } = await supabase.from("projects").select("id").eq("number", "PRJ-PECAN-2026");
-  const projectId = projects?.[0]?.id || null;
+  // 2. Find or create project
+  let { data: projects } = await supabase.from("projects").select("id").eq("number", "PRJ-PECAN-2026");
+  let projectId = projects?.[0]?.id;
+  if (!projectId) {
+    const { data: custOrgs } = await supabase.from("customer_organizations").select("id").limit(1);
+    const { data: leadOrgs } = await supabase.from("organizations").select("id").eq("code", "LA-PROJECTS");
+    const { data: newProj } = await supabase.from("projects").insert({
+      id: "d1000000-0000-0000-0000-000000000001",
+      number: "PRJ-PECAN-2026",
+      name: "SpaceX Starbase Louisiana Launch Complex & Industrial Campus",
+      description: "Pecan Island 125,000-acre coastal space launch complex, orbital launch mounts, methane liquefaction plant, deluge wastewater retention systems, and heavy-haul logistics corridor in Vermilion Parish, Louisiana.",
+      customer_organization_id: custOrgs?.[0]?.id || "b9977037-3175-4dc6-9b61-8d64b6b863fa",
+      lead_organization_id: leadOrgs?.[0]?.id || "c0000000-0000-0000-0000-000000000002",
+      status: "active",
+      risk: "at_risk",
+      start_date: "2026-01-01",
+      target_date: "2026-12-28",
+      location: { parish: "Vermilion Parish", region: "Pecan Island Coastal Zone", description: "Pecan Island Coastal Zone, Vermilion Parish, Louisiana" },
+    }).select("id").single();
+    projectId = newProj?.id || "d1000000-0000-0000-0000-000000000001";
+  }
 
   // 3. Seed Workstreams, Tasks, Dependencies
   for (const ws of workstreamsData) {

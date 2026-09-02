@@ -1,0 +1,79 @@
+{
+  "database": {
+    "passed": true,
+    "details": [
+      "PASS: Table organizations has 18 rows",
+      "PASS: Table assignment_groups has 28 rows",
+      "PASS: Table profiles has 13 rows",
+      "PASS: Table organization_memberships has 11 rows",
+      "PASS: Table projects has 6 rows",
+      "PASS: Table permit_types has 25 rows",
+      "PASS: Table requirement_resources has 0 rows",
+      "PASS: Table workstreams has 12 rows",
+      "PASS: Table tasks has 17 rows",
+      "PASS: Table commitments has 6 rows",
+      "PASS: Table project_decisions has null rows",
+      "PASS: Table project_meetings has null rows",
+      "PASS: Table coordination_requests has 3 rows",
+      "PASS: Table coordination_request_activities has null rows",
+      "PASS: Table rfis has 2 rows",
+      "PASS: Table rfi_responses has 0 rows",
+      "PASS: Table project_documents has null rows",
+      "PASS: Table document_versions has 11 rows",
+      "PASS: Table document_agency_reviews has 50 rows",
+      "PASS: Table workflow_definitions has 1 rows",
+      "PASS: Table workflow_stages has 5 rows",
+      "PASS: Table workflow_steps has null rows",
+      "PASS: Table audit_ledger has null rows",
+      "PASS: Table customer_requests has 0 rows",
+      "PASS: Table customer_filings has null rows",
+      "PASS: Table interagency_coordinations has null rows",
+      "PASS: Table statutory_catalog_links has null rows"
+    ]
+  },
+  "coverage": {
+    "passed": false,
+    "details": [
+      "FAIL: Missing permit type FAA-PART-450",
+      "FAIL: Missing permit type FAA-PART-420",
+      "FAIL: Missing permit type FAA-NEPA-EIS",
+      "PASS: Permit type USACE-404-10 present",
+      "PASS: Permit type USACE-408 present",
+      "PASS: Permit type LDEQ-401-WQC present",
+      "FAIL: Missing permit type OCM-CUP",
+      "FAIL: Missing permit type LDEQ-LPDES-DELUGE",
+      "PASS: Permit type LDEQ-LAR100000 present",
+      "FAIL: Missing permit type LDEQ-AIR-MINORTITLEV",
+      "FAIL: Missing permit type USFWS-ESA-SEC7",
+      "FAIL: Missing permit type SHPO-NHPA-106",
+      "FAIL: Missing permit type SLO-WATERBOTTOMS",
+      "FAIL: Missing permit type CPRA-COASTAL-REVIEW",
+      "FAIL: Missing permit type LDOTD-HIGHWAY-ACCESS",
+      "FAIL: Missing permit type VERMILION-BUILDING-FLOOD",
+      "FAIL: Missing permit type FERC-NGA-SEC7",
+      "FAIL: Missing permit type PHMSA-PART-193",
+      "FAIL: Missing permit type ATF-EXPLOSIVES-MAGAZINE",
+      "FAIL: Missing permit type FAA-7480-AIRPORT",
+      "FAIL: Missing permit type FAA-7460-OBSTRUCTION",
+      "FAIL: Missing permit type LDWF-SCENIC-STREAM",
+      "FAIL: Missing permit type LDOH-SANITARY-SEWER",
+      "FAIL: Missing permit type EPA-RMP-PSM",
+      "FAIL: Missing permit type SPCC-OIL-SPILL"
+    ]
+  },
+  "storage": {
+    "passed": false,
+    "details": [
+      "FAIL: Project undefined has no documents in DB",
+      "FAIL: Project undefined has no documents in DB",
+      "FAIL: Project undefined has no documents in DB",
+      "FAIL: Project undefined has no documents in DB",
+      "FAIL: Project undefined has no documents in DB",
+      "FAIL: Project undefined has no documents in DB"
+    ]
+  },
+  "navigation": {
+    "passed": true,
+    "details": []
+  }
+}

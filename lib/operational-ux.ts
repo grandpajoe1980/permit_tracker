@@ -682,6 +682,87 @@ export function getAvailableActions(item: OperationalWorkItem, persona: Operatio
   return Array.from(new Set(actions));
 }
 
+export function isAdministrator(persona: OperationalPersona | DemoPersona | null | undefined): boolean {
+  if (!persona) return false;
+  const p = persona as Record<string, unknown>;
+  const role = String(p.role ?? "").toLowerCase();
+  const roleId = String(p.roleId ?? "").toLowerCase();
+  const workspace = String(p.workspace ?? "").toLowerCase();
+  const perms = Array.isArray(p.permissions) ? (p.permissions as string[]) : [];
+  return (
+    role === "admin" ||
+    roleId === "admin" ||
+    workspace === "admin" ||
+    role.includes("admin") ||
+    perms.includes("admin") ||
+    perms.includes("system_admin")
+  );
+}
+
+export function canUserModifyItem(item: OperationalWorkItem, persona: OperationalPersona | DemoPersona | null | undefined): boolean {
+  if (!persona) return false;
+  if (isAdministrator(persona)) return true; // Admins can do anything and everything no matter what!
+
+  const p = persona as Record<string, unknown>;
+  const isCustomer = Boolean(p.isCustomer);
+  const workspace = String(p.workspace ?? "").toLowerCase();
+  const perms = Array.isArray(p.permissions) ? (p.permissions as string[]) : [];
+  const agencyCode = String(p.agencyCode ?? p.agency ?? "").toUpperCase();
+  const personaId = String(p.id ?? "");
+
+  if (isCustomer) {
+    if (item.kind === "customer_request" && (item.ownerName?.includes("SpaceX") || item.sourceRequest?.submittedByName?.includes("SpaceX"))) {
+      return true;
+    }
+    if (item.kind === "rfi" && (item.statusTone === "red" || item.statusLabel.toLowerCase().includes("waiting") || !item.hasRfiResponse)) {
+      return true;
+    }
+    return false;
+  }
+
+  // Supervisors & State Project Office can modify government-side items
+  if (workspace === "supervisor" || workspace === "state_office" || perms.includes("edit_workflow") || perms.includes("reassign_agency")) {
+    return true;
+  }
+
+  // Direct assignment or agency match
+  if (item.assignedUserId && (item.assignedUserId === personaId || item.assignedUserId === `user-${personaId}`)) {
+    return true;
+  }
+  if (item.requiresCurrentUserAction) {
+    return true;
+  }
+  if (item.requiresOrganizationAction && sameAgency(item.ownerOrganization, agencyCode)) {
+    return true;
+  }
+  if (sameAgency(item.ownerOrganization, agencyCode)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function canUserPerformAction(item: OperationalWorkItem, action: WorkActionId, persona: OperationalPersona | DemoPersona | null | undefined): boolean {
+  if (!persona) return false;
+  if (isAdministrator(persona)) return true; // Admins can do anything and everything no matter what!
+
+  if (!canUserModifyItem(item, persona)) {
+    const p = persona as Record<string, unknown>;
+    if (!p.isCustomer && action === "add_note") return true;
+    return false;
+  }
+
+  const p = persona as Record<string, unknown>;
+  const isCustomer = Boolean(p.isCustomer);
+  if (isCustomer) {
+    return action === "respond" || action === "upload_documents";
+  }
+
+  const opPersona = (persona as OperationalPersona).permissions ? (persona as OperationalPersona) : getOperationalPersona(persona as DemoPersona);
+  const available = getAvailableActions(item, opPersona);
+  return available.includes(action);
+}
+
 export function getCompletionRequirements(item: OperationalWorkItem) {
   const template = workflowTemplatesData.find((candidate) => candidate.permitTypeId === item.sourceWorkstream?.permitTypeId) as WorkflowTemplateRecord | undefined;
   const stage = template?.versions.find((version) => version.versionNumber === template.activeVersionNumber)?.stages.find((candidate) => candidate.id === item.sourceWorkstream?.currentStageId || item.sourceWorkstream?.currentStageName?.toLowerCase().includes(candidate.name.toLowerCase().split(" ")[0]));

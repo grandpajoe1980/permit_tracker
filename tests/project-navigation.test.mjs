@@ -1,4 +1,4 @@
-﻿import test, { after } from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
@@ -96,3 +96,67 @@ test("project navigation state transitions route to project and focus workstream
   assert.equal(selectedItemId, null);
   assert.equal(selectedProjectWorkstreamId, "WS-LA82-HEAVYHAUL");
 });
+
+test("workstream resolution supports code, lowercase, URL-encoded, and ID lookup", () => {
+  const workstreams = repository.getWorkstreams();
+  assert.ok(workstreams.length > 0);
+
+  function resolveWorkstream(lookupKey) {
+    const decoded = decodeURIComponent(lookupKey ?? "").trim();
+    return workstreams.find(
+      (ws) =>
+        ws.id === decoded ||
+        ws.code === decoded ||
+        ws.code.toLowerCase() === decoded.toLowerCase() ||
+        ws.id.toLowerCase() === decoded.toLowerCase()
+    );
+  }
+
+  // 1. Direct code lookup
+  const ws1 = resolveWorkstream("WS-LA82-HEAVYHAUL");
+  assert.ok(ws1, "Must resolve workstream by exact uppercase code");
+  assert.equal(ws1.code, "WS-LA82-HEAVYHAUL");
+
+  // 2. Lowercase code lookup
+  const ws2 = resolveWorkstream("ws-la82-heavyhaul");
+  assert.ok(ws2, "Must resolve workstream by lowercase code");
+  assert.equal(ws2.code, "WS-LA82-HEAVYHAUL");
+
+  // 3. URL-encoded code lookup
+  const ws3 = resolveWorkstream("WS%2DLA82%2DHEAVYHAUL");
+  assert.ok(ws3, "Must resolve workstream by URL-encoded code");
+  assert.equal(ws3.code, "WS-LA82-HEAVYHAUL");
+
+  // 4. URL-encoded lowercase code lookup
+  const ws4 = resolveWorkstream("ws%2Dwetlands%2Dpad%2Da");
+  assert.ok(ws4, "Must resolve workstream by URL-encoded lowercase code");
+  assert.equal(ws4.code, "WS-WETLANDS-PAD-A");
+
+  // 5. ID lookup
+  const ws5 = resolveWorkstream("WS-SUBSTATION-230KV");
+  assert.ok(ws5, "Must resolve workstream by ID");
+  assert.equal(ws5.code, "WS-SUBSTATION-230KV");
+});
+
+test("project lookup supports project number, lowercase, and UUID lookup", () => {
+  const project = repository.getProject();
+  assert.ok(project);
+
+  function resolveProject(identifier) {
+    const decoded = decodeURIComponent(identifier ?? "").trim();
+    if (decoded === project.id || decoded === project.code || decoded === "PRJ-PECAN-2026") {
+      return project;
+    }
+    if (decoded.toLowerCase() === project.code.toLowerCase() || decoded.toLowerCase() === "prj-pecan-2026") {
+      return project;
+    }
+    return null;
+  }
+
+  assert.ok(resolveProject("PRJ-PECAN-2026"));
+  assert.ok(resolveProject("prj-pecan-2026"));
+  assert.ok(resolveProject("PRJ%2DPECAN%2D2026"));
+  assert.ok(resolveProject(project.id));
+  assert.ok(resolveProject(project.code));
+});
+

@@ -31,7 +31,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { repository } from "@/lib/repository";
-import type { OperationalWorkItem } from "@/lib/operational-ux";
+import { isAdministrator, canUserModifyItem, type OperationalWorkItem } from "@/lib/operational-ux";
 import type { DemoPersona, WorkflowStageRecord } from "@/lib/domain-models";
 
 interface TicketWorkflowEditorProps {
@@ -41,16 +41,8 @@ interface TicketWorkflowEditorProps {
 }
 
 export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: TicketWorkflowEditorProps) {
-  const isAuthorized =
-    !persona.isCustomer &&
-    (persona.role === "admin" ||
-      persona.role === "reviewer" ||
-      persona.role === "infrastructure" ||
-      persona.role === "community" ||
-      persona.roleId === "admin" ||
-      persona.roleId === "reviewer" ||
-      persona.roleId === "infrastructure" ||
-      persona.roleId === "community");
+  const isAdmin = isAdministrator(persona);
+  const isAuthorized = isAdmin || (!persona.isCustomer && canUserModifyItem(item, persona));
   const canEditWorkflow = item.kind === "workflow" || item.kind === "task";
 
   const workstream = item.workstreamId ? repository.getWorkstreamById(item.workstreamId) : undefined;
@@ -284,20 +276,41 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
                 <span className="rounded-full bg-teal-100 border border-teal-300 px-2 py-0.5 text-[11px] font-bold text-teal-900 font-mono">
                   {stages.length} Stages
                 </span>
+                {isAdmin ? (
+                  <span className="rounded-full bg-emerald-100 border border-emerald-300 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-900 flex items-center gap-1">
+                    <ShieldCheck className="size-3 text-emerald-700" /> Admin Full Authority
+                  </span>
+                ) : isAuthorized ? (
+                  <span className="rounded-full bg-teal-50 border border-teal-200 px-2 py-0.5 text-[10px] font-bold text-teal-800 flex items-center gap-1">
+                    <UserCheck className="size-3 text-teal-700" /> Reviewer Authority
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-slate-200 border border-slate-300 px-2 py-0.5 text-[10px] font-bold text-slate-600 flex items-center gap-1" title="Modification restricted">
+                    <Lock className="size-3 text-slate-500" /> Read-Only
+                  </span>
+                )}
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                 {canEditWorkflow && isAuthorized
-                   ? "As a State Reviewer / Fulfiller, you can modify stages, insert custom gates, reorder dependencies, and adjust assignees."
-                   : canEditWorkflow ? "Read-only view of the operational workflow sequence for this ticket." : "Route this ticket to the responsible agency queue and fulfiller."}
+                 {isAdmin
+                   ? "Administrator Mode: You have full authority to modify any stage, gate, dependency, or assignee."
+                   : isAuthorized
+                   ? "As an Authorized Fulfiller / Reviewer, you can modify stages, insert custom gates, and adjust routing."
+                   : "Read-only mode: You do not have permission to modify this work item. All modification controls are disabled."}
               </CardDescription>
             </div>
           </div>
-          {canEditWorkflow && isAuthorized && !isAddingStage && (
+          {canEditWorkflow && !isAddingStage && (
             <Button
               type="button"
               size="sm"
+              disabled={!isAuthorized}
               onClick={() => setIsAddingStage(true)}
-              className="bg-[#00284d] hover:bg-[#003c70] text-xs font-bold gap-1.5 shadow-xs"
+              title={isAuthorized ? "Add a new stage to this workflow" : "Stage creation disabled: Administrator or Reviewer authority required."}
+              className={`text-xs font-bold gap-1.5 shadow-xs transition-opacity ${
+                isAuthorized
+                  ? "bg-[#00284d] hover:bg-[#003c70] text-white"
+                  : "bg-slate-200 text-slate-400 border border-slate-300 opacity-50 cursor-not-allowed shadow-none"
+              }`}
             >
               <Plus className="size-3.5" /> Add Workflow Stage
             </Button>
@@ -316,23 +329,60 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-wider text-slate-700">Assignment routing</p>
-              <p className="mt-1 text-xs text-slate-500">Route this ticket to an authorized agency queue and optional fulfiller.</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {isAuthorized
+                  ? "Route this ticket to an authorized agency queue and optional fulfiller."
+                  : "View current assignment routing (Read-Only: Administrator or Reviewer access required to reassign)."}
+              </p>
             </div>
-              <Button type="button" size="sm" onClick={() => void handleSaveAssignment()} disabled={assignmentSaving || !isAuthorized || activeAssignmentGroups.length === 0} className="bg-[#00284d] text-xs font-bold text-white">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void handleSaveAssignment()}
+              disabled={assignmentSaving || !isAuthorized || activeAssignmentGroups.length === 0}
+              title={isAuthorized ? "Save routing assignment" : "Assignment change disabled: Requires Administrator authority."}
+              className={`text-xs font-bold text-white transition-opacity ${
+                isAuthorized
+                  ? "bg-[#00284d] hover:bg-[#003c70]"
+                  : "bg-slate-300 text-slate-500 opacity-50 cursor-not-allowed shadow-none"
+              }`}
+            >
               {assignmentSaving ? "Saving..." : "Save assignment"}
             </Button>
           </div>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <div>
               <Label htmlFor="ticket-assignment-group" className="text-xs font-bold">Assignment group</Label>
-              <select id="ticket-assignment-group" value={selectedAssignmentGroupId} onChange={(event) => { setSelectedAssignmentGroupId(event.target.value); setSelectedAssigneeId(""); }} disabled={!isAuthorized || assignmentGroups.length === 0} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-xs">
+              <select
+                id="ticket-assignment-group"
+                value={selectedAssignmentGroupId}
+                onChange={(event) => { setSelectedAssignmentGroupId(event.target.value); setSelectedAssigneeId(""); }}
+                disabled={!isAuthorized || assignmentGroups.length === 0}
+                title={isAuthorized ? "Select assignment group" : "Assignment group modification disabled."}
+                className={`mt-1 h-9 w-full rounded-md border text-xs transition-colors ${
+                  isAuthorized
+                    ? "border-slate-300 bg-white text-slate-900"
+                    : "border-slate-200 bg-slate-100 text-slate-400 opacity-60 cursor-not-allowed"
+                }`}
+              >
                 <option value="">Select a group</option>
                 {activeAssignmentGroups.map((group) => <option key={group.id} value={group.id}>{group.name} · {group.orgCode}</option>)}
               </select>
             </div>
             <div>
               <Label htmlFor="ticket-assignee" className="text-xs font-bold">Fulfiller</Label>
-              <select id="ticket-assignee" value={selectedAssigneeId} onChange={(event) => setSelectedAssigneeId(event.target.value)} disabled={!isAuthorized || !selectedAssignmentGroupId} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-xs">
+              <select
+                id="ticket-assignee"
+                value={selectedAssigneeId}
+                onChange={(event) => setSelectedAssigneeId(event.target.value)}
+                disabled={!isAuthorized || !selectedAssignmentGroupId}
+                title={isAuthorized ? "Select individual fulfiller" : "Fulfiller assignment modification disabled."}
+                className={`mt-1 h-9 w-full rounded-md border text-xs transition-colors ${
+                  isAuthorized
+                    ? "border-slate-300 bg-white text-slate-900"
+                    : "border-slate-200 bg-slate-100 text-slate-400 opacity-60 cursor-not-allowed"
+                }`}
+              >
                 <option value="">Group queue, no individual</option>
                 {repository.getAssignmentGroupMembers(selectedAssignmentGroupId).map((member) => <option key={member.userId} value={member.userId}>{member.userName ?? member.userEmail ?? member.userId}</option>)}
               </select>
@@ -558,54 +608,64 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
                     </div>
 
                     {/* Fulfiller Action Controls */}
-                    {isAuthorized && (
-                      <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={!isAuthorized || index === 0}
+                        onClick={() => handleMoveStage(index, "up")}
+                        className={`size-7 transition-opacity ${
+                          isAuthorized ? "text-slate-500 hover:text-slate-900" : "text-slate-300 opacity-40 cursor-not-allowed"
+                        }`}
+                        title={isAuthorized ? "Move stage up" : "Stage reordering disabled: Requires Administrator authority."}
+                      >
+                        <ArrowUp className="size-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={!isAuthorized || index === stages.length - 1}
+                        onClick={() => handleMoveStage(index, "down")}
+                        className={`size-7 transition-opacity ${
+                          isAuthorized ? "text-slate-500 hover:text-slate-900" : "text-slate-300 opacity-40 cursor-not-allowed"
+                        }`}
+                        title={isAuthorized ? "Move stage down" : "Stage reordering disabled: Requires Administrator authority."}
+                      >
+                        <ArrowDown className="size-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={!isAuthorized}
+                        onClick={() => startEditing(stage)}
+                        className={`size-7 transition-opacity ${
+                          isAuthorized ? "text-slate-500 hover:text-slate-900" : "text-slate-300 opacity-40 cursor-not-allowed"
+                        }`}
+                        title={isAuthorized ? "Edit stage details" : "Stage editing disabled: Requires Administrator authority."}
+                      >
+                        <Edit3 className="size-3.5" />
+                      </Button>
+                      {stages.length > 1 && (
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          disabled={index === 0}
-                          onClick={() => handleMoveStage(index, "up")}
-                          className="size-7 text-slate-500 hover:text-slate-900"
-                          title="Move stage up"
+                          disabled={!isAuthorized}
+                          onClick={() => handleDeleteStage(stage.id)}
+                          className={`size-7 transition-opacity ${
+                            isAuthorized
+                              ? "text-red-400 hover:text-red-700 hover:bg-red-50"
+                              : "text-slate-300 opacity-40 cursor-not-allowed hover:bg-transparent"
+                          }`}
+                          title={isAuthorized ? "Remove stage" : "Stage deletion disabled: Requires Administrator authority."}
                         >
-                          <ArrowUp className="size-3.5" />
+                          <Trash2 className="size-3.5" />
                         </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          disabled={index === stages.length - 1}
-                          onClick={() => handleMoveStage(index, "down")}
-                          className="size-7 text-slate-500 hover:text-slate-900"
-                          title="Move stage down"
-                        >
-                          <ArrowDown className="size-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => startEditing(stage)}
-                          className="size-7 text-slate-500 hover:text-slate-900"
-                          title="Edit stage details"
-                        >
-                          <Edit3 className="size-3.5" />
-                        </Button>
-                        {stages.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteStage(stage.id)}
-                            className="size-7 text-red-400 hover:text-red-700 hover:bg-red-50"
-                            title="Remove stage"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
