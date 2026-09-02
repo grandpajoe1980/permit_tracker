@@ -21,11 +21,12 @@ export default async function WorkstreamRoute({ params }: { params: Promise<{ pr
   if (!workstream) return <main className="mx-auto max-w-4xl p-8"><h1 className="text-2xl font-bold">Workstream not found</h1><p className="mt-2 text-slate-600">This workstream is not part of the requested authorized project.</p></main>;
   // The resolver applies the project scope equivalent to .eq("project_id", project.id).
 
-  const [{ data: taskRows }, { data: stageRows }] = await Promise.all([
+  const [{ data: taskRows }, { data: stageRows }, { data: stageRunRows }] = await Promise.all([
     client.from("tasks").select("id, title, status, assigned_org_code, assigned_user_name, forecast_due_date, baseline_due_date, actual_completion_date, duration_days, is_milestone, stage_id").eq("workstream_id", workstream.id).order("task_code", { ascending: true }),
     workstream.workflow_version_id
       ? client.from("workflow_version_stages").select("*").eq("workflow_version_id", workstream.workflow_version_id).order("sequence_order", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
+    client.from("stage_runs").select("id, stage_id, stage_key, status, started_at, completed_at, completion_notes").eq("workstream_id", workstream.id).order("started_at", { ascending: true }),
   ]);
 
   const journeySource = {
@@ -53,6 +54,15 @@ export default async function WorkstreamRoute({ params }: { params: Promise<{ pr
       stageId: task.stage_id ?? undefined,
     })),
     stages: (stageRows ?? []).map((stage) => workflowStageRowToDomain(stage)),
+    stageRuns: (stageRunRows ?? []).map((run) => ({
+      id: String(run.id),
+      stageId: run.stage_id ?? undefined,
+      stageKey: run.stage_key ?? undefined,
+      status: String(run.status ?? "active"),
+      startedAt: run.started_at ?? undefined,
+      completedAt: run.completed_at ?? undefined,
+      completionNotes: run.completion_notes ?? undefined,
+    })),
   };
 
   return <main className="mx-auto max-w-5xl space-y-6 p-8">

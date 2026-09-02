@@ -13,6 +13,16 @@ export type WorkflowJourneyStageState =
   | "not_recorded"
   | "waived";
 
+export interface WorkflowJourneyStageRun {
+  id: string;
+  stageId?: string;
+  stageKey?: string;
+  status: "active" | "completed" | "cancelled" | string;
+  startedAt?: string;
+  completedAt?: string;
+  completionNotes?: string;
+}
+
 export interface WorkflowJourneySource {
   id: string;
   currentStageId?: string;
@@ -27,6 +37,7 @@ export interface WorkflowJourneySource {
   forecastTargetDate?: string;
   tasks?: Array<Partial<TaskRecord> & Pick<TaskRecord, "id" | "title">>;
   stages?: WorkflowStageRecord[];
+  stageRuns?: WorkflowJourneyStageRun[];
 }
 export interface WorkflowJourneyStage {
   id: string;
@@ -38,6 +49,7 @@ export interface WorkflowJourneyStage {
   ownerName?: string;
   targetDate?: string;
   actualCompletionDate?: string;
+  completionNotes?: string;
   targetDurationDays?: number;
   minimumStatutoryDays?: number;
   requiredInputs: string[];
@@ -73,7 +85,9 @@ function activeTemplateStages(source: WorkflowJourneySource, templates: Workflow
   return (version ?? template.versions.find((candidate) => candidate.versionNumber === template.activeVersionNumber) ?? template.versions[0])?.stages ?? [];
 }
 
-function stateForTask(task: Partial<TaskRecord>): WorkflowJourneyStageState {
+function stateForTask(task: Partial<TaskRecord>, stageRun?: WorkflowJourneyStageRun): WorkflowJourneyStageState {
+  if (stageRun?.status === "completed") return "completed";
+  if (stageRun?.status === "cancelled") return "waived";
   switch (task.status) {
     case "completed": return "completed";
     case "waived": return "waived";
@@ -90,7 +104,8 @@ export function buildWorkflowJourney(source: WorkflowJourneySource, templates: W
   const stages: WorkflowJourneyStage[] = tasks.length > 0
     ? tasks.map((task, index) => {
         const definition = definitions.find((candidate) => candidate.id === task.stageId || candidate.stageKey === (task as { stageKey?: string }).stageKey) ?? definitions[index];
-        const state = stateForTask(task);
+        const stageRun = (source.stageRuns ?? []).find((run) => run.stageId === task.stageId || run.stageKey === (task as { stageKey?: string }).stageKey);
+        const state = stateForTask(task, stageRun);
         return {
           id: task.id,
           sequence: index + 1,
@@ -99,8 +114,9 @@ export function buildWorkflowJourney(source: WorkflowJourneySource, templates: W
           state,
           ownerOrgCode: task.assignedOrgCode ?? definition?.responsibleOrgCode,
           ownerName: task.assignedUserName,
-          targetDate: task.forecastDueDate ?? task.baselineDueDate,
-          actualCompletionDate: task.actualCompletionDate,
+          targetDate: state === "completed" ? (stageRun?.completedAt ?? task.actualCompletionDate ?? task.forecastDueDate ?? task.baselineDueDate) : (task.forecastDueDate ?? task.baselineDueDate),
+          actualCompletionDate: stageRun?.completedAt ?? task.actualCompletionDate,
+          completionNotes: stageRun?.completionNotes,
           targetDurationDays: task.durationDays ?? definition?.targetDurationDays,
           minimumStatutoryDays: definition?.minimumStatutoryDays,
           requiredInputs: definition?.requiredInputs ?? [],
@@ -108,19 +124,25 @@ export function buildWorkflowJourney(source: WorkflowJourneySource, templates: W
           isParallel: definition?.canRunInParallel ?? false,
         };
       })
-    : definitions.map((definition) => ({
-        id: definition.id,
-        sequence: definition.sequenceOrder,
-        label: definition.name,
-        customerLabel: definition.customerVisibilityLabel,
-        state: "upcoming" as WorkflowJourneyStageState,
-        ownerOrgCode: definition.responsibleOrgCode,
-        targetDurationDays: definition.targetDurationDays,
-        minimumStatutoryDays: definition.minimumStatutoryDays,
-        requiredInputs: definition.requiredInputs,
-        isMilestoneGate: definition.isMilestoneGate,
-        isParallel: definition.canRunInParallel,
-      }));
+    : definitions.map((definition) => {
+        const stageRun = (source.stageRuns ?? []).find((run) => run.stageId === definition.id || run.stageKey === definition.stageKey);
+        return {
+          id: definition.id,
+          sequence: definition.sequenceOrder,
+          label: definition.name,
+          customerLabel: definition.customerVisibilityLabel,
+          state: stageRun?.status === "completed" ? "completed" as WorkflowJourneyStageState : stageRun?.status === "cancelled" ? "waived" as WorkflowJourneyStageState : "upcoming" as WorkflowJourneyStageState,
+          ownerOrgCode: definition.responsibleOrgCode,
+          targetDate: stageRun?.status === "completed" ? stageRun.completedAt : undefined,
+          actualCompletionDate: stageRun?.completedAt,
+          completionNotes: stageRun?.completionNotes,
+          targetDurationDays: definition.targetDurationDays,
+          minimumStatutoryDays: definition.minimumStatutoryDays,
+          requiredInputs: definition.requiredInputs,
+          isMilestoneGate: definition.isMilestoneGate,
+          isParallel: definition.canRunInParallel,
+        };
+      });
 
   const currentByIdentity = stages.findIndex((stage) =>
     sameStage(stage.id, source.currentStageId) ||
@@ -133,7 +155,7 @@ export function buildWorkflowJourney(source: WorkflowJourneySource, templates: W
 
   if (tasks.length === 0 && currentStageIndex >= 0) {
     stages.forEach((stage, index) => {
-      if (index < currentStageIndex) stage.state = "not_recorded";
+      if (index < currentStageIndex && !["completed", "waived"].includes(stage.state)) stage.state = "not_recorded";
       else if (index === currentStageIndex) stage.state = source.operationalState?.includes("blocked")
         ? "blocked"
         : source.operationalState?.includes("waiting")

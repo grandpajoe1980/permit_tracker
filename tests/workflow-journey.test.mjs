@@ -51,6 +51,25 @@ test("does not invent completed history when only workflow definitions exist", a
   assert.equal(journey.stages[1].state, "current");
 });
 
+test("uses persisted stage runs for completed history and internal completion notes", async () => {
+  const { buildWorkflowJourney } = await vite.ssrLoadModule("/lib/workflow-journey.ts");
+  const source = {
+    id: "ws-1",
+    currentStageName: "Technical review",
+    operationalState: "running",
+    stages: [
+      { id: "s1", workflowVersionId: "v1", stageKey: "intake", name: "Intake", customerVisibilityLabel: "Application received", sequenceOrder: 1, responsibleOrgId: "state", responsibleOrgCode: "STATE", targetDurationDays: 2, minimumStatutoryDays: 0, requiredInputs: [], completionRequirements: [], permittedTransitions: ["review"], canRunInParallel: false, isMilestoneGate: false },
+      { id: "s2", workflowVersionId: "v1", stageKey: "review", name: "Technical review", customerVisibilityLabel: "Technical review", sequenceOrder: 2, responsibleOrgId: "agency", responsibleOrgCode: "AGENCY", targetDurationDays: 5, minimumStatutoryDays: 0, requiredInputs: [], completionRequirements: [], permittedTransitions: ["complete"], canRunInParallel: false, isMilestoneGate: true },
+    ],
+    stageRuns: [{ id: "run-1", stageId: "s1", stageKey: "intake", status: "completed", completedAt: "2026-09-01T15:30:00Z", completionNotes: "Validated intake packet." }],
+  };
+  const journey = buildWorkflowJourney(source);
+  assert.equal(journey.stages[0].state, "completed");
+  assert.equal(journey.stages[0].actualCompletionDate, "2026-09-01T15:30:00Z");
+  assert.equal(journey.stages[0].completionNotes, "Validated intake packet.");
+  assert.equal(journey.stages[1].state, "current");
+});
+
 test("renders role-safe full journey and hides internal assignees for customers", async () => {
   const { WorkflowJourney } = await vite.ssrLoadModule("/components/cockpits/WorkflowJourney.tsx");
   const source = {

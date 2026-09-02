@@ -133,6 +133,9 @@ export function WorkflowJourney({
                       {!customerSafe && stage.requiredInputs.length > 0 && <p className="mt-1"><strong>Required inputs:</strong> {stage.requiredInputs.join(", ")}</p>}
                     </div>
                   )}
+                  {stage.state === "completed" && stage.completionNotes && !customerSafe && (
+                    <p className="mt-2 rounded-lg bg-emerald-50 p-2 text-xs leading-5 text-emerald-950"><strong>Completion note:</strong> {stage.completionNotes}</p>
+                  )}
                 </div>
               </li>
             );
