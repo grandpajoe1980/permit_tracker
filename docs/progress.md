@@ -111,6 +111,21 @@ Next ready task: UX-05 — simplify My Work and correct counts.
 
 Next ready task: UX-06 — build the unified work item page.
 
+## UX-06 — unified work-item summary (2026-09-02)
+
+- Added shared `WorkItemPage`, `NextActionPanel`, `WorkItemFacts`, and
+  `ActivityFeed` components around the existing exact-record detail renderer.
+- Detail views now expose the next action, owner/removal rule, Completed /
+  Current / Next summary, and saved activity before the supporting workflow
+  and record facts.
+- The summary uses persisted journey/status data and explicitly avoids
+  inventing completion history.
+- Focused source tests — 13 passed; focused ESLint — 0 errors (existing
+  warnings only); `npm run build` — PASS.
+- Supabase, RLS, audit, notifications, uploads, and downloads were not changed.
+
+Next ready task: UX-07 — make mutations refresh in place.
+
 ## Flow visibility checkpoint (2026-09-02)
 
 - Added a shared past/current/next workflow journey model and reusable UI.

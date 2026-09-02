@@ -38,6 +38,12 @@ const [page, layout, css, readme, productCopy, navigation, portalMigration, hard
 ]);
 const workflowQueries = await readFile(new URL("../lib/supabase/queries.ts", import.meta.url), "utf8");
 const operationalUx = await readFile(new URL("../lib/operational-ux.ts", import.meta.url), "utf8");
+const [workItemPage, nextActionPanel, workItemFacts, activityFeed] = await Promise.all([
+  readFile(new URL("../components/path/work/WorkItemPage.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../components/path/work/NextActionPanel.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../components/path/work/WorkItemFacts.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../components/path/work/ActivityFeed.tsx", import.meta.url), "utf8"),
+]);
 const loginPage = await readFile(new URL("../components/path/LoginPage.tsx", import.meta.url), "utf8");
 const [customerHome, customerRequestList, submitRequestLauncher] = await Promise.all([
   readFile(new URL("../components/path/customer/CustomerHome.tsx", import.meta.url), "utf8"),
@@ -108,6 +114,16 @@ test("keeps My Work groups exclusive and counts structured actionable items", ()
   assert.match(operationalUx, /"due_soon"/);
   assert.match(operationalUx, /QueueSectionId = "needs_action" \| "due_soon" \| "waiting" \| "recently_completed"/);
   assert.match(page, /const actionableCount = activeQueueItems\.filter/);
+});
+
+test("renders the unified work-item summary and saved activity surface", () => {
+  assert.match(page, /<WorkItemPage/);
+  assert.match(workItemPage, /NextActionPanel/);
+  assert.match(nextActionPanel, /Your next action/);
+  assert.match(workItemFacts, /Completed/);
+  assert.match(workItemFacts, /Current/);
+  assert.match(workItemFacts, /Next/);
+  assert.match(activityFeed, /Saved activity/);
 });
 
 test("includes responsive, focus, reduced-motion, and print protections", () => {

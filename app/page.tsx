@@ -125,6 +125,7 @@ import { LoginPage } from "@/components/path/LoginPage";
 import { CustomerHome } from "@/components/path/customer/CustomerHome";
 import { CustomerRequestList } from "@/components/path/customer/CustomerRequestList";
 import { SubmitRequestLauncher, type CustomerRequestIntent } from "@/components/path/customer/SubmitRequestLauncher";
+import { WorkItemPage } from "@/components/path/work/WorkItemPage";
 import { buildShellPath, buildWorkItemPath, parseShellPath, parseWorkItemPath, type AppRoute } from "@/lib/navigation";
 
 type Route = AppRoute;
@@ -1697,7 +1698,7 @@ export default function Home() {
   }
 
   function renderMain() {
-    if (route === "detail") return renderDetail();
+    if (route === "detail") return <WorkItemPage item={selectedItem} events={selectedItem ? repository.getAuditEvents().filter((event) => event.entityId === selectedItem.workstreamId || event.entityId === selectedItem.sourceId) : []}>{renderDetail()}</WorkItemPage>;
     if (route === "my-work") return renderMyWork();
     if (route === "agency-queue" || route === "rfis" || route === "coordination" || route === "documents") return activePersona.isCustomer && route === "documents" ? renderCustomerDocuments() : renderQueue(route);
     if (route === "project") return renderProject();
