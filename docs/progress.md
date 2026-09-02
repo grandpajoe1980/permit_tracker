@@ -51,6 +51,21 @@ stateful/navigation change; no UX-00 source behavior was changed.
 
 Next ready task: UX-02 — simplify the logged-out sign-in experience.
 
+## UX-02 — simplified PATH sign-in (2026-09-02)
+
+- Extracted the logged-out experience into
+  `components/path/LoginPage.tsx` with one centered sign-in card.
+- Removed the hero claim, benefit cards, default-landing explanation, and
+  demo-persona paragraph from the first-time view.
+- Preserved email/username, password, Sign In, Quick Demo Sign-In, collapsed
+  persona choices, keyboard focus styles, and an assertive login error region.
+- Focused verification: source/SSR tests — 10 passed; focused ESLint — 0
+  errors (existing warnings only); `npm run build` — PASS.
+- Supabase, RLS, audit, notifications, uploads, and downloads were not
+  changed.
+
+Next ready task: UX-03 — stable navigation and return-context contract.
+
 ## Flow visibility checkpoint (2026-09-02)
 
 - Added a shared past/current/next workflow journey model and reusable UI.

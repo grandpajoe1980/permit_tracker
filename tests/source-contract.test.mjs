@@ -36,6 +36,7 @@ const [page, layout, css, readme, productCopy, portalMigration, hardeningMigrati
   readFile(new URL("../scripts/test-supabase-rls-isolation.mjs", import.meta.url), "utf8"),
 ]);
 const workflowQueries = await readFile(new URL("../lib/supabase/queries.ts", import.meta.url), "utf8");
+const loginPage = await readFile(new URL("../components/path/LoginPage.tsx", import.meta.url), "utf8");
 
 test("uses the typed domain module without duplicating fixtures in the UI", () => {
   assert.match(page, /^"use client";/);
@@ -46,11 +47,7 @@ test("uses the typed domain module without duplicating fixtures in the UI", () =
 
 test("preserves stable journey labels and semantic controls", () => {
   assert.match(page, /PROGRAM_SUBTITLE/);
-  assert.match(page, /Sign in to \{PRODUCT_NAME\}/i);
   assert.match(page, /Critical Path/i);
-  assert.match(page, /id="login-submit"/);
-  assert.match(page, /id="demo-login-trigger"/);
-  assert.match(page, /id="login-error" role="alert"/);
   assert.match(page, /id="intake-submit-btn"/);
   assert.match(page, /createRequestForUser/);
   assert.match(page, /aria-live="polite"/);
@@ -70,6 +67,15 @@ test("centralizes PATH product and project display copy", () => {
   assert.match(productCopy, /PRODUCT_NAME\s*=\s*[\"']PATH[\"']/);
   assert.match(productCopy, /PROGRAM_SUBTITLE\s*=\s*[\"']Starbase Louisiana/);
   assert.match(productCopy, /PROJECT_DISPLAY_NAME\s*=\s*[\"']SpaceX/);
+});
+
+test("keeps the login surface focused and preserves demo access", () => {
+  assert.match(loginPage, /Sign in to \{PRODUCT_NAME\}/);
+  assert.match(loginPage, /id="login-submit"/);
+  assert.match(loginPage, /id="demo-login-trigger"/);
+  assert.match(loginPage, /Quick Demo Sign-In/);
+  assert.match(loginPage, /id="login-error" role="alert"/);
+  assert.doesNotMatch(loginPage, /PATH tells you what to do next|Your default landing page|See work assigned to you/);
 });
 
 test("includes responsive, focus, reduced-motion, and print protections", () => {

@@ -12,7 +12,6 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
-  ChevronDown,
   ClipboardCheck,
   Clock3,
   Download,
@@ -41,7 +40,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
-  User,
   UserCog,
   UserRound,
   Users,
@@ -59,7 +57,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   DEMO_PASSWORD,
-  demoPersonas,
   initialTeamUsers,
   pecanIslandRequests,
   roleDefinitions,
@@ -123,6 +120,7 @@ import { WorkflowMiniStepper } from "@/components/cockpits/WorkflowJourney";
 import { SystemVersionFooter } from "@/components/SystemVersionFooter";
 import { TicketWorkflowEditor } from "@/components/cockpits/TicketWorkflowEditor";
 import { PRODUCT_NAME, PROGRAM_SUBTITLE, PROJECT_DISPLAY_NAME } from "@/lib/product-copy";
+import { LoginPage } from "@/components/path/LoginPage";
 
 type Route = "my-work" | "agency-queue" | "rfis" | "coordination" | "documents" | "project" | "notifications" | "secondary" | "admin" | "detail" | "requests" | "schedule" | "contacts" | "help" | "profile";
 type SecondaryTool = "schedule" | "vault" | "catalog";
@@ -171,7 +169,7 @@ function makeAuthenticatedPersona(email: string, name: string, userId?: string):
     email,
     badge: "Authenticated",
     scenario: "Project workspace",
-    group: PROGRAM_SUBTITLE,
+    group: "SpaceX Louisiana Program",
   };
 }
 
@@ -246,11 +244,6 @@ function workspaceTitle(workspace: WorkspaceMode) {
 
 function persistedTeamUsers() {
   return teamUsersFromMemberships(repository.getProfiles(), repository.getOrganizationMemberships(), repository.getOrganizations());
-}
-
-function demoPersonaDomId(persona: DemoPersona) {
-  const ids: Record<string, string> = { "alex-martin": "alex", "maya-chen": "maya", "sarah-johnson": "sarah", "jordan-lee": "jordan" };
-  return ids[persona.id] ?? persona.id;
 }
 
 function syncRequestState(request: ServiceRequest, workstreamState?: ReturnType<typeof repository.getWorkstreamById>): ServiceRequest {
@@ -1220,49 +1213,20 @@ export default function Home() {
   }
 
   if (!loggedIn) {
-    return (
-      <div id="login-shell" data-hydrated={hydrated ? "true" : "false"} className="min-h-screen bg-[#f3f6f7] text-[#172033]">
-        <div className="road-stripe" />
-        <header className="site-header">
-          <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-4 sm:px-8">
-            <span className="flex size-10 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d]"><Zap className="size-6 fill-current" aria-hidden="true" /></span>
-            <div><p className="text-lg font-black tracking-tight text-white">{PRODUCT_NAME}</p><p className="text-xs font-semibold text-slate-200">{PROGRAM_SUBTITLE}</p></div>
-          </div>
-        </header>
-        <main className="mx-auto grid min-h-[calc(100vh-88px)] max-w-7xl items-center gap-8 px-4 py-10 sm:px-8 lg:grid-cols-[1.1fr_0.9fr]">
-          <section className="max-w-2xl">
-            <p className="mb-3 text-xs font-black uppercase tracking-[0.22em] text-teal-800">{PROGRAM_SUBTITLE}</p>
-            <h1 className="text-4xl font-black tracking-tight text-[#00284d] sm:text-6xl">PATH tells you what to do next.</h1>
-            <p className="mt-5 max-w-xl text-lg leading-8 text-slate-600">A shared operational workspace for reviewers, supervisors, the State Project Office, and the SpaceX project team.</p>
-            <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              {["See work assigned to you", "Complete or block a step", "Preview the next handoff"].map((text) => <div key={text} className="rounded-xl border border-slate-200 bg-white p-4 text-sm font-bold text-[#00284d] shadow-sm"><CheckCircle2 className="mb-3 size-5 text-teal-700" aria-hidden="true" />{text}</div>)}
-            </div>
-          </section>
-          <Card className="border-slate-200 bg-white shadow-xl">
-            <CardHeader className="border-b border-slate-100 bg-slate-50">
-              <CardTitle className="flex items-center gap-2 text-xl font-black text-[#00284d]"><User className="size-5 text-teal-700" /> Sign in to {PRODUCT_NAME}</CardTitle>
-              <p className="text-sm text-slate-600">Your default landing page is My Work, filtered to your role and agency.</p>
-            </CardHeader>
-            <CardContent className="space-y-5 p-6">
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div><Label htmlFor="username">Email address / username</Label><Input ref={usernameRef} id="username" name="username" type="text" value={username} required onChange={(event) => { setUsername(event.target.value); setLoginError(""); }} className="mt-1 h-11" placeholder="jordan.lee@la.gov" /></div>
-                <div><Label htmlFor="password">Password</Label><Input id="password" name="password" type="password" value={password} required onChange={(event) => { setPassword(event.target.value); setLoginError(""); }} className="mt-1 h-11" placeholder="demo1234" /></div>
-                <Button id="login-submit" type="submit" disabled={loadingData} className="h-11 w-full bg-[#00284d] font-bold hover:bg-[#003c70]">{loadingData ? "Signing in…" : "Sign In"}<ArrowRight className="size-4" aria-hidden="true" /></Button>
-              </form>
-              {loginError && <p id="login-error" role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-900">{loginError}</p>}
-              <div className="border-t border-slate-100 pt-4">
-                <Button id="demo-login-trigger" type="button" variant="outline" className="w-full justify-between border-teal-300 bg-teal-50 font-bold text-teal-950" onClick={() => setShowDemoPeople((value) => !value)}><span className="flex items-center gap-2"><Sparkles className="size-4 text-teal-700" aria-hidden="true" /> Quick Demo Sign-In</span><ChevronDown className={`size-4 transition-transform ${showDemoPeople ? "rotate-180" : ""}`} aria-hidden="true" /></Button>
-                {showDemoPeople && <div className="mt-3 space-y-2" aria-label="Demo personas">
-                  {demoPersonas.map((persona) => <button key={persona.id} id={`demo-persona-${demoPersonaDomId(persona)}`} type="button" onClick={() => void handleDemoPersonaSelect(persona)} className="flex w-full items-start justify-between rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-teal-500 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><span><span className="block text-sm font-black text-[#00284d]">{persona.name}</span><span className="block text-xs font-semibold text-slate-500">{persona.role}</span></span><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase text-slate-600">{persona.badge}</span></button>)}
-                </div>}
-              </div>
-              <p className="text-xs leading-5 text-slate-500"><strong className="text-slate-700">Demo:</strong> use the persona picker for the reviewer, supervisor, customer, and applicant scenarios. Official statutory filings remain in the authoritative agency systems.</p>
-            </CardContent>
-          </Card>
-        </main>
-        <SystemVersionFooter />
-      </div>
-    );
+    return <LoginPage
+      hydrated={hydrated}
+      username={username}
+      password={password}
+      loginError={loginError}
+      loadingData={loadingData}
+      showDemoPeople={showDemoPeople}
+      usernameRef={usernameRef}
+      onUsernameChange={(value) => { setUsername(value); setLoginError(""); }}
+      onPasswordChange={(value) => { setPassword(value); setLoginError(""); }}
+      onLogin={handleLogin}
+      onDemoPersonaSelect={handleDemoPersonaSelect}
+      onToggleDemoPeople={() => setShowDemoPeople((value) => !value)}
+    />;
   }
 
   const canAdmin = activePersona.workspace === "admin" || activePersona.workspace === "supervisor" || activePersona.workspace === "state_office";
