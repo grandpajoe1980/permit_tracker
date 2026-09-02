@@ -8,6 +8,7 @@ export type AppRoute =
   | "notifications"
   | "secondary"
   | "admin"
+  | "intake"
   | "detail"
   | "requests"
   | "schedule"
@@ -34,6 +35,7 @@ export const NAVIGATION_DEFINITIONS: NavigationDefinition[] = [
   { id: "schedule", label: "Schedule", scope: "schedule", audiences: ["customer", "staff", "supervisor", "admin"] },
   { id: "notifications", label: "Notifications", scope: "system", audiences: ["customer", "staff", "supervisor", "admin"] },
   { id: "requests", label: "Submit a Request", scope: "record", audiences: ["customer"] },
+  { id: "intake", label: "Customer Intake Queue", scope: "queue", audiences: ["staff", "supervisor", "admin"] },
   { id: "contacts", label: "Contacts & Help", scope: "support", audiences: ["customer"] },
   { id: "help", label: "Contacts & Help", scope: "support", audiences: ["customer"] },
 ];
@@ -81,4 +83,3 @@ export function parseShellPath(url: URL): { route: AppRoute; workstreamId?: stri
     : view === "detail" ? "detail" : "my-work";
   return { route: knownRoute, workstreamId: url.searchParams.get("workstream") ?? undefined };
 }
-

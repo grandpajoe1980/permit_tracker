@@ -16,7 +16,7 @@ export default async function GlobalWorkstreamRoute({ params }: { params: Promis
 
   const workstream = await resolveWorkstreamRoute(client, undefined, workstreamId);
 
-  if (!workstream) return <main className="mx-auto max-w-4xl p-8"><h1 className="text-2xl font-bold">Workstream not found</h1><p className="mt-2 text-slate-600">The requested workstream could not be resolved.</p></main>;
+  if (!workstream) return <main className="mx-auto max-w-4xl space-y-4 p-8"><h1 className="text-2xl font-bold">Workstream not found</h1><p className="text-slate-600">The requested workstream could not be resolved.</p><Link href="/" className="inline-flex text-sm font-bold text-teal-800 hover:underline">Back to Projects</Link></main>;
 
   if (workstream.project_id) {
     const project = await resolveProjectRoute(client, workstream.project_id);

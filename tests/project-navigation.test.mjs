@@ -19,6 +19,7 @@ const { repository } = await vite.ssrLoadModule("/lib/repository.ts");
 const { getProjectOverview } = await vite.ssrLoadModule("/lib/customer-portal.ts");
 const { getOperationalWorkItems } = await vite.ssrLoadModule("/lib/operational-ux.ts");
 const { demoPersonas } = await vite.ssrLoadModule("/lib/demo-data.ts");
+const { buildShellPath, parseShellPath, NAVIGATION_DEFINITIONS } = await vite.ssrLoadModule("/lib/navigation.ts");
 
 test("spacexProjectRecord provides authoritative project page metadata", () => {
   assert.equal(spacexProjectRecord.id, "proj-spacex-pecan");
@@ -95,6 +96,15 @@ test("project navigation state transitions route to project and focus workstream
   assert.equal(route, "project");
   assert.equal(selectedItemId, null);
   assert.equal(selectedProjectWorkstreamId, "WS-LA82-HEAVYHAUL");
+});
+
+test("deep project links preserve the exact workstream identifier", () => {
+  const path = buildShellPath("project", "WS-AIR-TITLE-V");
+  assert.equal(path, "/?view=project&workstream=WS-AIR-TITLE-V");
+  const parsed = parseShellPath(new URL(`https://path.demo${path}`));
+  assert.equal(parsed.route, "project");
+  assert.equal(parsed.workstreamId, "WS-AIR-TITLE-V");
+  assert.ok(NAVIGATION_DEFINITIONS.some((entry) => entry.id === "intake"));
 });
 
 test("workstream resolution supports code, lowercase, URL-encoded, and ID lookup", () => {
