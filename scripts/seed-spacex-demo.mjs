@@ -28,14 +28,19 @@ function stableUuid(value) {
 }
 
 const users = [
-  { email: "alex.martin@spacex.com", password: "SpaceX-MVP-2026!", name: "Alex Martin", role: "customer" },
-  { email: "maya.chen@spacex.com", password: "SpaceX-MVP-2026!", name: "Maya Chen", role: "program" },
-  { email: "jordan.lee@la.gov", password: "SpaceX-MVP-2026!", name: "Jordan Lee", role: "environment" },
-  { email: "sam.rivera@la.gov", password: "SpaceX-MVP-2026!", name: "Sam Rivera", role: "infrastructure" },
-  { email: "riley.brooks@vermilionparish.org", password: "SpaceX-MVP-2026!", name: "Riley Brooks", role: "community" },
-  { email: "joe.skaggs@la.gov", password: "PATH-MVP-2026!", name: "Joe Skaggs", role: "admin" },
-  { email: "sarah.johnson@la.gov", password: "PATH-MVP-2026!", name: "Sarah Johnson", role: "state_office" },
-  { email: "aris.thorne@gulfcoast-engineering.example", password: "SpaceX-MVP-2026!", name: "Dr. Aris Thorne", role: "consultant" },
+  { email: "alex.martin@demo.permit.local", password: "SpaceX-Demo-2026!", name: "Alex Martin", role: "customer" },
+  { email: "maya.chen@demo.permit.local", password: "SpaceX-Demo-2026!", name: "Maya Chen", role: "program" },
+  { email: "jordan.lee@demo.permit.local", password: "Agency-Demo-2026!", name: "Jordan Lee", role: "environment" },
+  { email: "sam.rivera@demo.permit.local", password: "Agency-Demo-2026!", name: "Sam Rivera", role: "infrastructure" },
+  { email: "riley.brooks@demo.permit.local", password: "Agency-Demo-2026!", name: "Riley Brooks", role: "community" },
+  { email: "joe.skaggs@demo.permit.local", password: "PATH-Demo-2026!", name: "Joe Skaggs", role: "admin" },
+  { email: "sarah.johnson@demo.permit.local", password: "PATH-Demo-2026!", name: "Sarah Johnson", role: "state_office" },
+  { email: "aris.thorne@demo.permit.local", password: "SpaceX-Demo-2026!", name: "Dr. Aris Thorne", role: "consultant" },
+  { email: "elon.musk@demo.permit.local", password: "SpaceX-Demo-2026!", name: "Elon Musk", role: "space_exec" },
+  { email: "gwynne.shotwell@demo.permit.local", password: "SpaceX-Demo-2026!", name: "Gwynne Shotwell", role: "space_exec" },
+  { email: "bill.gerstenmaier@demo.permit.local", password: "SpaceX-Demo-2026!", name: "Bill Gerstenmaier", role: "space_build" },
+  { email: "jeff.landry@demo.permit.local", password: "PATH-Demo-2026!", name: "Jeff Landry", role: "state_exec" },
+  { email: "susan.bourgeois@demo.permit.local", password: "PATH-Demo-2026!", name: "Susan Bourgeois", role: "state_coordinator" },
 ];
 
 const requests = [
@@ -57,10 +62,28 @@ async function one(query, label) {
 
 const customer = (await one(supabase.from("customer_organizations").select("id").eq("name", "SpaceX Louisiana").single(), "customer org"));
 const project = (await one(supabase.from("projects").select("id").eq("number", "PRJ-PECAN-2026").single(), "project"));
+await one(supabase.from("organizations").upsert([
+  ["SPACEPORT", "SpaceX Project Delivery", "applicant", "external_partner"],
+  ["LA-PROJECTS", "Louisiana Economic Development Space Coordination", "coordination", "state"],
+  ["LED", "Louisiana Economic Development", "agency", "state"],
+  ["LDEQ", "LDEQ Air, Water, Waste and Remediation Permits", "agency", "state"],
+  ["DOTD", "DOTD Roads, Bridges and Aviation", "agency", "state"],
+  ["CPRA", "CPRA Coastal Permitting", "agency", "state"],
+  ["LDNR", "LDNR Energy and Pipeline Coordination", "agency", "state"],
+  ["OSFM", "State Fire Marshal", "agency", "state"],
+  ["LSP", "Louisiana State Police", "agency", "state"],
+  ["VERMILION", "Local Parish Coordination", "agency", "local"],
+  ["VERMILION-PARISH", "Local Parish Coordination", "agency", "local"],
+  ["USACE", "U.S. Army Corps of Engineers Federal Coordination", "federal_agency", "federal"],
+  ["FAA", "Federal Aviation Administration Coordination", "federal_agency", "federal"],
+  ["EPA", "U.S. Environmental Protection Agency Coordination", "federal_agency", "federal"],
+  ["COASTAL_ENGINEERING", "Coastal Engineering Partners", "external_partner", "external_partner"],
+  ["STATEPO", "Governor's Executive Review", "coordination", "state"],
+].map(([code, name, organization_type, jurisdiction_level]) => ({ code, name, organization_type, jurisdiction_level, active: true })), { onConflict: "code" }), "ensure demo organizations");
 const orgs = await one(supabase.from("organizations").select("id,code"), "organizations");
 const orgByCode = Object.fromEntries(orgs.map((o) => [o.code, o.id]));
-const membershipOrgByRole = { program: "SPACEPORT", environment: "LDEQ", infrastructure: "DOTD", community: "VERMILION", admin: "LED", state_office: "STATEPO", consultant: "COASTAL_ENGINEERING" };
-const membershipRoleByUserRole = { program: "supervisor", admin: "system_admin", state_office: "supervisor", environment: "contributor", infrastructure: "contributor", community: "contributor", consultant: "contributor" };
+const membershipOrgByRole = { program: "SPACEPORT", environment: "LDEQ", infrastructure: "DOTD", community: "VERMILION", admin: "LED", state_office: "LA-PROJECTS", consultant: "COASTAL_ENGINEERING", space_exec: "SPACEX", space_build: "SPACEX", state_exec: "LA-PROJECTS", state_coordinator: "LED" };
+const membershipRoleByUserRole = { program: "supervisor", admin: "system_admin", state_office: "supervisor", environment: "contributor", infrastructure: "contributor", community: "contributor", consultant: "contributor", space_exec: "supervisor", space_build: "contributor", state_exec: "supervisor", state_coordinator: "supervisor" };
 
 const authUsers = [];
 for (const spec of users) {
@@ -77,14 +100,19 @@ for (const spec of users) {
 }
 
 const profileByEmail = {
-  "alex.martin@spacex.com": { title: "SpaceX Project Manager", unit: "Louisiana Launch Site Delivery", organizationId: "SPACEX", organizationName: "Space Exploration Technologies Corp. (SpaceX)", projectRole: "Customer project lead", visible: true },
-  "maya.chen@spacex.com": { title: "SpaceX Regulatory Affairs Manager", unit: "Regulatory Affairs & Permitting", organizationId: "SPACEX", organizationName: "Space Exploration Technologies Corp. (SpaceX)", projectRole: "Customer regulatory lead", visible: true },
-  "jordan.lee@la.gov": { title: "Environmental Scientist 1", unit: "Office of Environmental Services / Water Quality Permits", organizationId: "LDEQ", organizationName: "Louisiana Department of Environmental Quality", projectRole: "Environmental review lead", visible: true },
-  "sam.rivera@la.gov": { title: "Civil Engineer 4", unit: "District 03 / Aviation and Bridge Design", organizationId: "DOTD", organizationName: "Louisiana Department of Transportation and Development", projectRole: "Transportation and infrastructure lead", visible: true },
-  "riley.brooks@vermilionparish.org": { title: "Intergovernmental Affairs Coordinator", unit: "Parish Administration / Community Relations", organizationId: "VERMILION", organizationName: "Vermilion Parish Police Jury", projectRole: "Parish and community liaison", visible: true },
-  "joe.skaggs@la.gov": { title: "Space Czar", unit: "PATH / Louisiana Project Delivery Administration", organizationId: "LED", organizationName: "Louisiana Economic Development (LED)", projectRole: "PATH administrator", visible: false },
-  "sarah.johnson@la.gov": { title: "State Project Manager", unit: "PATH / Louisiana Project Delivery Office", organizationId: "STATEPO", organizationName: "Louisiana Governor's Office of Major Projects & Delivery", projectRole: "State concierge and project manager", visible: true },
-  "aris.thorne@gulfcoast-engineering.example": { title: "Civil / Coastal Engineering Lead", unit: "Coastal Hydrology Practice", organizationId: "COASTAL_ENGINEERING", organizationName: "Gulf Coast Engineering Partners", projectRole: "Consultant representing SpaceX", visible: true },
+  "alex.martin@demo.permit.local": { title: "SpaceX Project Manager", unit: "Louisiana Launch Site Delivery", organizationId: "SPACEX", organizationName: "Space Exploration Technologies Corp. (SpaceX)", projectRole: "Customer project lead", visible: true },
+  "maya.chen@demo.permit.local": { title: "SpaceX Regulatory Affairs Manager", unit: "Regulatory Affairs & Permitting", organizationId: "SPACEX", organizationName: "Space Exploration Technologies Corp. (SpaceX)", projectRole: "Customer regulatory lead", visible: true },
+  "jordan.lee@demo.permit.local": { title: "Environmental Scientist 1", unit: "LDEQ / Air and Water Permits", organizationId: "LDEQ", organizationName: "Louisiana Department of Environmental Quality", projectRole: "Environmental review lead", visible: true },
+  "sam.rivera@demo.permit.local": { title: "Civil Engineer 4", unit: "DOTD / Roads, Bridges, and Aviation", organizationId: "DOTD", organizationName: "Louisiana Department of Transportation and Development", projectRole: "Transportation and infrastructure lead", visible: true },
+  "riley.brooks@demo.permit.local": { title: "Intergovernmental Affairs Coordinator", unit: "Local Parish Coordination", organizationId: "VERMILION", organizationName: "Local parish coordination office (demo)", projectRole: "Parish and community liaison", visible: true },
+  "joe.skaggs@demo.permit.local": { title: "Workflow Administrator", unit: "PATH / Administration", organizationId: "LED", organizationName: "Louisiana Economic Development (demo)", projectRole: "PATH administrator", visible: false },
+  "sarah.johnson@demo.permit.local": { title: "Interagency Coordinator", unit: "PATH / Louisiana Project Delivery Office", organizationId: "LA-PROJECTS", organizationName: "Louisiana Governor's Office of Major Projects & Delivery (demo)", projectRole: "State concierge and project manager", visible: true },
+  "aris.thorne@demo.permit.local": { title: "Civil / Coastal Engineering Lead", unit: "Coastal Hydrology Practice", organizationId: "COASTAL_ENGINEERING", organizationName: "Gulf Coast Engineering Partners (demo)", projectRole: "Consultant representing SpaceX", visible: true },
+  "elon.musk@demo.permit.local": { title: "SpaceX Executive / Project Sponsor", unit: "SpaceX Project Delivery", organizationId: "SPACEX", organizationName: "Space Exploration Technologies Corp. (SpaceX) (demo)", projectRole: "Applicant executive observer", visible: true },
+  "gwynne.shotwell@demo.permit.local": { title: "SpaceX President / Operational Executive", unit: "SpaceX Project Delivery", organizationId: "SPACEX", organizationName: "Space Exploration Technologies Corp. (SpaceX) (demo)", projectRole: "Applicant executive", visible: true },
+  "bill.gerstenmaier@demo.permit.local": { title: "SpaceX Build and Flight Reliability Executive", unit: "SpaceX Civil and Site Development", organizationId: "SPACEX", organizationName: "Space Exploration Technologies Corp. (SpaceX) (demo)", projectRole: "Applicant technical executive", visible: true },
+  "jeff.landry@demo.permit.local": { title: "Louisiana Governor / Executive Sponsor", unit: "Governor's Executive Review", organizationId: "LA-PROJECTS", organizationName: "Governor's Executive Review (demo)", projectRole: "Executive observer / sponsor", visible: true },
+  "susan.bourgeois@demo.permit.local": { title: "Louisiana Economic Development Secretary", unit: "Louisiana Economic Development Space Coordination", organizationId: "LED", organizationName: "Louisiana Economic Development (demo)", projectRole: "Executive coordinator", visible: true },
 };
 for (const user of authUsers) {
   const profile = profileByEmail[user.email];
@@ -94,14 +122,19 @@ for (const user of authUsers) {
 
 const userByEmail = Object.fromEntries(authUsers.map((user) => [user.email, user]));
 const participantSpecs = [
-  ["participant-alex", "alex.martin@spacex.com", "SPACEX", "lead", "customer", ["WS-LA82-HEAVYHAUL", "WS-WETLANDS-PAD-A", "WS-UTILITY-INTERCONNECT"], [], [], ["customer_updates"]],
-  ["participant-maya", "maya.chen@spacex.com", "SPACEX", "reviewing", "customer", ["WS-WETLANDS-PAD-A", "WS-LA82-HEAVYHAUL", "WS-AIRSPACE-MARITIME"], [], ["customer_submissions"], ["rfis", "escalations"]],
-  ["participant-jordan", "jordan.lee@la.gov", "LDEQ", "reviewing", "project", ["WS-WETLANDS-PAD-A", "WS-WASTEWATER-DELUGE"], ["TASK-T003"], ["environmental_permits"], ["rfis", "document_reviews"]],
-  ["participant-sam", "sam.rivera@la.gov", "DOTD", "reviewing", "project", ["WS-LA82-HEAVYHAUL", "WS-SUBSTATION-230KV"], ["TASK-T001", "TASK-T002"], ["transportation_permits"], ["coordination_requests"]],
-  ["participant-riley", "riley.brooks@vermilionparish.org", "VERMILION", "consulting", "customer", ["WS-COMMUNITY-WATER", "WS-AIRSPACE-MARITIME"], [], ["public_hearings"], ["meetings", "public_notices"]],
-  ["participant-sarah", "sarah.johnson@la.gov", "STATEPO", "coordinating", "project", ["WS-LA82-HEAVYHAUL", "WS-WETLANDS-PAD-A", "WS-COMMUNITY-WATER"], [], ["cross_agency_triage"], ["all_project_exceptions"]],
-  ["participant-joe", "joe.skaggs@la.gov", "LED", "lead", "admin", [], [], ["administration", "escalations"], ["escalation_queue"]],
-  ["participant-aris", "aris.thorne@gulfcoast-engineering.example", "COASTAL_ENGINEERING", "consulting", "customer", ["WS-LA82-HEAVYHAUL", "WS-WETLANDS-PAD-A"], [], ["technical_submissions"], ["document_requests"]],
+  ["participant-alex", "alex.martin@demo.permit.local", "SPACEX", "lead", "customer", ["WS-LA82-HEAVYHAUL", "WS-WETLANDS-PAD-A", "WS-UTILITY-INTERCONNECT"], [], [], ["customer_updates"]],
+  ["participant-maya", "maya.chen@demo.permit.local", "SPACEX", "reviewing", "customer", ["WS-WETLANDS-PAD-A", "WS-LA82-HEAVYHAUL", "WS-AIRSPACE-MARITIME"], [], ["customer_submissions"], ["rfis", "escalations"]],
+  ["participant-jordan", "jordan.lee@demo.permit.local", "LDEQ", "reviewing", "project", ["WS-WETLANDS-PAD-A", "WS-WASTEWATER-DELUGE"], ["TASK-T003"], ["environmental_permits"], ["rfis", "document_reviews"]],
+  ["participant-sam", "sam.rivera@demo.permit.local", "DOTD", "reviewing", "project", ["WS-LA82-HEAVYHAUL", "WS-SUBSTATION-230KV"], ["TASK-T001", "TASK-T002"], ["transportation_permits"], ["coordination_requests"]],
+  ["participant-riley", "riley.brooks@demo.permit.local", "VERMILION", "consulting", "customer", ["WS-COMMUNITY-WATER", "WS-AIRSPACE-MARITIME"], [], ["public_hearings"], ["meetings", "public_notices"]],
+  ["participant-sarah", "sarah.johnson@demo.permit.local", "LA-PROJECTS", "coordinating", "project", ["WS-LA82-HEAVYHAUL", "WS-WETLANDS-PAD-A", "WS-COMMUNITY-WATER"], [], ["cross_agency_triage"], ["all_project_exceptions"]],
+  ["participant-joe", "joe.skaggs@demo.permit.local", "LED", "lead", "admin", [], [], ["administration", "escalations"], ["escalation_queue"]],
+  ["participant-aris", "aris.thorne@demo.permit.local", "COASTAL_ENGINEERING", "consulting", "customer", ["WS-LA82-HEAVYHAUL", "WS-WETLANDS-PAD-A"], [], ["technical_submissions"], ["document_requests"]],
+  ["participant-elon", "elon.musk@demo.permit.local", "SPACEX", "notified", "customer", ["WS-LA82-HEAVYHAUL", "WS-AIR-TITLE-V"], [], ["executive_observer"], ["critical_path_notifications"]],
+  ["participant-gwynne", "gwynne.shotwell@demo.permit.local", "SPACEX", "lead", "customer", ["WS-LA82-HEAVYHAUL", "WS-WETLANDS-PAD-A", "WS-UTILITY-INTERCONNECT"], [], ["executive_operations"], ["executive_updates"]],
+  ["participant-bill", "bill.gerstenmaier@demo.permit.local", "SPACEX", "consulting", "customer", ["WS-LA82-HEAVYHAUL", "WS-SUBSTATION-230KV"], [], ["technical_executive_review"], ["reliability_updates"]],
+  ["participant-jeff", "jeff.landry@demo.permit.local", "LA-PROJECTS", "notified", "project", [], [], ["executive_sponsor"], ["executive_observer"]],
+  ["participant-susan", "susan.bourgeois@demo.permit.local", "LED", "coordinating", "project", ["WS-LA82-HEAVYHAUL", "WS-WETLANDS-PAD-A", "WS-AIR-TITLE-V"], [], ["space_coordination"], ["executive_coordination"]],
 ];
 for (const [id, email, orgCode, participationRole, accessScope, workstreamIds, assignedTaskIds, reviewResponsibility, notificationResponsibility] of participantSpecs) {
   const user = userByEmail[email];

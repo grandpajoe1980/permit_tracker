@@ -456,7 +456,7 @@ CHECKPOINT:
    accepted response → stage handoff journey; the current Chromium suite
    proves only the request/RFI/document slices independently.
 
-## Latest verification
+## Historical verification from the prior checkpoint
 
 | Command | Result | Evidence |
 |---|---|---|
@@ -467,3 +467,64 @@ CHECKPOINT:
 | `npm run build` | PASS | Vinext/Vite production build completed; asset-size and dynamic-route warnings remain. |
 | `npx eslint . --ignore-pattern dist --ignore-pattern .next` | PASS with warnings | 0 errors; existing unused-import/unused-variable warning debt remains. |
 | `npm test` | PASS | Build plus 170 Node tests: 170 passed, 0 failed, 0 skipped; Node runs with `--expose-gc` for the memory stress gate. |
+
+## September 2, 2026 continuation checkpoint
+
+- Fixed project workstream navigation in the client shell. Project, customer,
+  schedule, vault, and catalog workstream controls now route through the
+  stable workstream identifier and preserve `/?view=project&workstream=...`.
+  The focused project view is now an explicit workstream workspace with the
+  current stage, assignment group, next action, tasks, configured stages,
+  documents, activity, decisions, dependencies, and hold state. Invalid
+  identifiers have a recovery state with project-list navigation.
+- Separated State Project Office intake from administrator access. The Admin
+  route now requires `isAdministrator`, while State Project Office users use
+  the distinct `intake` route. Workflow Templates, authorization catalog
+  administration, and Agency Registry remain behind the authorized Admin
+  route. The public/customer-facing catalog is read-only and includes
+  purpose/trigger, agency and reviewing group, prerequisites, stages,
+  submission guidance, resources, contact/escalation, related permits, and a
+  request-start action.
+- Added internal demo resource pages for catalog entries without an
+  authoritative form or instruction URL. They are explicitly labeled as
+  fictional PATH demo material and do not impersonate government forms.
+- Hardened the repeatable seed path: `supabase/seed.sql` now upserts core
+  federal/state/local coordination organizations, and
+  `scripts/seed-spacex-demo.mjs` uses `@demo.permit.local` accounts, expands
+  demo personas to include the requested public professional roles, upserts
+  their profiles/memberships/participants, and retains repeatable request
+  upserts.
+- Added navigation and source-contract coverage for the exact workstream query
+  contract and Admin/catalog boundary.
+
+### Verification for this checkpoint
+
+| Command | Result | Evidence |
+|---|---|---|
+| `npx tsc --noEmit` | PASS | TypeScript completed without errors after correcting pre-existing type drift in the ticket workflow editor/repository notification path. |
+| `npm run build` | PASS (elevated Windows runner) | Vinext build emitted root, Admin, catalog demo-resource, project, workstream, request, and API routes. |
+| `node --test tests/project-navigation.test.mjs` | BLOCKED in restricted runner | Node test worker creation returned Windows `spawn EPERM` before test code executed; rerun with the elevated runner is pending. |
+
+### Remaining follow-up
+
+- The focused Node suites pass under the elevated Windows runner: 34/34.
+- The full `npm test` gate passes under the elevated Windows runner: 358/358
+  tests, 0 failures.
+- Chromium was installed and the four existing browser specs were executed;
+  all four currently fail in the browser fixture/auth setup before completing
+  their assertions (the runner now reaches the app, but the document and
+  queue fixtures are not available in that browser session). This is tracked
+  separately from the clean Node/live-Supabase persistence gate.
+- Reconcile the remote Supabase migration ledger before applying any pending
+  forward migrations; deployment remains intentionally out of scope because
+  the assignment explicitly prohibits push/deploy.
+
+## Final verification — September 2, 2026
+
+| Command | Result |
+|---|---|
+| `npx tsc --noEmit` | PASS |
+| `npm run lint` | PASS; 0 errors, 304 warnings |
+| `npm test` | PASS; build plus 358 tests passed |
+| `node --check scripts/seed-spacex-demo.mjs` | PASS |
+| `npx playwright test --project=chromium tests/e2e/supabase-persistence.spec.ts tests/e2e/document-management.spec.ts` | EXECUTED; 4 browser assertions fail because the browser session lacks the expected seeded document/queue fixture state |
