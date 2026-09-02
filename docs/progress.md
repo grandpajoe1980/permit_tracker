@@ -53,6 +53,24 @@ regression gates for every stateful or navigation change.
 Next ready task: Appended Task 2 — separate administrative configuration from
 the public Permit Catalog.
 
+## Appended Task 2 — administration boundary (2026-09-02)
+
+- Added a physical `/admin` landing route with server-side session and active
+  `system_admin` / `organization_admin` membership checks.
+- The Admin landing links to versioned Workflow Templates and the existing
+  audited people/organizations/roles workspace; the public Permit Catalog
+  remains a resource-only surface.
+- Added focused source-contract tests for the server boundary and catalog
+  separation.
+- Verification: `node --test tests/admin-catalog.test.mjs` — 2 passed;
+  `npx tsc --noEmit` — PASS; focused ESLint — 0 errors; `npm run build` — PASS
+  with `/admin` emitted.
+- Supabase schema, RLS, audit, notifications, uploads, and downloads were not
+  changed; existing admin RPC authorization remains the mutation boundary.
+
+Next ready task: Appended Task 3 — make each Permit Catalog resource actionable
+without placeholder links or dead routes.
+
 ## UX recovery baseline — 2026-09-02
 
 - Branch/commit: `main` at `680b441b0a491cc43e17287a7e610d9360ff462a`.
