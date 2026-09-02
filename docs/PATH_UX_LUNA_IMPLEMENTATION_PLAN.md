@@ -548,3 +548,255 @@ At every checkpoint explicitly report:
 
 Before final completion run the entire protected regression suite and execute all ten end-to-end journeys in UX-13. Fix all blocker/high findings. Do not call the work complete based only on component rendering or fixture tests.
 ```
+
+
+Additional Guidance:
+You are continuing work on the existing PATH / Louisiana Permit Tracker repository.
+
+Repository:
+https://github.com/grandpajoe1980/permit_tracker
+
+This is an implementation assignment, not merely a review. Work autonomously through the entire request in one run. Keep resource usage modest: work serially, do not create a large subagent tree, and avoid broad rewrites.
+
+## Startup
+
+Before changing code:
+
+1. Verify the current branch, commit, and working-tree status.
+2. Read and follow:
+
+   * `docs/.agents.md`
+   * `README.md`
+   * `docs/PRD.MD`
+   * `docs/execution-plan.md`
+   * `docs/progress.md`
+   * `docs/operational-ux.md`, if present
+   * the current UX implementation plan copied into the repository
+3. Inspect the existing routing, navigation, project cards, workstream views, Permit Catalog, workflow templates, Agency Registry, seed scripts, authentication/personas, and Supabase data access.
+4. Preserve working functionality. Do not restart or redesign the application from scratch.
+5. Do not stop after producing a plan. Implement, test, document, and commit the work.
+
+## Non-negotiable persistence rule
+
+Supabase/Postgres/Storage must remain the authoritative production data source.
+
+Do not implement new production behavior using `localStorage`, browser-only fixtures, or React state as persistence. All mutations must be awaited and confirmed by Supabase before success is shown. Refreshing, signing in from another browser, or opening a direct URL must rehydrate the same data from Supabase.
+
+Seed data must be created through the project’s real database seeding/migration approach and must be safe to run repeatedly without creating duplicates.
+
+## Task 1: Fix project-card navigation
+
+On the Projects page, clicking a project or workstream card does not reliably open the operational workstream.
+
+A URL such as:
+
+`https://permit-tracker-iota.vercel.app/?view=project&workstream=WS-AIR-TITLE-V`
+
+must open the actual workstream workspace for `WS-AIR-TITLE-V`, including its current stage, assigned group, tasks, documents, notes, decisions, dependencies, holds, next actions, and timeline.
+
+Implement the following:
+
+* Make the entire appropriate card clickable, while preserving any separate buttons or menus.
+* Route using stable database-backed identifiers.
+* Read the URL on initial load; do not depend on a previous in-memory selection.
+* Support refresh, direct-link entry, browser Back, and browser Forward.
+* If a workstream ID is invalid, show a useful recovery state with a link back to Projects.
+* Do not send the user to a generic project summary when the clicked item represents a specific workstream.
+* Provide clear navigation back to the parent project and project list.
+* Add or update navigation tests covering card clicks and direct workstream URLs.
+
+## Task 2: Correct the information architecture
+
+Workflow Templates and Agency Registry are administrative configuration features. They do not belong inside the public-facing Permit Catalog.
+
+Create or enhance an Admin section and move these features into it:
+
+* Workflow Templates
+* Agency Registry
+* User and Persona Management, if an equivalent feature already exists
+* Group and Role Management, if supported by the current architecture
+* Seed/demo-data controls only if such controls already exist and can be exposed safely
+
+Requirements:
+
+* Add a clearly labeled Admin navigation area.
+* Show administrative navigation only to appropriate admin personas.
+* Enforce authorization in the underlying route/action, not merely by hiding links.
+* Preserve old deep links where practical by redirecting them to the new location.
+* Update headings, breadcrumbs, empty states, and navigation labels.
+* The Permit Catalog must no longer present workflow-template or agency-registry configuration as catalog content.
+
+## Task 3: Turn the Permit Catalog into a usable resource catalog
+
+Each permit or approval catalog entry should help the user understand and begin the application process.
+
+Each applicable entry should provide:
+
+* Permit or approval name
+* Responsible agency and reviewing group
+* Plain-language purpose
+* When it is required
+* Application or form download
+* Instructions or checklist
+* How and where to submit
+* Expected supporting documents
+* Typical review stages
+* Related permits, dependencies, or prerequisites
+* Contact or escalation path
+* A clear action to start a request in this system
+
+Do not leave buttons pointing to `#`, blank pages, or dead routes.
+
+Use authoritative links already present in the repository where available. Where the demo lacks an external authoritative resource, create a clearly labeled internal demo instruction page or downloadable sample resource. Do not invent official-looking government URLs or claim that demo material is an official form.
+
+Starting a request from a catalog entry should preselect the relevant permit type and connect the new request to the proper workflow template.
+
+## Task 4: Greatly expand the self-contained seed environment
+
+Enhance the seed data so the application demonstrates a realistic, end-to-end Louisiana space-development permitting program without requiring the user to imagine missing participants or workflow stages.
+
+Add substantially more:
+
+* Agencies
+* Divisions and reviewing groups
+* Users and demo logins
+* Personas and job titles
+* Projects and project teams
+* Workflow templates
+* Workstreams and workflow stages
+* Tasks and assignments
+* Dependencies
+* Documents and document requirements
+* Notes and activity history
+* Information requests
+* Decisions and approvals
+* Escalations
+* Holds using the supported hold types
+* Completed, current, blocked, and future work
+* Notifications and audit history where supported
+
+Include representative organizations and groups such as:
+
+* SpaceX Project Delivery
+* SpaceX Regulatory Affairs
+* SpaceX Environmental
+* SpaceX Civil and Site Development
+* SpaceX Launch Operations
+* Louisiana Economic Development Space Coordination
+* Governor’s Executive Review
+* LDEQ Air Permits
+* LDEQ Water Permits
+* LDEQ Waste and Remediation
+* DOTD Aviation
+* DOTD Roads and Bridges
+* CPRA Coastal Permitting
+* LDNR Energy and Pipeline Coordination
+* State Fire Marshal
+* Local parish coordination
+* Federal coordination groups such as FAA, USACE, and EPA where appropriate
+
+Include public figures as fun demo personas using only public professional names and roles:
+
+* Elon Musk — SpaceX executive/project sponsor
+* Gwynne Shotwell — SpaceX president and operational executive
+* Bill Gerstenmaier — SpaceX build and flight reliability executive
+* Jeff Landry — Governor of Louisiana/executive sponsor
+* Susan Bourgeois — Louisiana Economic Development secretary/executive coordinator
+
+You may add a small number of other widely known SpaceX personnel if their public professional roles are already known in the project context. Do not research, collect, or seed personal details.
+
+Important safety rules:
+
+* These must be unmistakably fictional demo accounts.
+* Do not use or imply real email addresses, credentials, phone numbers, signatures, or private information.
+* Use a reserved demo domain such as `@demo.permit.local`.
+* Do not suggest that any seeded decision or approval was actually made by the named person.
+* Label simulated actions and data appropriately.
+
+Create meaningful permission differences among personas, including:
+
+* Applicant/project contributor
+* Applicant executive
+* Agency reviewer
+* Agency supervisor
+* Interagency coordinator
+* Executive observer/sponsor
+* Workflow administrator
+* System administrator
+
+## Task 5: Make the seeded scenario functional end to end
+
+The expanded seed data must demonstrate a complete operating path:
+
+1. A SpaceX user searches the Permit Catalog.
+2. The user reviews the form, instructions, submission method, and requirements.
+3. The user starts and submits a request.
+4. The request creates or activates the correct project workstream.
+5. An intake group receives and assigns it.
+6. A reviewer opens the workstream directly from a card.
+7. The reviewer reviews documents, adds notes, requests information, and changes status.
+8. The applicant responds and uploads the requested information.
+9. The agency resumes review.
+10. A supervisor or coordinator handles an escalation.
+11. Dependencies and holds are visible.
+12. The workstream advances through its configured stages.
+13. Completion updates the workstream, project summary, timeline/Gantt, audit history, and applicant view.
+14. Refreshing or signing in through another browser shows the same Supabase-backed state.
+
+Every seeded project must have an obvious current condition:
+
+* What has already happened
+* What is happening now
+* What is blocked or on hold
+* Who owns the next action
+* What happens next
+* How the user performs that action
+
+Eliminate dead-end screens. Every operational screen should offer a valid next action, useful explanation, or route back to the correct parent context.
+
+## Implementation loop
+
+Complete one focused slice at a time:
+
+1. Inspect the relevant existing files and database schema.
+2. Make the smallest coherent change.
+3. Run focused tests.
+4. Run the repository’s typecheck, lint, and build commands.
+5. Run relevant Playwright navigation and persistence scenarios where available.
+6. Inspect `git diff` and `git status`.
+7. Fix regressions before moving on.
+8. Make a narrow, descriptive commit.
+9. Update `docs/progress.md` with completed work, evidence, failures, and remaining items.
+10. Continue immediately to the next slice.
+
+Do not replace established domain concepts merely because you would model them differently. Reuse the current components, repositories, schema, RLS policies, RPCs, authentication, audit, notifications, and storage mechanisms.
+
+## Required acceptance checks
+
+Before declaring completion, verify:
+
+* Project/workstream cards open the correct workspace.
+* The supplied `WS-AIR-TITLE-V` deep link works after a fresh load.
+* Refresh and browser navigation preserve the correct view.
+* Workflow Templates and Agency Registry are under Admin.
+* Unauthorized personas cannot access administrative actions.
+* Permit Catalog entries provide functional forms, instructions, submission guidance, and start-request actions.
+* Expanded personas can sign in through the existing demo-login mechanism.
+* Seed execution is idempotent.
+* Seeded workstreams cover completed, active, blocked, held, and future states.
+* The full seeded request can be operated from submission through completion.
+* Mutations survive reload and cross-browser authentication.
+* No new production path relies on `localStorage`.
+* There are no placeholder links, dead buttons, silent failures, or success messages shown before persistence completes.
+* Existing protected regression tests still pass.
+* Typecheck, lint, tests, and production build pass.
+
+At the end, provide:
+
+* A concise implementation summary
+* The exact commits created
+* Database migrations or seed commands required
+* Test/build results
+* Any remaining blocker that genuinely requires human credentials or a policy decision
+
+Commit all completed changes locally in small, descriptive commits. Do not discard or overwrite unrelated existing work, and do not push or deploy unless that authorization is explicitly available in the current assignment.
