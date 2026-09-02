@@ -140,6 +140,12 @@ test("normalizes encoded project and workstream route identities", () => {
   assert.match(routeResolvers, /normalizeRouteSegment\(rawKey\)/);
 });
 
+test("keeps focused project workstreams visibly in view", async () => {
+  const projectOverviewPage = await readFile(new URL("../components/cockpits/ProjectOverviewPage.tsx", import.meta.url), "utf8");
+  assert.match(projectOverviewPage, /aria-pressed=\{focused\}/);
+  assert.match(projectOverviewPage, /scrollIntoView/);
+});
+
 test("includes responsive, focus, reduced-motion, and print protections", () => {
   assert.match(css, /\.skip-link:focus/);
   assert.match(css, /:focus-visible/);

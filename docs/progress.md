@@ -154,6 +154,17 @@ Next ready task: UX-08 — repair workstream navigation and journey hydration.
 
 Next ready task: UX-09 — rebuild the project workstream interaction.
 
+## UX-09 — visible project workstream focus (2026-09-02)
+
+- Project workstream rows now expose `aria-pressed` focus state and keyboard
+  semantics; selecting a row scrolls the selected journey into the visible
+  viewport instead of leaving it below the grid.
+- Existing scan fields and customer-safe journey rendering remain intact.
+- Focused ProjectOverview/source lint — 0 errors; `npm run build` — PASS.
+- Supabase, RLS, audit, notifications, uploads, and downloads were not changed.
+
+Next ready task: UX-10 — make the Gantt truthful and usable.
+
 ## Flow visibility checkpoint (2026-09-02)
 
 - Added a shared past/current/next workflow journey model and reusable UI.

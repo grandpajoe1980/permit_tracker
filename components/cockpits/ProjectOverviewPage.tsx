@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { ArrowRight, Building2, CalendarClock, CheckCircle2, FileCheck2, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +19,7 @@ function formatDate(value?: string) {
 
 function WorkstreamSummary({ workstream, focused, onFocus, workflowTemplates, customerSafe }: { workstream: WorkstreamRecord; focused: boolean; onFocus: () => void; workflowTemplates: WorkflowTemplateRecord[]; customerSafe: boolean }) {
   const state = STATE_COLOR_MAP[workstream.operationalState];
-  return <button type="button" onClick={onFocus} className={`rounded-xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 ${focused ? "border-teal-600 bg-teal-50 ring-2 ring-teal-200" : "border-slate-200 bg-white hover:border-teal-400 hover:bg-teal-50/40"}`}>
+  return <button type="button" aria-pressed={focused} onClick={onFocus} className={`rounded-xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 ${focused ? "border-teal-600 bg-teal-50 ring-2 ring-teal-200" : "border-slate-200 bg-white hover:border-teal-400 hover:bg-teal-50/40"}`}>
     <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-mono text-[11px] font-black text-slate-500">{workstream.code}</p><p className="mt-1 text-sm font-black text-[#00284d]">{workstream.title}</p></div><span className={`rounded-full border px-2 py-1 text-[10px] font-black uppercase ${state.badgeBg} ${state.badgeText}`}>{state.shortLabel}</span></div>
     <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2"><span><strong>Stage:</strong> {workstream.currentStageName}</span><span><strong>Lead:</strong> {workstream.regulatoryLead.orgCode}</span><span><strong>Forecast:</strong> {formatDate(workstream.forecastTargetDate)}</span><span><strong>Variance:</strong> {workstream.scheduleVarianceDays > 0 ? `+${workstream.scheduleVarianceDays}d` : "On schedule"}</span></div>
     <p className="mt-3 border-t border-slate-100 pt-3 text-xs font-semibold text-slate-700">{workstream.currentActionSummary}</p>
@@ -39,6 +41,11 @@ export function ProjectOverviewPage({ project, customerSafe = false, workflowTem
   const attentionWorkstream = project.workstreams.find((workstream) => workstream.operationalState === "blocked" || workstream.ragHealth === "red" || workstream.operationalState === "waiting_government" || workstream.operationalState === "waiting_applicant" || workstream.operationalState === "waiting_external") ?? project.workstreams.find((workstream) => workstream.ragHealth === "yellow");
   const activeWorkstream = project.workstreams.find((workstream) => workstream.operationalState === "running") ?? project.workstreams.find((workstream) => workstream.operationalState === "waiting_government" || workstream.operationalState === "waiting_applicant" || workstream.operationalState === "waiting_external") ?? project.workstreams.find((workstream) => workstream.operationalState !== "complete");
   const nextWorkstream = [...project.workstreams].filter((workstream) => workstream.operationalState !== "complete").sort((left, right) => left.forecastTargetDate.localeCompare(right.forecastTargetDate))[0];
+
+  useEffect(() => {
+    if (!focusedWorkstreamId) return;
+    window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>("button[aria-pressed='true']")?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  }, [focusedWorkstreamId]);
 
   return <div className="space-y-6">
     <section className="rounded-2xl border border-teal-300 bg-white p-6 shadow-md sm:p-8"><div className="flex flex-wrap items-start justify-between gap-5"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-teal-800">{customerSafe ? "Customer project page" : "Authoritative project page"}</p><h1 className="mt-2 text-3xl font-black tracking-tight text-[#00284d] sm:text-4xl">{project.name}</h1><p className="mt-2 text-sm font-semibold text-slate-600">{project.code} · {project.locationDescription}</p></div><Badge className="border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-black uppercase text-amber-900">{project.overallRagHealth === "red" ? "At risk" : project.overallRagHealth === "yellow" ? "Attention" : "On track"}</Badge></div><div className="mt-7 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2 lg:grid-cols-5"><div><p className="text-[11px] font-black uppercase text-slate-500">Baseline launch</p><p className="mt-1 text-sm font-black text-[#00284d]">{formatDate(project.baselineLaunchDate)}</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Current forecast</p><p className="mt-1 text-sm font-black text-[#00284d]">{formatDate(project.currentForecastLaunchDate)}</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Variance</p><p className="mt-1 text-sm font-black text-rose-700">+{project.scheduleVarianceDays} days</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Workstreams</p><p className="mt-1 text-sm font-black text-[#00284d]">{completeCount}/{project.workstreams.length} complete</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Location</p><p className="mt-1 text-sm font-black text-[#00284d]">{project.parish}, Louisiana</p></div></div></section>
