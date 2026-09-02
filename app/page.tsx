@@ -119,6 +119,7 @@ import { WorkstreamGraphGantt } from "@/components/cockpits/WorkstreamGraphGantt
 import { DocumentVaultPanel } from "@/components/cockpits/DocumentVaultPanel";
 import { WorkflowDesignerPanel } from "@/components/cockpits/WorkflowDesignerPanel";
 import { ProjectOverviewPage } from "@/components/cockpits/ProjectOverviewPage";
+import { WorkflowMiniStepper } from "@/components/cockpits/WorkflowJourney";
 import { SystemVersionFooter } from "@/components/SystemVersionFooter";
 import { TicketWorkflowEditor } from "@/components/cockpits/TicketWorkflowEditor";
 
@@ -1304,6 +1305,7 @@ export default function Home() {
             </div>
             <h3 className="mt-1 text-lg font-black leading-tight text-[#00284d]">{item.title}</h3>
             <button type="button" onClick={(e) => { e.stopPropagation(); openProject(item.workstreamId); }} className="mt-1 text-sm font-semibold text-slate-600 hover:text-teal-800 hover:underline text-left cursor-pointer transition-colors" title="View in project page">{item.workstreamTitle}</button>
+            {item.sourceWorkstream && <WorkflowMiniStepper source={item.sourceWorkstream} templates={repository.getWorkflowTemplates()} customerSafe={activePersona.isCustomer} />}
           </div>
         </div>
         <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-black uppercase ${tone.badge}`}><span className={`size-1.5 rounded-full ${tone.dot}`} />{item.statusLabel}</span>
@@ -1554,7 +1556,7 @@ export default function Home() {
   }
 
   function renderProject() {
-    return <ProjectOverviewPage project={projectRecord} customerSafe={activePersona.isCustomer} focusedWorkstreamId={selectedProjectWorkstreamId} onFocusWorkstream={setSelectedProjectWorkstreamId} onOpenSchedule={() => { setSecondaryTool("schedule"); navigate("secondary"); }} />;
+    return <ProjectOverviewPage project={projectRecord} customerSafe={activePersona.isCustomer} workflowTemplates={repository.getWorkflowTemplates()} focusedWorkstreamId={selectedProjectWorkstreamId} onFocusWorkstream={setSelectedProjectWorkstreamId} onOpenSchedule={() => { setSecondaryTool("schedule"); navigate("secondary"); }} />;
   }
 
   function renderSecondary() {

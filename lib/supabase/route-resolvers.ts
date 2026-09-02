@@ -15,6 +15,9 @@ export type RouteWorkstream = {
   title: string;
   category: string;
   project_id: string;
+  permit_type_id?: string | null;
+  workflow_version_id?: string | null;
+  current_stage_id?: string | null;
   current_stage_name: string | null;
   operational_state: string;
   operational_state_label: string | null;
@@ -28,7 +31,7 @@ export type RouteWorkstream = {
 
 const projectColumns = "id, number, name, description, location, status";
 const workstreamColumns = [
-  "id", "code", "title", "category", "project_id", "current_stage_name",
+  "id", "code", "title", "category", "project_id", "permit_type_id", "workflow_version_id", "current_stage_id", "current_stage_name",
   "operational_state", "operational_state_label", "waiting_reason",
   "waiting_on_entity", "forecast_target_date", "baseline_target_date",
   "regulatory_lead", "state_concierge",
@@ -68,15 +71,18 @@ export async function resolveWorkstreamRoute(
   const key = decodeRouteSegment(rawKey);
   if (!key) return null;
 
-  const scoped = (query: any) =>
-    projectId ? query.eq("project_id", projectId) : query;
-
-  const byId = await scoped(client.from("workstreams").select(workstreamColumns)).eq("id", key).maybeSingle();
+  const byIdQuery = client.from("workstreams").select(workstreamColumns);
+  if (projectId) byIdQuery.eq("project_id", projectId);
+  const byId = await byIdQuery.eq("id", key).maybeSingle();
   if (byId.data) return byId.data as RouteWorkstream;
 
-  const byCode = await scoped(client.from("workstreams").select(workstreamColumns)).eq("code", key).maybeSingle();
+  const byCodeQuery = client.from("workstreams").select(workstreamColumns);
+  if (projectId) byCodeQuery.eq("project_id", projectId);
+  const byCode = await byCodeQuery.eq("code", key).maybeSingle();
   if (byCode.data) return byCode.data as RouteWorkstream;
 
-  const byCodeInsensitive = await scoped(client.from("workstreams").select(workstreamColumns)).ilike("code", key).maybeSingle();
+  const byCodeInsensitiveQuery = client.from("workstreams").select(workstreamColumns);
+  if (projectId) byCodeInsensitiveQuery.eq("project_id", projectId);
+  const byCodeInsensitive = await byCodeInsensitiveQuery.ilike("code", key).maybeSingle();
   return (byCodeInsensitive.data as RouteWorkstream | null) ?? null;
 }
