@@ -116,10 +116,12 @@ test("fresh authenticated project links are not overwritten by hydration default
   assert.match(rootPageSource, /setSelectedProjectWorkstreamId\(shell\.workstreamId \?\? null\)/);
 });
 
-test("project summary cards open the selected workstream workspace", () => {
+test("project summary cards open standalone project pages for persisted workstreams", () => {
   assert.match(projectOverviewSource, /aria-label=\{attentionWorkstream \? `Open workstream workspace/);
   assert.match(projectOverviewSource, /onFocusWorkstream\(attentionWorkstream\.id\)/);
-  assert.match(projectOverviewSource, /aria-label=\{`Open workstream workspace for \$\{workstream\.title\}`\}/);
+  assert.match(projectOverviewSource, /<Link href=\{`\/workstreams\/\$\{encodeURIComponent\(workstream\.id\)\}`\}/);
+  assert.match(projectOverviewSource, /aria-label=\{`Open project page for \$\{workstream\.title\}`\}/);
+  assert.match(projectOverviewSource, /Each row opens its project page/);
 });
 
 test("workstream resolution supports code, lowercase, URL-encoded, and ID lookup", () => {
