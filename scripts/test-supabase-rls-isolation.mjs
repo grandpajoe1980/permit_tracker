@@ -20,9 +20,9 @@ function readEnvFile(path = ".env") {
 const env = { ...readEnvFile(), ...process.env };
 const url = env.SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = env.SUPABASE_ANON_KEY ?? env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY ?? env.legacy_service_role_key;
-const email = env.RLS_TEST_EMAIL ?? "alex.martin@spacex.com";
-const password = env.RLS_TEST_PASSWORD ?? "SpaceX-MVP-2026!";
+const serviceKey = env.SUPABASE_SECRET_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY ?? env.legacy_service_role_key;
+const email = env.RLS_TEST_EMAIL ?? "alex.martin@demo.permit.local";
+const password = env.RLS_TEST_PASSWORD ?? "SpaceX-Demo-2026!";
 
 if (!url || !anonKey || !serviceKey) {
   throw new Error("Supabase URL, anon key, and service role key are required for the RLS isolation probe.");
@@ -106,8 +106,8 @@ try {
   assert.deepEqual(authenticatedDocument.data, [], "A customer without a project grant must not read the isolated document.");
 
   const anonymousProject = await anonymous.from("projects").select("id").eq("id", ids.project);
-  assert.equal(anonymousProject.error, null, anonymousProject.error?.message);
-  assert.deepEqual(anonymousProject.data, [], "Anonymous callers must not read project records.");
+  assert.equal(anonymousProject.error?.code, "42501", "Anonymous callers must be denied at the database privilege boundary.");
+  assert.equal(anonymousProject.data, null, "Denied anonymous reads must not be represented as empty authorized data.");
 
   const upload = await authenticated.storage.from("path-documents").upload(storagePath, new Blob(["RLS probe"]), {
     contentType: "text/plain",

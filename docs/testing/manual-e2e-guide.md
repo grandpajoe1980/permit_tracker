@@ -4,7 +4,7 @@ This guide covers the demo path for the Space Exploration Technologies Corp. (Sp
 
 ## Start clean
 
-1. From the repository root, run `node scripts/reset-e2e-demo.mjs`.
+1. For offline fixture mode, run `node scripts/reset-e2e-demo.mjs`. For connected mode, use a disposable Supabase staging project and run `npm run supabase:seed:spacex`; never run a reset against production.
 2. Start the app with `npm run dev`.
 3. Open the local URL shown by Vite.
 4. Use the persona selector on the sign-in page. Demo credentials are seeded by `scripts/seed-spacex-demo.mjs` when Supabase is configured; the in-memory selector remains available without Supabase.
@@ -13,14 +13,14 @@ Primary personas:
 
 | Persona | Login | Password | Purpose |
 | --- | --- | --- | --- |
-| Alex Martin | `alex.martin@spacex.com` | `SpaceX-MVP-2026!` | Customer / submitter |
-| Maya Chen | `maya.chen@spacex.com` | `SpaceX-MVP-2026!` | SpaceX regulatory program supervisor |
-| Jordan Lee | `jordan.lee@la.gov` | `SpaceX-MVP-2026!` | LDEQ environmental reviewer |
-| Sam Rivera | `sam.rivera@la.gov` | `SpaceX-MVP-2026!` | DOTD infrastructure reviewer |
-| Riley Brooks | `riley.brooks@vermilionparish.org` | `SpaceX-MVP-2026!` | Parish / community coordinator |
-| Joe Skaggs | `joe.skaggs@la.gov` | `PATH-MVP-2026!` | LED PATH administrator / Space Czar |
+| Alex Martin | `alex.martin@demo.permit.local` | `SpaceX-Demo-2026!` | Customer / submitter |
+| Maya Chen | `maya.chen@demo.permit.local` | `SpaceX-Demo-2026!` | SpaceX regulatory program supervisor |
+| Jordan Lee | `jordan.lee@demo.permit.local` | `Agency-Demo-2026!` | LDEQ environmental reviewer |
+| Sam Rivera | `sam.rivera@demo.permit.local` | `Agency-Demo-2026!` | DOTD infrastructure reviewer |
+| Riley Brooks | `riley.brooks@demo.permit.local` | `PATH-Demo-2026!` | Parish / community coordinator |
+| Joe Skaggs | `joe.skaggs@demo.permit.local` | `PATH-Demo-2026!` | LED PATH administrator / Space Czar |
 
-Legacy `.test` aliases are accepted only for compatibility with existing seeded fixtures. New customer-visible contact records use the realistic addresses above.
+These are fictional staging identities only. They must not be used in production or represented as real agency accounts.
 
 ## Customer acceptance path — Alex Martin
 

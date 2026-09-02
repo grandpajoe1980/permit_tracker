@@ -19,7 +19,7 @@ function readEnvFile(path = ".env") {
 
 const env = { ...readEnvFile(), ...process.env };
 const url = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
-const key = env.SUPABASE_SERVICE_ROLE_KEY || env.legacy_service_role_key;
+const key = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY || env.legacy_service_role_key;
 
 const res = await fetch(`${url.replace(/\/$/, "")}/rest/v1/`, {
   headers: { apikey: key, Authorization: `Bearer ${key}` },

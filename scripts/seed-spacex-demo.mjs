@@ -18,8 +18,8 @@ function readEnvFile(path = ".env") {
 
 const env = { ...readEnvFile(), ...process.env };
 const url = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY || env.LEGACY_SERVICE_ROLE_KEY || env.legacy_service_role_key;
-if (!url || !serviceKey) throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
+const serviceKey = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY || env.LEGACY_SERVICE_ROLE_KEY || env.legacy_service_role_key;
+if (!url || !serviceKey) throw new Error("SUPABASE_URL and SUPABASE_SECRET_KEY are required");
 const supabase = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
 function stableUuid(value) {

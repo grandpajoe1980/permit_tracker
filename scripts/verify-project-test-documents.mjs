@@ -16,8 +16,8 @@ const anonKey = env.SUPABASE_ANON_KEY ?? env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 if (!url || !anonKey) throw new Error("Supabase browser credentials are unavailable.");
 const client = createClient(url, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
 const auth = await client.auth.signInWithPassword({
-  email: env.DOCUMENT_TEST_EMAIL ?? "alex.martin@spacex.com",
-  password: env.DOCUMENT_TEST_PASSWORD ?? "SpaceX-MVP-2026!",
+  email: env.DOCUMENT_TEST_EMAIL ?? "alex.martin@demo.permit.local",
+  password: env.DOCUMENT_TEST_PASSWORD ?? "SpaceX-Demo-2026!",
 });
 if (auth.error) throw new Error(`Authenticated verification sign-in failed: ${auth.error.message}`);
 

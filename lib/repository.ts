@@ -61,6 +61,8 @@ import { validateStageTransition } from "./engines/workflow-engine";
 import {
   fetchAssignmentGroups,
   fetchAssignmentGroupMemberships,
+  beginQueryDiagnostics,
+  takeQueryDiagnostics,
   fetchAuditEvents,
   fetchCatalog,
   fetchCommitments,
@@ -176,6 +178,7 @@ class ProjectDeliveryRepository {
     if (!isSupabaseConfigured()) return false;
 
     try {
+      beginQueryDiagnostics();
       const [
         ws,
         custReqs,
@@ -217,6 +220,12 @@ class ProjectDeliveryRepository {
         fetchAssignmentGroups(),
         fetchAssignmentGroupMemberships(),
       ]);
+
+      const queryFailures = takeQueryDiagnostics();
+      if (queryFailures.length > 0) {
+        console.warn("Supabase hydration failed because one or more reads were rejected:", queryFailures);
+        return false;
+      }
 
       const keepFixtures = allowsFixtureData();
       const groupById = new Map(groups.map((group) => [group.id, group]));

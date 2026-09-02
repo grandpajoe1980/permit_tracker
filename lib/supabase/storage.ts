@@ -2,9 +2,9 @@ import { getSupabaseBrowser } from "./client";
 import { insertAuditEvent } from "./mutations";
 import { allowsFixtureData, requiresSupabase } from "../data-mode";
 import type { DocumentAgencyReviewRecord, DocumentVersionRecord } from "../domain-models";
-import { calculateSHA256, uploadDocumentFile } from "./storage-primitives";
+import { calculateSHA256, uploadDocumentFile, validateDocumentFile } from "./storage-primitives";
 
-export { calculateSHA256, uploadDocumentFile } from "./storage-primitives";
+export { calculateSHA256, uploadDocumentFile, validateDocumentFile } from "./storage-primitives";
 
 export async function downloadDocumentFile(
   storagePath: string,
@@ -66,6 +66,9 @@ export async function mutateUploadDocumentVersion(params: {
   projectId?: string;
   actorId?: string;
 }): Promise<{ data: DocumentVersionRecord | null; error: Error | null }> {
+  const validationError = validateDocumentFile(params.file);
+  if (validationError) return { data: null, error: validationError };
+
   const client = getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 

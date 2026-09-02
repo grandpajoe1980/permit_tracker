@@ -59,7 +59,7 @@ The SpaceX customer workspace opens with a project command center for the Pecan 
 
 Requests & Permits provides six guided intents: permit/authorization, government help/service, project question, blocker/coordination, escalation, and concierge (“I’m not sure what I need”). Permit records show prerequisites, statutory timing, official resources, agency contacts, and whether filing is PATH-supported or remains in an external authoritative system. Customer requests receive a `PATH-YYYY-NNNN` confirmation and are visible to the state project office.
 
-The customer document center creates immutable revisions with file metadata and SHA-256 tracking, exact-version downloads, and agency review assignments. Contacts and My Profile separate editable contact fields from administrator-controlled organization, role, capability, and visibility. The deterministic local demo state persists through browser refresh using `localStorage`; run `node scripts/reset-e2e-demo.mjs` before a clean E2E process.
+The customer document center creates immutable revisions with file metadata and SHA-256 tracking, exact-version downloads, and agency review assignments. Contacts and My Profile separate editable contact fields from administrator-controlled organization, role, capability, and visibility. The offline fixture demo state persists through browser refresh using `localStorage`; connected demo and E2E runs use Supabase and the fictional `@demo.permit.local` accounts.
 
 See [docs/testing/manual-e2e-guide.md](docs/testing/manual-e2e-guide.md), [docs/testing/playwright-handoff.md](docs/testing/playwright-handoff.md), and [docs/testing/playwright-scenarios.json](docs/testing/playwright-scenarios.json) for acceptance flows and stable scenario IDs.
 
@@ -72,14 +72,14 @@ Critical Path provides direct sign-in on the main page along with an account men
 ### SpaceX Louisiana Program Team
 | Persona | Role | Scenario | Email |
 |---|---|---|---|
-| **Alex Martin** | Customer / Submitter | SpaceX Louisiana project lead submitting requests | `alex.martin@spacex.com` |
-| **Maya Chen** | Program Supervisor | SpaceX regulatory program supervisor | `maya.chen@spacex.com` |
-| **Jordan Lee** | Environmental Reviewer | LDEQ / environmental quality technical reviewer | `jordan.lee@la.gov` |
-| **Sam Rivera** | Infrastructure Lead | DOTD / civil engineering and utility coordinator | `sam.rivera@la.gov` |
-| **Riley Brooks** | Community Coordinator | Vermilion Parish / local government liaison | `riley.brooks@vermilionparish.org` |
-| **Joe Skaggs** | PATH Administrator | LED administrator / Space Czar | `joe.skaggs@la.gov` |
+| **Alex Martin** | Customer / Submitter | SpaceX Louisiana project lead submitting requests | `alex.martin@demo.permit.local` |
+| **Maya Chen** | Program Supervisor | SpaceX regulatory program supervisor | `maya.chen@demo.permit.local` |
+| **Jordan Lee** | Environmental Reviewer | LDEQ / environmental quality technical reviewer | `jordan.lee@demo.permit.local` |
+| **Sam Rivera** | Infrastructure Lead | DOTD / civil engineering and utility coordinator | `sam.rivera@demo.permit.local` |
+| **Riley Brooks** | Community Coordinator | Vermilion Parish / local government liaison | `riley.brooks@demo.permit.local` |
+| **Joe Skaggs** | PATH Administrator | LED administrator / Space Czar | `joe.skaggs@demo.permit.local` |
 
-### Applicant Scenarios (Password: `demo1234`)
+### Offline Applicant Scenarios (Password: `demo1234`)
 | Persona | Role | Scenario | Email / Username |
 |---|---|---|---|
 | **Jordan Thibodaux** | Standard Review Applicant | Water quality permit under standard review | `applicant.happypath` |

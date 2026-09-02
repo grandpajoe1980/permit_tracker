@@ -55,7 +55,7 @@ function createPdf(lines) {
 
 const env = { ...readEnvFile(), ...process.env };
 const url = env.SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY ?? env.legacy_service_role_key;
+const serviceKey = env.SUPABASE_SECRET_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY ?? env.legacy_service_role_key;
 if (!url || !serviceKey) throw new Error("Supabase service credentials are unavailable.");
 
 const client = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
@@ -71,7 +71,7 @@ const [orgResult, userResult] = await Promise.all([
   client.auth.admin.listUsers({ page: 1, perPage: 100 }),
 ]);
 if (orgResult.error || !orgResult.data) throw new Error(`SpaceX organization lookup failed: ${orgResult.error?.message ?? "Organization not found"}`);
-const creator = userResult.data?.users?.find((user) => user.email === "alex.martin@spacex.com") ?? userResult.data?.users?.find((user) => user.email === "alex.martin@spacex.test");
+const creator = userResult.data?.users?.find((user) => user.email === "alex.martin@demo.permit.local") ?? userResult.data?.users?.find((user) => user.email === "alex.martin@spacex.test");
 if (!creator) throw new Error(`Demo creator lookup failed: ${userResult.error?.message ?? "Alex Martin was not found"}`);
 
 const legacyIds = ["doc-v-drainage-v11", "doc-v-drainage-v12", "doc-v-wetland-v4"];

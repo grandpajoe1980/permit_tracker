@@ -7,17 +7,16 @@
   },
   "scripts": {
     "install:ci": "bash scripts/install-ci.sh",
-    "prebuild": "node scripts/generate-version.mjs",
-    "predev": "node scripts/generate-version.mjs",
-    "version:gen": "node scripts/generate-version.mjs",
     "dev": "vite",
     "build": "vinext build",
+    "postbuild": "npm run security:scan",
     "start": "vinext start",
-    "test": "npm run build && node --expose-gc --test tests/*.test.mjs",
+    "test": "npm run build && node --expose-gc --import ./tests/load-env.mjs --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vercel --ignore-pattern scripts/reviewer2-exhaustive-audit.mjs",
     "supabase:probe": "node scripts/supabase-probe.mjs",
     "supabase:rls": "node scripts/test-supabase-rls-isolation.mjs",
     "supabase:seed:spacex": "node scripts/seed-spacex-demo.mjs",
+    "security:scan": "node scripts/scan-build-secrets.mjs",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {

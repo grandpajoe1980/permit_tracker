@@ -1,5 +1,3 @@
-import { createBrowserClient } from "@supabase/ssr";
-
 import type {
   JurisdictionLevel,
   PermitRecord,
@@ -10,33 +8,15 @@ import type {
   ServiceRequest,
 } from "./demo-data";
 import { mutateCreateCustomerRequest, mutateCreateCustomerRequestWithDocument } from "./supabase/mutations";
-
-const DEFAULT_SUPABASE_URL = "https://zomzacaxwqfwjstkxbpv.supabase.co";
-const DEFAULT_SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvbXphY2F4d3Fmd2pzdGt4YnB2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MTA0OTMsImV4cCI6MjEwMzA4NjQ5M30.MO84_KXLzxK1yVpEBTyw0L2Jz550VoaEhatpyC2ric0";
-
-const supabaseUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.SUPABASE_URL ||
-  DEFAULT_SUPABASE_URL;
-
-const supabaseKey =
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-  process.env.SUPABASE_ANON_KEY ??
-  DEFAULT_SUPABASE_ANON_KEY;
-
-let browserClient: ReturnType<typeof createBrowserClient> | null = null;
+import { getSupabaseBrowser, isSupabaseConfigured } from "./supabase/client";
 
 /** The browser client intentionally accepts only publishable/anon credentials. */
 export function getSupabaseBrowserClient() {
-  if (!supabaseUrl || !supabaseKey) return null;
-  browserClient ??= createBrowserClient(supabaseUrl, supabaseKey);
-  return browserClient;
+  return getSupabaseBrowser();
 }
 
 export function supabaseConfigured() {
-  return Boolean(supabaseUrl && supabaseKey);
+  return isSupabaseConfigured();
 }
 
 export async function signInWithPassword(email: string, password: string) {

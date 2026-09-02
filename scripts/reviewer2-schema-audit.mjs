@@ -19,7 +19,7 @@ function readEnvFile(path = ".env") {
 
 const env = { ...readEnvFile(), ...process.env };
 const url = env.SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY ?? env.legacy_service_role_key;
+const serviceKey = env.SUPABASE_SECRET_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY ?? env.legacy_service_role_key;
 
 const client = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },

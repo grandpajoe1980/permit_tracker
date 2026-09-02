@@ -1,34 +1,13 @@
 import test, { describe } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import { fileURLToPath } from "node:url";
+import { startVinextServer } from "./helpers/start-vinext-server.mjs";
 
 describe("Challenger 1: Production Worker HTTP Routing Adversarial Tests", () => {
   test("Production Worker HTTP Route Permutations & SSR Delivery", async () => {
-    const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-    if (!fs.existsSync(fileURLToPath(workerUrl))) {
-      console.warn("dist/server/index.js not found, skipping worker test");
-      return;
-    }
-
-    workerUrl.searchParams.set("test", process.pid + "-" + Date.now());
-    const { default: worker } = await import(workerUrl.href);
+    const server = await startVinextServer();
 
     async function fetchPath(path) {
-      return worker.fetch(
-        new Request("http://localhost" + path, {
-          headers: { accept: "text/html" },
-        }),
-        {
-          ASSETS: {
-            fetch: async () => new Response("Not found", { status: 404 }),
-          },
-        },
-        {
-          waitUntil() {},
-          passThroughOnException() {},
-        }
-      );
+      return fetch(server.baseUrl + path, { headers: { accept: "text/html" } });
     }
 
     // 1. Root page
@@ -70,5 +49,6 @@ describe("Challenger 1: Production Worker HTTP Routing Adversarial Tests", () =>
     // 6. Global Workstream Route
     const globalRes = await fetchPath("/workstreams/WS-LA82-HEAVYHAUL");
     assert.ok([200, 307, 308].includes(globalRes.status), "Global workstream route must return 200 or redirect");
+    await server.stop();
   });
 });

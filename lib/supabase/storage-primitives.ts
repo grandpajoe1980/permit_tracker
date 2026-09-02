@@ -1,4 +1,6 @@
 import { getSupabaseBrowser } from "./client";
+import { validateDocumentFile } from "./storage-validation";
+export { validateDocumentFile, MAX_DOCUMENT_SIZE_BYTES, ALLOWED_DOCUMENT_MIME_TYPES } from "./storage-validation";
 
 export async function calculateSHA256(buffer: ArrayBuffer): Promise<string> {
   const subtle = globalThis.crypto?.subtle;
@@ -16,6 +18,9 @@ export async function uploadDocumentFile(
   versionNumber: number,
   uploadId = crypto.randomUUID(),
 ): Promise<{ storagePath: string; error: Error | null }> {
+  const validationError = validateDocumentFile(file);
+  if (validationError) return { storagePath: "", error: validationError };
+
   const client = getSupabaseBrowser();
   if (!client) return { storagePath: "", error: new Error("Supabase client unavailable") };
 

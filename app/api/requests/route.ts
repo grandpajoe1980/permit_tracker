@@ -38,13 +38,34 @@ async function resolveProjectId(client: NonNullable<Awaited<ReturnType<typeof cr
   return String(lookup.data.id);
 }
 
+async function idempotencyId(userId: string, key: string): Promise<string> {
+  const input = new TextEncoder().encode(`customer-request:${userId}:${key}`);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", input)).slice(0, 16);
+  digest[6] = (digest[6] & 0x0f) | 0x50;
+  digest[8] = (digest[8] & 0x3f) | 0x80;
+  const hex = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function mutationFailure(message: string): { status: number; error: string } {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("not found")) return { status: 404, error: "The requested project or related record was not found." };
+  if (normalized.includes("permission") || normalized.includes("authorized") || normalized.includes("access")) {
+    return { status: 403, error: "You are not authorized to create this request." };
+  }
+  if (normalized.includes("duplicate") || normalized.includes("unique") || normalized.includes("already exists")) {
+    return { status: 409, error: "This request conflicts with an existing submission." };
+  }
+  return { status: 500, error: "Request could not be persisted." };
+}
+
 export async function GET(request: NextRequest) {
   const auth = await authenticatedClient();
   if (auth.error || !auth.client) return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
   const projectId = await resolveProjectId(auth.client, new URL(request.url).searchParams.get("projectId") ?? undefined);
   if (!projectId) return NextResponse.json({ success: false, error: "Project not found." }, { status: 404 });
   const { data, error } = await auth.client.from("customer_requests").select("*").eq("project_id", projectId).order("created_at", { ascending: false });
-  if (error) return NextResponse.json({ success: false, error: error.message }, { status: 403 });
+  if (error) return NextResponse.json({ success: false, error: "Unable to load requests." }, { status: error.code === "42501" ? 403 : 500 });
   return NextResponse.json({ success: true, count: data?.length ?? 0, data: data ?? [] });
 }
 
@@ -52,11 +73,21 @@ export async function POST(request: NextRequest) {
   const auth = await authenticatedClient();
   if (auth.error || !auth.client || !auth.user) return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
   const parsed = requestSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ success: false, error: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ success: false, error: parsed.error.flatten() }, { status: 422 });
   const projectId = await resolveProjectId(auth.client, parsed.data.projectId);
   if (!projectId) return NextResponse.json({ success: false, error: "Project not found." }, { status: 404 });
+  const rawIdempotencyKey = request.headers.get("idempotency-key")?.trim();
+  if (rawIdempotencyKey && (rawIdempotencyKey.length < 8 || rawIdempotencyKey.length > 200)) {
+    return NextResponse.json({ success: false, error: "Idempotency-Key must be between 8 and 200 characters." }, { status: 422 });
+  }
+  const requestId = rawIdempotencyKey ? await idempotencyId(auth.user.id, rawIdempotencyKey) : crypto.randomUUID();
+  if (rawIdempotencyKey) {
+    const existing = await auth.client.from("customer_requests").select("*").eq("id", requestId).maybeSingle();
+    if (existing.error) return NextResponse.json({ success: false, error: "Unable to verify request idempotency." }, { status: existing.error.code === "42501" ? 403 : 500 });
+    if (existing.data) return NextResponse.json({ success: true, data: existing.data, replayed: true }, { status: 200 });
+  }
   const result = await mutateCreateCustomerRequest({
-    id: crypto.randomUUID(),
+    id: requestId,
     confirmationNumber: `PATH-${new Date().getUTCFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
     projectId,
     requestType: parsed.data.requestType,
@@ -69,12 +100,19 @@ export async function POST(request: NextRequest) {
     knownAgencyCode: parsed.data.knownAgencyCode,
     knownPermitTypeId: parsed.data.knownPermitTypeId,
     submittedByUserId: auth.user.id,
-    submittedByName: String(auth.user.user_metadata?.full_name ?? auth.user.email ?? "Authenticated user"),
+    submittedByName: auth.user.email ?? "Authenticated user",
     relatedWorkstreamId: parsed.data.relatedWorkstreamId,
     blocksActiveWork: parsed.data.blocksActiveWork ?? false,
     status: parsed.data.status ?? "submitted",
     attachmentDocumentVersionIds: parsed.data.attachmentDocumentVersionIds ?? [],
   }, auth.client);
-  if (result.error || !result.data) return NextResponse.json({ success: false, error: result.error?.message ?? "Request was not persisted." }, { status: 400 });
-  return NextResponse.json({ success: true, data: result.data }, { status: 201 });
+  if (result.error || !result.data) {
+    const message = result.error?.message ?? "Request was not persisted.";
+    const failure = mutationFailure(message);
+    return NextResponse.json(
+      { success: false, error: failure.error },
+      { status: failure.status },
+    );
+  }
+  return NextResponse.json({ success: true, data: result.data, replayed: false }, { status: 201 });
 }

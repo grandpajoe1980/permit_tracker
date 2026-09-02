@@ -62,10 +62,10 @@ function createPdf(lines) {
 
 const env = { ...readEnvFile(), ...process.env };
 const url = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
-const key = env.SUPABASE_SERVICE_ROLE_KEY || env.LEGACY_SERVICE_ROLE_KEY || env.legacy_service_role_key;
+const key = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY || env.LEGACY_SERVICE_ROLE_KEY || env.legacy_service_role_key;
 
 if (!url || !key) {
-  console.error("Missing SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY credentials in environment");
+  console.error("Missing SUPABASE_URL and SUPABASE_SECRET_KEY credentials in environment");
   process.exit(1);
 }
 

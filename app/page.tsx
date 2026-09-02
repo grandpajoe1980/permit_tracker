@@ -323,6 +323,7 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loadingData, setLoadingData] = useState(false);
+  const [hydrationError, setHydrationError] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [dialogError, setDialogError] = useState("");
@@ -428,7 +429,10 @@ export default function Home() {
     if (!client) return;
     void getBrowserUser().then(async (user) => {
       if (!active || !user) return;
-      await repository.hydrateFromSupabase();
+      const hydratedFromDb = await repository.hydrateFromSupabase();
+      if (!hydratedFromDb && !allowsFixtureData()) {
+        setHydrationError("The operational workspace could not load from Supabase. Retry or contact an administrator.");
+      }
       if (!allowsFixtureData()) setTeamUsers(persistedTeamUsers());
       const loaded = await loadRequestsForUser();
       const persona = makeAuthenticatedPersona(user.email ?? "authenticated@path.local", String(user.user_metadata?.full_name ?? user.email ?? "Authenticated User"), user.id);
@@ -647,7 +651,12 @@ export default function Home() {
       usernameRef.current?.focus();
       return;
     }
-    await repository.hydrateFromSupabase();
+    const hydratedFromDb = await repository.hydrateFromSupabase();
+    if (!hydratedFromDb && !allowsFixtureData()) {
+      setHydrationError("The operational workspace could not load from Supabase. Retry or contact an administrator.");
+    } else {
+      setHydrationError("");
+    }
     if (!allowsFixtureData()) setTeamUsers(persistedTeamUsers());
     const loaded = await loadRequestsForUser();
     const persona = makeAuthenticatedPersona(user.email ?? username, String(user.user_metadata?.full_name ?? user.email ?? "Authenticated User"), user.id);
@@ -706,6 +715,17 @@ export default function Home() {
     setRoute("my-work");
     setUsername("");
     setPassword("");
+    setHydrationError("");
+  }
+
+  async function retryHydration() {
+    setHydrationError("");
+    const hydratedFromDb = await repository.hydrateFromSupabase();
+    if (!hydratedFromDb && !allowsFixtureData()) {
+      setHydrationError("The operational workspace could not load from Supabase. Retry or contact an administrator.");
+      return;
+    }
+    setMutationVersion((value) => value + 1);
   }
 
   async function handleIntakeSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1721,19 +1741,22 @@ export default function Home() {
   }
 
   function renderMain() {
-    if (route === "detail") return <WorkItemPage item={selectedItem} saving={saveStatus === "saving"} escalationTarget={escalationTarget} onEscalationTargetChange={setEscalationTarget} events={selectedItem ? repository.getAuditEvents().filter((event) => event.entityId === selectedItem.workstreamId || event.entityId === selectedItem.sourceId) : []}>{renderDetail()}</WorkItemPage>;
-    if (route === "my-work") return renderMyWork();
-    if (route === "agency-queue" || route === "rfis" || route === "coordination" || route === "documents") return activePersona.isCustomer && route === "documents" ? renderCustomerDocuments() : renderQueue(route);
-    if (route === "project") return renderProject();
-    if (route === "requests") return <><div className="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><Label htmlFor="request-attachment">Supporting attachment for this request (optional)</Label><Input key={requestFileInputKey} id="request-attachment" type="file" onChange={(event) => setRequestFile(event.target.files?.[0] ?? null)} className="mt-1 cursor-pointer" /><p className="mt-1 text-xs text-slate-500">Attach supporting material to the selected permit or service request.</p></div>{renderCustomerRequestCenter()}</>;
-    if (route === "schedule") return <div className="space-y-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Read-only project delivery schedule for SpaceX. Internal government notes and control actions are not shown.</p></div><WorkstreamGraphGantt project={projectRecord} customerSafe onSelectWorkstream={(workstreamId) => openProject(workstreamId)} /></div>;
-    if (route === "contacts" || route === "profile") return renderContacts();
-    if (route === "help") return renderHelp();
-    if (route === "notifications") return renderNotifications();
-    if (route === "secondary") return renderSecondary();
-    if (route === "intake") return canTriage ? renderAdmin() : <div className="rounded-xl border border-amber-300 bg-amber-50 p-8"><h1 className="text-xl font-black text-amber-950">Access restricted</h1><p className="mt-2 text-sm text-amber-900">The customer intake queue is available to the State Project Office.</p><Button type="button" onClick={() => navigate("my-work")} className="mt-4 bg-[#00284d] font-bold">Back to My Work</Button></div>;
-    if (route === "admin") return canAdmin ? renderAdmin() : <div className="rounded-xl border border-amber-300 bg-amber-50 p-8"><h1 className="text-xl font-black text-amber-950">Administrator access required</h1><p className="mt-2 text-sm text-amber-900">Workflow, agency, and user configuration is restricted to authorized administrators.</p><Button type="button" onClick={() => navigate("my-work")} className="mt-4 bg-[#00284d] font-bold">Back to My Work</Button></div>;
-    return renderMyWork();
+    let content: ReactNode;
+    if (route === "detail") content = <WorkItemPage item={selectedItem} saving={saveStatus === "saving"} escalationTarget={escalationTarget} onEscalationTargetChange={setEscalationTarget} events={selectedItem ? repository.getAuditEvents().filter((event) => event.entityId === selectedItem.workstreamId || event.entityId === selectedItem.sourceId) : []}>{renderDetail()}</WorkItemPage>;
+    else if (route === "my-work") content = renderMyWork();
+    else if (route === "agency-queue" || route === "rfis" || route === "coordination" || route === "documents") content = activePersona.isCustomer && route === "documents" ? renderCustomerDocuments() : renderQueue(route);
+    else if (route === "project") content = renderProject();
+    else if (route === "requests") content = <><div className="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><Label htmlFor="request-attachment">Supporting attachment for this request (optional)</Label><Input key={requestFileInputKey} id="request-attachment" type="file" onChange={(event) => setRequestFile(event.target.files?.[0] ?? null)} className="mt-1 cursor-pointer" /><p className="mt-1 text-xs text-slate-500">Attach supporting material to the selected permit or service request.</p></div>{renderCustomerRequestCenter()}</>;
+    else if (route === "schedule") content = <div className="space-y-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Read-only project delivery schedule for SpaceX. Internal government notes and control actions are not shown.</p></div><WorkstreamGraphGantt project={projectRecord} customerSafe onSelectWorkstream={(workstreamId) => openProject(workstreamId)} /></div>;
+    else if (route === "contacts" || route === "profile") content = renderContacts();
+    else if (route === "help") content = renderHelp();
+    else if (route === "notifications") content = renderNotifications();
+    else if (route === "secondary") content = renderSecondary();
+    else if (route === "intake") content = canTriage ? renderAdmin() : <div className="rounded-xl border border-amber-300 bg-amber-50 p-8"><h1 className="text-xl font-black text-amber-950">Access restricted</h1><p className="mt-2 text-sm text-amber-900">The customer intake queue is available to the State Project Office.</p><Button type="button" onClick={() => navigate("my-work")} className="mt-4 bg-[#00284d] font-bold">Back to My Work</Button></div>;
+    else if (route === "admin") content = canAdmin ? renderAdmin() : <div className="rounded-xl border border-amber-300 bg-amber-50 p-8"><h1 className="text-xl font-black text-amber-950">Administrator access required</h1><p className="mt-2 text-sm text-amber-900">Workflow, agency, and user configuration is restricted to authorized administrators.</p><Button type="button" onClick={() => navigate("my-work")} className="mt-4 bg-[#00284d] font-bold">Back to My Work</Button></div>;
+    else content = renderMyWork();
+
+    return <>{hydrationError && <div role="alert" className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-950"><span className="flex-1">{hydrationError}</span><Button type="button" variant="outline" size="sm" onClick={() => void retryHydration()}>Retry</Button></div>}{content}</>;
   }
 
   return <div className="min-h-screen bg-[#f3f6f7] text-[#172033] flex flex-col justify-between"><a className="skip-link" href="#main-content">Skip to main content</a><div className="road-stripe" /><header className="site-header sticky top-0 z-30"><div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-3 sm:px-6"><Button type="button" variant="ghost" size="icon" onClick={() => setMobileNavOpen((value) => !value)} className="text-white hover:bg-white/10 lg:hidden" aria-label="Toggle navigation"><Menu className="size-5" /></Button><span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d]"><Zap className="size-5 fill-current" aria-hidden="true" /></span><div className="min-w-0"><p className="text-sm font-black text-white">{PRODUCT_NAME}</p><button type="button" onClick={() => openProject()} className="truncate text-left text-[11px] font-semibold text-slate-300 hover:text-white hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 cursor-pointer" title="Go to project page">{workspaceTitle(activePersona.workspace)} · {PROGRAM_SUBTITLE}</button></div><div className="ml-auto hidden items-center gap-2 text-xs text-slate-200 md:flex"><span className="rounded-full border border-white/20 px-3 py-1.5">{activePersona.name}</span><span className="rounded-full border border-teal-300/40 bg-teal-900/40 px-3 py-1.5 font-bold text-teal-100">{activePersona.roleLabel}</span></div><Button type="button" variant="ghost" size="icon" onClick={() => navigate("notifications")} className="relative text-white hover:bg-white/10" aria-label="Open notifications"><Bell className="size-5" /><span className="absolute right-1 top-1 size-2 rounded-full bg-[#f4a100]" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => void signOut()} className="text-white hover:bg-white/10"><LogOut className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Sign out</span></Button></div></header><div className="mx-auto flex max-w-[1600px] items-start flex-1 w-full"><aside className={`${mobileNavOpen ? "block" : "hidden"} fixed inset-x-0 top-[69px] z-20 max-h-[calc(100vh-69px)] overflow-y-auto border-b border-slate-200 bg-white p-3 shadow-xl lg:sticky lg:top-[69px] lg:block lg:min-h-[calc(100vh-69px)] lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}><button type="button" onClick={() => openProject()} className="group mb-4 w-full rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-left transition hover:border-teal-400 hover:bg-teal-50 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 cursor-pointer" aria-label="Open project page" title="Open project page"><div className="flex items-center justify-between"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500 group-hover:text-teal-800">Current context</p><ArrowRight className="size-3 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-teal-700" aria-hidden="true" /></div><p className="mt-1 text-sm font-black text-[#00284d] group-hover:text-teal-950">{PROJECT_DISPLAY_NAME}</p><p className="mt-1 text-xs text-slate-500 group-hover:text-teal-900">Vermilion Parish · Louisiana</p></button><nav aria-label="Primary navigation" className="space-y-1"><p className="px-3 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Work</p>{primaryNav.map((item) => <button key={item.id} type="button" onClick={() => navigate(item.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${route === item.id ? "bg-[#00284d] text-white shadow-sm" : "text-slate-700 hover:bg-teal-50 hover:text-teal-950"}`}>{item.icon}<span className="flex-1">{item.label}</span>{typeof item.count === "number" && <span className={`rounded-full px-2 py-0.5 text-[10px] ${route === item.id ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700"}`}>{item.count}</span>}</button>)}{!activePersona.isCustomer && <p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Secondary tools</p>}{!activePersona.isCustomer && <><button type="button" onClick={() => { setSecondaryTool("schedule"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "schedule" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><CalendarClock className="size-4" />Schedule</button><button type="button" onClick={() => { setSecondaryTool("vault"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "vault" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><BookOpen className="size-4" />Document Vault</button><button type="button" onClick={() => { setSecondaryTool("catalog"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "catalog" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><Landmark className="size-4" />Permit Catalog</button></>}{canAdmin && <><p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Administration</p><button type="button" onClick={() => navigate("admin")} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "admin" ? "bg-[#00284d] text-white" : "text-slate-700 hover:bg-teal-50"}`}><Settings2 className="size-4" />Administration</button></>}</nav></aside><main id="main-content" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">{toast && <div role="status" aria-live="polite" className="mb-5 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-950"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" aria-hidden="true" />{toast}</div>}{renderMain()}</main></div><SystemVersionFooter />{renderDialog()}{viewerModalDoc && <DocumentViewerModal document={viewerModalDoc} version={viewerModalVer} isOpen={Boolean(viewerModalDoc)} onClose={() => { setViewerModalDoc(null); setViewerModalVer(undefined); }} onDownload={(docId, verId) => void downloadVersion(docId, verId)} />}</div>;

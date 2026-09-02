@@ -20,9 +20,9 @@ function readEnvFile(path = ".env") {
 const env = { ...readEnvFile(), ...process.env };
 const url = env.SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = env.SUPABASE_ANON_KEY ?? env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY ?? env.legacy_service_role_key;
-const email = env.DOCUMENT_TEST_EMAIL ?? "alex.martin@spacex.com";
-const password = env.DOCUMENT_TEST_PASSWORD ?? "SpaceX-MVP-2026!";
+const serviceKey = env.SUPABASE_SECRET_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY ?? env.legacy_service_role_key;
+const email = env.DOCUMENT_TEST_EMAIL ?? "alex.martin@demo.permit.local";
+const password = env.DOCUMENT_TEST_PASSWORD ?? "SpaceX-Demo-2026!";
 
 if (!url || !anonKey || !serviceKey) throw new Error("Supabase credentials are unavailable.");
 

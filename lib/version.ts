@@ -1,8 +1,3 @@
-// ==========================================
-// PATH ITSM PLATFORM - BUILD & VERSION INFO
-// Auto-generated during build/dev startup
-// ==========================================
-
 export interface BuildInfo {
   version: string;
   commitHash: string;
@@ -14,13 +9,24 @@ export interface BuildInfo {
   repositoryUrl: string;
 }
 
+function runtimeValue(name: string): string {
+  if (typeof process !== "undefined" && process.env?.[name]) {
+    return process.env[name] ?? "";
+  }
+
+  const metaEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+  return metaEnv?.[name] ?? "";
+}
+
+const commitHash = runtimeValue("VERCEL_GIT_COMMIT_SHA") || runtimeValue("GIT_COMMIT_SHA") || "unknown";
+
 export const BUILD_INFO: BuildInfo = {
   version: "1.1.0-itsm",
-  commitHash: "93c84187a7fa4a7f752c97d8de637914e7ac20f7",
-  commitShort: "93c8418",
-  commitDate: "2026-09-02 14:26:13 CDT",
-  buildDate: "2026-09-02 19:35:54 UTC",
-  branch: "main",
-  environment: "development",
+  commitHash,
+  commitShort: commitHash === "unknown" ? "unknown" : commitHash.slice(0, 7),
+  commitDate: runtimeValue("VERCEL_GIT_COMMIT_AUTHOR_DATE") || "unknown",
+  buildDate: runtimeValue("BUILD_TIMESTAMP") || "unknown",
+  branch: runtimeValue("VERCEL_GIT_COMMIT_REF") || "unknown",
+  environment: runtimeValue("VERCEL_ENV") || runtimeValue("NODE_ENV") || "production",
   repositoryUrl: "https://github.com/grandpajoe1980/permit_tracker",
 };
