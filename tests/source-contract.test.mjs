@@ -156,6 +156,16 @@ test("uses an injected current date and explicit Gantt viewport controls", async
   assert.match(gantt, />Today</);
 });
 
+test("requires an explicit escalation target and preserves record association", async () => {
+  const escalation = await readFile(new URL("../components/path/work/EscalationSelection.tsx", import.meta.url), "utf8");
+  assert.match(escalation, /id="escalation-target"/);
+  assert.match(escalation, /Project-wide \/ not sure/);
+  assert.match(escalation, /Permit \/ authorization/);
+  assert.match(escalation, /Document decision/);
+  assert.match(page, /escalationTarget/);
+  assert.match(page, /relatedWorkstreamId: workstreamId/);
+});
+
 test("includes responsive, focus, reduced-motion, and print protections", () => {
   assert.match(css, /\.skip-link:focus/);
   assert.match(css, /:focus-visible/);

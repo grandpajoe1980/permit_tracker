@@ -178,6 +178,20 @@ Next ready task: UX-10 — make the Gantt truthful and usable.
 
 Next ready task: UX-11 — improve escalation selection.
 
+## UX-11 — explicit escalation association (2026-09-02)
+
+- Added an explicit escalation-target selector with project-wide/not-sure,
+  workstream, permit, RFI, and document-decision choices.
+- Escalation launched from a record is preselected to that record’s canonical
+  kind/source identity; the existing recipient/customer-message preview remains
+  in place before confirmation.
+- Focused escalation/source tests — 18 passed; focused lint — 0 errors
+  (existing warnings only); `npm run build` — PASS.
+- Existing persisted escalation RPC/request behavior, RLS, audit, notifications,
+  uploads, and downloads were not changed.
+
+Next ready task: UX-12 — remove noise and finish the shell.
+
 ## Flow visibility checkpoint (2026-09-02)
 
 - Added a shared past/current/next workflow journey model and reusable UI.

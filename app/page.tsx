@@ -338,6 +338,7 @@ export default function Home() {
   const [questionDueDate, setQuestionDueDate] = useState("2026-09-05");
   const [transferType, setTransferType] = useState("Ask another reviewer");
   const [escalationType, setEscalationType] = useState("Supervisor decision");
+  const [escalationTarget, setEscalationTarget] = useState("");
   const [statusUpdate, setStatusUpdate] = useState("in_progress");
   const [queueSearch, setQueueSearch] = useState("");
   const [queueKind, setQueueKind] = useState("all");
@@ -599,6 +600,7 @@ export default function Home() {
 
   function openAction(item: OperationalWorkItem, action: WorkActionId) {
     setSaveStatus("idle");
+    setEscalationTarget(action === "escalate" ? `${item.kind}:${item.sourceId}` : "");
     setSelectedItemId(item.id);
     setDialogError("");
     setActionNote("");
@@ -633,6 +635,7 @@ export default function Home() {
     setSaveStatus("saved");
     setToast(message);
     setDialog(null);
+    setEscalationTarget("");
     setMutationVersion((value) => value + 1);
   }
 
@@ -1708,7 +1711,7 @@ export default function Home() {
   }
 
   function renderMain() {
-    if (route === "detail") return <WorkItemPage item={selectedItem} saving={saveStatus === "saving"} events={selectedItem ? repository.getAuditEvents().filter((event) => event.entityId === selectedItem.workstreamId || event.entityId === selectedItem.sourceId) : []}>{renderDetail()}</WorkItemPage>;
+    if (route === "detail") return <WorkItemPage item={selectedItem} saving={saveStatus === "saving"} escalationTarget={escalationTarget} onEscalationTargetChange={setEscalationTarget} events={selectedItem ? repository.getAuditEvents().filter((event) => event.entityId === selectedItem.workstreamId || event.entityId === selectedItem.sourceId) : []}>{renderDetail()}</WorkItemPage>;
     if (route === "my-work") return renderMyWork();
     if (route === "agency-queue" || route === "rfis" || route === "coordination" || route === "documents") return activePersona.isCustomer && route === "documents" ? renderCustomerDocuments() : renderQueue(route);
     if (route === "project") return renderProject();
