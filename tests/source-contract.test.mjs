@@ -126,6 +126,13 @@ test("renders the unified work-item summary and saved activity surface", () => {
   assert.match(activityFeed, /Saved activity/);
 });
 
+test("refreshes the canonical work item after persisted actions", () => {
+  assert.match(page, /async function notify/);
+  assert.match(page, /await repository\.hydrateFromSupabase\(\)/);
+  assert.match(page, /canonicalItem/);
+  assert.match(page, /setSaveStatus\("saving"\)/);
+});
+
 test("includes responsive, focus, reduced-motion, and print protections", () => {
   assert.match(css, /\.skip-link:focus/);
   assert.match(css, /:focus-visible/);

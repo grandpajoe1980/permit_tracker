@@ -126,6 +126,20 @@ Next ready task: UX-06 — build the unified work item page.
 
 Next ready task: UX-07 — make mutations refresh in place.
 
+## UX-07 — mutation refresh and truthful saving state (2026-09-02)
+
+- Persisted work-item actions now enter a Saving state, await the existing
+  repository mutation, rehydrate authorized Supabase data, rebuild the
+  canonical operational projection, and reselect the same item while staying
+  on its detail route.
+- Success messaging is emitted only after the refresh path completes; existing
+  real mutation errors remain inline and do not produce success messaging.
+- Focused source test — 14 passed; focused ESLint — 0 errors (existing
+  warnings only); `npm run build` — PASS.
+- RPC semantics, RLS, audit, notifications, uploads, and downloads were not changed.
+
+Next ready task: UX-08 — repair workstream navigation and journey hydration.
+
 ## Flow visibility checkpoint (2026-09-02)
 
 - Added a shared past/current/next workflow journey model and reusable UI.

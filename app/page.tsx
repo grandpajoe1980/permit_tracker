@@ -598,6 +598,7 @@ export default function Home() {
   }
 
   function openAction(item: OperationalWorkItem, action: WorkActionId) {
+    setSaveStatus("idle");
     setSelectedItemId(item.id);
     setDialogError("");
     setActionNote("");
@@ -621,7 +622,15 @@ export default function Home() {
     setMutationVersion((value) => value + 1);
   }
 
-  function notify(message: string) {
+  async function notify(message: string) {
+    const canonicalItem = selectedItem ? { kind: selectedItem.kind, sourceId: selectedItem.sourceId, workstreamId: selectedItem.workstreamId } : null;
+    await repository.hydrateFromSupabase();
+    setRoute("detail");
+    if (canonicalItem) {
+      const refreshed = getOperationalWorkItems({ persona: currentPersona, requests: userPermits, workstreams: repository.getWorkstreams(), coordinationRequests: repository.getCoordinationRequests(), rfis: repository.getRFIs(), documents: repository.getDocuments(), commitments: repository.getCommitments(), customerRequests: repository.getCustomerRequests() }).items.find((candidate) => candidate.kind === canonicalItem.kind && candidate.sourceId === canonicalItem.sourceId);
+      setSelectedItemId(refreshed?.id ?? selectedItem?.id ?? null);
+    }
+    setSaveStatus("saved");
     setToast(message);
     setDialog(null);
     setMutationVersion((value) => value + 1);
@@ -976,6 +985,7 @@ export default function Home() {
 
   async function handleConfirmAction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSaveStatus("saving");
     if (!dialog || !selectedItem) return;
     const item = selectedItem;
     const actorName = activePersona.name;
@@ -1698,7 +1708,7 @@ export default function Home() {
   }
 
   function renderMain() {
-    if (route === "detail") return <WorkItemPage item={selectedItem} events={selectedItem ? repository.getAuditEvents().filter((event) => event.entityId === selectedItem.workstreamId || event.entityId === selectedItem.sourceId) : []}>{renderDetail()}</WorkItemPage>;
+    if (route === "detail") return <WorkItemPage item={selectedItem} saving={saveStatus === "saving"} events={selectedItem ? repository.getAuditEvents().filter((event) => event.entityId === selectedItem.workstreamId || event.entityId === selectedItem.sourceId) : []}>{renderDetail()}</WorkItemPage>;
     if (route === "my-work") return renderMyWork();
     if (route === "agency-queue" || route === "rfis" || route === "coordination" || route === "documents") return activePersona.isCustomer && route === "documents" ? renderCustomerDocuments() : renderQueue(route);
     if (route === "project") return renderProject();
