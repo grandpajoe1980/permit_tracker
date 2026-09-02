@@ -70,6 +70,8 @@ if (!url || !key) {
 }
 
 const supabase = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+const STORAGE_BUCKETS = ["path-documents", "project-documents"];
+const PRIMARY_STORAGE_BUCKET = STORAGE_BUCKETS[0];
 
 // Load fixture data for alignment
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -97,9 +99,9 @@ console.log("STARBASE LOUISIANA COMMAND SYSTEM: SAFE RESET & AUTHORITATIVE SEEDI
 console.log("================================================================================");
 
 // -----------------------------------------------------------------------------
-// STEP 1: 22-STEP TOPOLOGICAL CLEANUP OF NON-PRODUCTION OPERATIONAL ROWS
+// STEP 1: TOPOLOGICAL CLEANUP OF NON-PRODUCTION OPERATIONAL ROWS
 // -----------------------------------------------------------------------------
-console.log("\n[Step 1/4] Executing 22-step topological cleanup of operational tables...");
+console.log("\n[Step 1/4] Executing topological cleanup of operational tables...");
 
 const operationalTables = [
   "audit_events",
@@ -133,7 +135,7 @@ for (let i = 0; i < operationalTables.length; i++) {
   const table = operationalTables[i];
   const { data: rows, error: selectErr } = await supabase.from(table).select("id");
   if (selectErr) {
-    console.warn(`  [${i + 1}/22] Table ${table} select check: ${selectErr.message}`);
+    console.warn(`  [${i + 1}/${operationalTables.length}] Table ${table} select check: ${selectErr.message}`);
     continue;
   }
   const count = rows?.length || 0;
@@ -146,32 +148,44 @@ for (let i = 0; i < operationalTables.length; i++) {
         console.error(`  ❌ Error deleting from ${table}:`, delErr.message);
       }
     }
-    console.log(`  [${i + 1}/22] Cleared ${count} rows from ${table}`);
+    console.log(`  [${i + 1}/${operationalTables.length}] Cleared ${count} rows from ${table}`);
   } else {
-    console.log(`  [${i + 1}/22] ${table}: already clean (0 rows)`);
+    console.log(`  [${i + 1}/${operationalTables.length}] ${table}: already clean (0 rows)`);
   }
 }
 
-// Clean up existing storage test objects in path-documents
-console.log("\nCleaning existing Supabase Storage files in 'path-documents'...");
-try {
-  const { data: rootFiles } = await supabase.storage.from("path-documents").list("", { limit: 100 });
-  for (const item of rootFiles || []) {
-    if (item.id) {
-      const { data: subFiles } = await supabase.storage.from("path-documents").list(item.name, { limit: 100 });
-      for (const sub of subFiles || []) {
-        const { data: deepFiles } = await supabase.storage.from("path-documents").list(`${item.name}/${sub.name}`, { limit: 100 });
-        const paths = (deepFiles || []).map((f) => `${item.name}/${sub.name}/${f.name}`);
-        if (paths.length > 0) {
-          await supabase.storage.from("path-documents").remove(paths);
-        }
-      }
-      await supabase.storage.from("path-documents").remove([item.name]);
+async function ensurePrivateBucket(bucketName) {
+  const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+  if (listError) throw new Error(`Storage bucket listing failed: ${listError.message}`);
+  if (!buckets?.some((bucket) => bucket.name === bucketName)) {
+    const { error } = await supabase.storage.createBucket(bucketName, { public: false });
+    if (error && !/already exists/i.test(error.message)) {
+      throw new Error(`Storage bucket creation failed for ${bucketName}: ${error.message}`);
     }
   }
-  console.log("  ✅ Storage bucket 'path-documents' cleared.");
-} catch (err) {
-  console.warn("  Storage cleanup notice:", err.message);
+}
+
+async function listStorageFiles(bucketName, prefix = "") {
+  const { data, error } = await supabase.storage.from(bucketName).list(prefix, { limit: 1000 });
+  if (error) throw new Error(`Storage listing failed for ${bucketName}/${prefix}: ${error.message}`);
+  const paths = [];
+  for (const item of data || []) {
+    const itemPath = prefix ? `${prefix}/${item.name}` : item.name;
+    if (item.id) paths.push(itemPath);
+    else paths.push(...await listStorageFiles(bucketName, itemPath));
+  }
+  return paths;
+}
+
+console.log("\nCleaning authoritative document Storage buckets...");
+for (const bucketName of STORAGE_BUCKETS) {
+  await ensurePrivateBucket(bucketName);
+  const paths = await listStorageFiles(bucketName);
+  for (let index = 0; index < paths.length; index += 100) {
+    const { error } = await supabase.storage.from(bucketName).remove(paths.slice(index, index + 100));
+    if (error) throw new Error(`Storage cleanup failed for ${bucketName}: ${error.message}`);
+  }
+  console.log(`  ✅ Storage bucket '${bucketName}' cleared (${paths.length} files).`);
 }
 
 // -----------------------------------------------------------------------------
@@ -181,6 +195,28 @@ console.log("\n[Step 2/4] Verifying system catalogs, user profiles, and assignme
 
 const { data: orgs } = await supabase.from("organizations").select("id, code, name");
 const orgMap = new Map((orgs || []).map((o) => [o.code, o.id]));
+
+const requiredOrganizations = [
+  ["FAA", "Federal Aviation Administration - AST", "federal"],
+  ["LDCE", "Louisiana Department of Conservation and Energy", "state"],
+  ["SLO", "Louisiana Office of State Lands", "state"],
+  ["LPSC", "Louisiana Public Service Commission", "state"],
+  ["VPPJ", "Vermilion Parish Police Jury Permitting Office", "local"],
+  ["USFWS", "U.S. Fish and Wildlife Service", "federal"],
+  ["NOAA", "NOAA Fisheries Southeast Region", "federal"],
+  ["SHPO", "Louisiana State Historic Preservation Office", "state"],
+];
+for (const [code, name, jurisdictionLevel] of requiredOrganizations) {
+  const { data, error } = await supabase.from("organizations").upsert({
+    code,
+    name,
+    organization_type: jurisdictionLevel === "federal" ? "federal_agency" : "state_agency",
+    jurisdiction_level: jurisdictionLevel,
+    active: true,
+  }, { onConflict: "code" }).select("id, code").single();
+  if (error) throw new Error(`Organization seed failed for ${code}: ${error.message}`);
+  orgMap.set(code, data.id);
+}
 
 const { data: customerOrgs } = await supabase.from("customer_organizations").select("id, name");
 let customerOrgId = customerOrgs?.[0]?.id;
@@ -349,19 +385,27 @@ console.log(`  ✅ Seeded ${projectsData.length} core projects.`);
 
 const primaryProjectId = projectsData[0].id; // d1000000-0000-0000-0000-000000000001
 
-// 3.2 Seed Project Participants
-const participatingAgencyCodes = ["SPACEX", "LA-PROJECTS", "DOTD", "LDEQ", "CPRA", "OSFM", "LSP", "VERMILION-PARISH", "USACE"];
+// 3.2 Seed Project Participants. The current RLS boundary requires a real
+// participant organization row for agency members to hydrate project data.
+const participatingAgencyCodes = [
+  "SPACEX", "LA-PROJECTS", "DOTD", "LDEQ", "CPRA", "OSFM", "LSP",
+  "VERMILION-PARISH", "USACE", "FAA", "LDCE", "SLO", "LPSC", "VPPJ",
+  "USFWS", "NOAA", "SHPO",
+];
 for (const p of projectsData) {
   for (const orgCode of participatingAgencyCodes) {
     const orgId = orgMap.get(orgCode);
     if (orgId) {
-      await supabase.from("project_participants").upsert({
+      const { error } = await supabase.from("project_participants").insert({
         id: crypto.randomUUID(),
         project_id: p.id,
         organization_id: orgId,
         participation_role: orgCode === "SPACEX" ? "lead" : orgCode === "LA-PROJECTS" ? "coordinating" : "reviewing",
         access_scope: "project",
       }, { onConflict: "project_id,organization_id" });
+      if (error && !/duplicate key/i.test(error.message)) {
+        throw new Error(`Project participant seed failed for ${p.number}/${orgCode}: ${error.message}`);
+      }
     }
   }
 }
@@ -730,6 +774,82 @@ const permitTypesCatalog = [
     verification_status: "verified",
   },
 ];
+
+// Federal environmental and consultation actions are tracked as first-class
+// roadmap workstreams so the UI does not collapse them into a generic permit.
+permitTypesCatalog.push(
+  {
+    id: "FAA-NEPA-EIS",
+    code: "FAA-NEPA-EIS",
+    name: "FAA NEPA Environmental Impact Statement / Record of Decision",
+    category: "environmental",
+    responsible_org_id: orgMap.get("FAA"),
+    responsible_org_code: "FAA",
+    trigger_explanation: "Federal launch licensing requires environmental review of the coastal launch complex and operating envelope.",
+    statutory_citation: "42 U.S.C. §4321 et seq.; FAA environmental procedures",
+    expected_lead_time_days: 540,
+    minimum_statutory_days: 180,
+    public_notice_required: true,
+    public_notice_days: 30,
+    verification_status: "verified",
+  },
+  {
+    id: "USFWS-ESA-7",
+    code: "USFWS-ESA-7",
+    name: "ESA Section 7 Terrestrial and Freshwater Species Consultation",
+    category: "environmental",
+    responsible_org_id: orgMap.get("USFWS"),
+    responsible_org_code: "USFWS",
+    trigger_explanation: "FAA and USACE federal actions require species-effects analysis and consultation before authorization.",
+    statutory_citation: "16 U.S.C. §1536; 50 CFR Part 402",
+    expected_lead_time_days: 180,
+    minimum_statutory_days: 60,
+    public_notice_required: false,
+    verification_status: "verified",
+  },
+  {
+    id: "NOAA-ESA-EFH",
+    code: "NOAA-ESA-EFH",
+    name: "NOAA Marine Species ESA and Essential Fish Habitat Consultation",
+    category: "environmental",
+    responsible_org_id: orgMap.get("NOAA"),
+    responsible_org_code: "NOAA",
+    trigger_explanation: "Marine launch corridors, dredging, and coastal construction may affect protected species and essential fish habitat.",
+    statutory_citation: "ESA §7; Magnuson-Stevens Act §305(b)",
+    expected_lead_time_days: 180,
+    minimum_statutory_days: 60,
+    public_notice_required: false,
+    verification_status: "verified",
+  },
+  {
+    id: "SHPO-NHPA-106",
+    code: "SHPO-NHPA-106",
+    name: "NHPA Section 106 Cultural and Historic Resources Review",
+    category: "environmental",
+    responsible_org_id: orgMap.get("SHPO"),
+    responsible_org_code: "SHPO",
+    trigger_explanation: "Federal undertakings require an Area of Potential Effects and cultural-resource consultation.",
+    statutory_citation: "54 U.S.C. §306108; 36 CFR Part 800",
+    expected_lead_time_days: 150,
+    minimum_statutory_days: 45,
+    public_notice_required: false,
+    verification_status: "verified",
+  },
+  {
+    id: "FAA-PART440",
+    code: "FAA-PART440",
+    name: "FAA Maximum Probable Loss and Financial Responsibility Demonstration",
+    category: "air",
+    responsible_org_id: orgMap.get("FAA"),
+    responsible_org_code: "FAA",
+    trigger_explanation: "Commercial launch licensing requires financial responsibility and maximum probable loss evidence.",
+    statutory_citation: "14 CFR Part 440",
+    expected_lead_time_days: 90,
+    minimum_statutory_days: 30,
+    public_notice_required: false,
+    verification_status: "verified",
+  },
+);
 
 
 for (const permit of permitTypesCatalog) {
@@ -1525,7 +1645,92 @@ const comprehensiveWorkstreams = [
   },
 ];
 
-for (const ws of comprehensiveWorkstreams) {
+function roadmapWorkstream({ id, projectId, title, category, permitTypeId, assignedOrgCode, currentStageName, startDate, finishDate, durationDays = 30, isCriticalPath = false, taskTitle }) {
+  const assignmentGroupId = findAgId(assignedOrgCode) || findAgId("LA-PROJECTS", "Interagency") || findAgId("LA-PROJECTS");
+  return {
+    id,
+    code: id,
+    projectId,
+    title,
+    category,
+    permitTypeId,
+    currentStageName,
+    operationalState: "running",
+    operationalStateLabel: "Running (Roadmap Baseline)",
+    ragStatus: "green",
+    ragLabel: "On Track",
+    isCriticalPath,
+    baselineTargetDate: finishDate,
+    forecastTargetDate: finishDate,
+    scheduleVarianceDays: 0,
+    remainingFloatDays: isCriticalPath ? 0 : 20,
+    currentActionSummary: `${assignedOrgCode} roadmap intake and jurisdiction confirmation are in progress.`,
+    stateConcierge: {
+      name: "Sarah Johnson",
+      title: "State Project Concierge",
+      agency: "Louisiana Governor's Project Office",
+      email: "sarah.johnson@la.gov",
+    },
+    regulatoryLead: {
+      orgCode: assignedOrgCode,
+      orgName: `${assignedOrgCode} Regulatory Review`,
+      jurisdictionLevel: assignedOrgCode === "FAA" || assignedOrgCode === "USFWS" || assignedOrgCode === "NOAA" ? "Federal" : "State",
+      assignedReviewerName: "Roadmap Intake Team",
+      assignedReviewerEmail: "permits@spacex.example",
+    },
+    sixQuestions: {
+      whereAreWeNow: "Roadmap workstream created from the authoritative Starbase Louisiana regulatory inventory.",
+      whoHasNextAction: `${assignedOrgCode} and SpaceX permitting teams.`,
+      whatIsAction: "Confirm applicability, submit the required application package, and track agency response.",
+      whatIsTargetDate: finishDate,
+      isItAtRisk: false,
+      whatIsPathToGreen: "Complete the design-basis package and hold the interagency pre-application review.",
+    },
+    assignmentGroupId,
+    assignedToUserId: alexUser?.id,
+    assignedOrgCode,
+    itsmState: "submitted",
+    priority: isCriticalPath ? "P1" : "P3",
+    clockStatus: "active",
+    tasks: [{
+      id: `${id.toLowerCase()}-task-1`,
+      title: taskTitle || `Complete ${title} applicability and submission package`,
+      durationDays,
+      floatDays: isCriticalPath ? 0 : 20,
+      earlyStart: startDate,
+      earlyFinish: finishDate,
+      isCriticalPath,
+      status: "pending",
+      predecessors: [],
+    }],
+  };
+}
+
+const supplementalWorkstreams = [
+  roadmapWorkstream({ id: "WS-COASTAL-CZMA-CUP", projectId: projectsData[1].id, title: "Louisiana Coastal Use Permit & CZMA Federal Consistency", category: "environmental", permitTypeId: "LDCE-OCM-CUP", assignedOrgCode: "LDCE", currentStageName: "Coastal Pre-Application Coordination", startDate: "2026-03-01", finishDate: "2026-10-15", durationDays: 90, isCriticalPath: true }),
+  roadmapWorkstream({ id: "WS-COASTAL-USACE-408", projectId: projectsData[1].id, title: "USACE Section 408 Civil Works Compatibility Review", category: "water", permitTypeId: "USACE-408", assignedOrgCode: "USACE", currentStageName: "Civil Works Impact Screening", startDate: "2026-03-15", finishDate: "2026-11-15", durationDays: 120, isCriticalPath: true }),
+  roadmapWorkstream({ id: "WS-COASTAL-401-WQC", projectId: projectsData[1].id, title: "Section 401 Water Quality Certification", category: "water", permitTypeId: "LDEQ-401-WQC", assignedOrgCode: "LDEQ", currentStageName: "Certification Package Review", startDate: "2026-04-01", finishDate: "2026-10-30", durationDays: 60, isCriticalPath: true }),
+  roadmapWorkstream({ id: "WS-COASTAL-WATERBOTTOM", projectId: projectsData[1].id, title: "State Water Bottom Lease and Right-of-Way", category: "permit", permitTypeId: "SLO-WATER-BOTTOM", assignedOrgCode: "SLO", currentStageName: "Submerged Land Boundary Review", startDate: "2026-04-15", finishDate: "2026-10-31", durationDays: 60 }),
+  roadmapWorkstream({ id: "WS-PIPE-INTRASTATE", projectId: projectsData[2].id, title: "Intrastate Natural Gas Pipeline Construction Authorization", category: "utility", permitTypeId: "LDCE-PIPE-INTRA", assignedOrgCode: "LDCE", currentStageName: "Pipeline Route and Safety Review", startDate: "2026-04-01", finishDate: "2026-09-30", durationDays: 45 }),
+  roadmapWorkstream({ id: "WS-PIPE-CRYOGENIC-SAFETY", projectId: projectsData[2].id, title: "Cryogenic Methane Facility High-Hazard Plan Review", category: "public_safety", permitTypeId: "OSFM-PLAN-REV", assignedOrgCode: "OSFM", currentStageName: "Cryogenic Safety Plan Review", startDate: "2026-04-15", finishDate: "2026-10-15", durationDays: 45 }),
+  roadmapWorkstream({ id: "WS-PIPE-AIR-QUALITY", projectId: projectsData[2].id, title: "Liquefaction and Combustion Source Air Permit", category: "air", permitTypeId: "LDEQ-AIR-TITLEV", assignedOrgCode: "LDEQ", currentStageName: "Emissions Inventory and Applicability", startDate: "2026-05-01", finishDate: "2026-11-30", durationDays: 90, isCriticalPath: true }),
+  roadmapWorkstream({ id: "WS-AIRPORT-PART420", projectId: projectsData[3].id, title: "FAA Part 420 Launch Site Operator License Determination", category: "air", permitTypeId: "FAA-PART420", assignedOrgCode: "FAA", currentStageName: "Launch Site License Applicability", startDate: "2026-04-01", finishDate: "2026-12-01", durationDays: 90, isCriticalPath: true }),
+  roadmapWorkstream({ id: "WS-AIRPORT-DOTD-7480", projectId: projectsData[3].id, title: "Airport Landing Area Notice and DOTD Aviation Approval", category: "air", permitTypeId: "DOTD-AIRPORT", assignedOrgCode: "DOTD", currentStageName: "Runway and Obstruction Notice", startDate: "2026-05-01", finishDate: "2026-09-30", durationDays: 45 }),
+  roadmapWorkstream({ id: "WS-POWER-GRID-230KV", projectId: projectsData[4].id, title: "230kV Grid Interconnection and System Impact Study", category: "energy", permitTypeId: "GRID-230KV-INTERCONN", assignedOrgCode: "LPSC", currentStageName: "Utility Interconnection Study", startDate: "2026-04-01", finishDate: "2026-11-15", durationDays: 90, isCriticalPath: true }),
+  roadmapWorkstream({ id: "WS-POWER-AIR-PERMIT", projectId: projectsData[4].id, title: "Dedicated Generation Air Quality Authorization", category: "air", permitTypeId: "LDEQ-AIR-TITLEV", assignedOrgCode: "LDEQ", currentStageName: "PSD and BACT Screening", startDate: "2026-04-15", finishDate: "2026-12-01", durationDays: 120 }),
+  roadmapWorkstream({ id: "WS-WATER-STORMWATER", projectId: projectsData[5].id, title: "Large Construction Stormwater LAR100000 Coverage", category: "water", permitTypeId: "LDEQ-LAR100000", assignedOrgCode: "LDEQ", currentStageName: "SWPPP and NOI Preparation", startDate: "2026-03-01", finishDate: "2026-06-30", durationDays: 30, isCriticalPath: true }),
+  roadmapWorkstream({ id: "WS-WATER-401-WQC", projectId: projectsData[5].id, title: "Water Quality Certification for Deluge and Outfall Systems", category: "water", permitTypeId: "LDEQ-401-WQC", assignedOrgCode: "LDEQ", currentStageName: "Outfall and Receiving Water Review", startDate: "2026-04-01", finishDate: "2026-10-30", durationDays: 60 }),
+  roadmapWorkstream({ id: "WS-WATER-DELUGE", projectId: projectsData[5].id, title: "Industrial Deluge LPDES Discharge Authorization", category: "water", permitTypeId: "LDEQ-LPDES-IND", assignedOrgCode: "LDEQ", currentStageName: "Deluge Characterization and Permit Review", startDate: "2026-03-15", finishDate: "2026-11-15", durationDays: 90, isCriticalPath: true }),
+  roadmapWorkstream({ id: "WS-FAA-NEPA-EIS", projectId: primaryProjectId, title: "FAA NEPA Environmental Impact Statement and Record of Decision", category: "environmental", permitTypeId: "FAA-NEPA-EIS", assignedOrgCode: "FAA", currentStageName: "NEPA Scoping and Alternatives Analysis", startDate: "2026-02-01", finishDate: "2027-06-30", durationDays: 540, isCriticalPath: true }),
+  roadmapWorkstream({ id: "WS-FAA-PART440", projectId: primaryProjectId, title: "FAA Maximum Probable Loss and Financial Responsibility", category: "air", permitTypeId: "FAA-PART440", assignedOrgCode: "FAA", currentStageName: "MPL and Insurance Demonstration", startDate: "2026-05-01", finishDate: "2026-09-30", durationDays: 60 }),
+  roadmapWorkstream({ id: "WS-USFWS-ESA7", projectId: primaryProjectId, title: "ESA Section 7 Terrestrial and Freshwater Species Consultation", category: "environmental", permitTypeId: "USFWS-ESA-7", assignedOrgCode: "USFWS", currentStageName: "IPaC Species List and Biological Assessment", startDate: "2026-03-01", finishDate: "2026-11-30", durationDays: 120, isCriticalPath: true }),
+  roadmapWorkstream({ id: "WS-NOAA-ESA-EFH", projectId: projectsData[1].id, title: "NOAA Marine Species and Essential Fish Habitat Consultation", category: "environmental", permitTypeId: "NOAA-ESA-EFH", assignedOrgCode: "NOAA", currentStageName: "Marine Effects Assessment", startDate: "2026-04-01", finishDate: "2026-11-30", durationDays: 120 }),
+  roadmapWorkstream({ id: "WS-SHPO-NHPA106", projectId: primaryProjectId, title: "NHPA Section 106 Cultural Resources Review", category: "environmental", permitTypeId: "SHPO-NHPA-106", assignedOrgCode: "SHPO", currentStageName: "Area of Potential Effects Survey", startDate: "2026-03-01", finishDate: "2026-10-31", durationDays: 90 }),
+];
+
+const allWorkstreams = [...comprehensiveWorkstreams, ...supplementalWorkstreams];
+
+for (const ws of allWorkstreams) {
   const { error: wsErr } = await supabase.from("workstreams").upsert({
     id: ws.id,
     project_id: ws.projectId,
@@ -1584,7 +1789,26 @@ for (const ws of comprehensiveWorkstreams) {
     if (tErr) throw new Error(`Task upsert failed for ${task.id}: ${tErr.message}`);
   }
 }
-console.log(`  ✅ Seeded ${comprehensiveWorkstreams.length} authoritative workstreams and their DAG tasks.`);
+console.log(`  ✅ Seeded ${allWorkstreams.length} authoritative workstreams and their DAG tasks.`);
+
+const taskIds = new Set(allWorkstreams.flatMap((ws) => (ws.tasks || []).map((task) => task.id)));
+for (const ws of allWorkstreams) {
+  for (const task of ws.tasks || []) {
+    for (const predecessorTaskId of task.predecessors || []) {
+      if (!taskIds.has(predecessorTaskId)) throw new Error(`Missing predecessor task ${predecessorTaskId} for ${task.id}`);
+      const { error } = await supabase.from("task_dependencies").upsert({
+        id: `dep-${predecessorTaskId}-${task.id}`,
+        predecessor_task_id: predecessorTaskId,
+        successor_task_id: task.id,
+        dependency_type: "finish_to_start",
+        gate_type: "statutory_mandatory",
+        lag_days: 0,
+        is_controlling: Boolean(task.isCriticalPath),
+      });
+      if (error) throw new Error(`Task dependency seed failed for ${predecessorTaskId}->${task.id}: ${error.message}`);
+    }
+  }
+}
 
 // 3.5 Seed Commitments, Decisions, Meetings, Coordination Requests, and RFIs
 for (const com of fixtureCommitments) {
@@ -1880,11 +2104,13 @@ for (const del of deliverables) {
   if (docErr) throw new Error(`Document metadata insert failed for ${fileName}: ${docErr.message}`);
 
   // 2. Upload to Supabase Storage
-  const { error: uploadErr } = await supabase.storage.from("path-documents").upload(storagePath, pdfBytes, {
-    contentType: "application/pdf",
-    upsert: true,
-  });
-  if (uploadErr) throw new Error(`Storage upload failed for ${fileName}: ${uploadErr.message}`);
+  for (const bucketName of STORAGE_BUCKETS) {
+    const { error: uploadErr } = await supabase.storage.from(bucketName).upload(storagePath, pdfBytes, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+    if (uploadErr) throw new Error(`Storage upload failed for ${bucketName}/${fileName}: ${uploadErr.message}`);
+  }
 
   // 3. Insert into document_versions (SHA-256 Ledger)
   const versionId = `doc-v-${documentId}`;
@@ -1927,17 +2153,18 @@ for (const del of deliverables) {
   }
 
   // 5. Test Download & Verify Byte-for-Byte SHA-256
-  const { data: downloadedBlob, error: dlErr } = await supabase.storage.from("path-documents").download(storagePath);
-  if (dlErr || !downloadedBlob) throw new Error(`Download verification failed for ${fileName}: ${dlErr?.message}`);
-  const downloadedBuffer = Buffer.from(await downloadedBlob.arrayBuffer());
-  const dlHash = crypto.createHash("sha256").update(downloadedBuffer).digest("hex");
-
-  if (dlHash !== hash) {
-    throw new Error(`SHA-256 checksum mismatch for ${fileName}! Expected ${hash}, got ${dlHash}`);
+  for (const bucketName of STORAGE_BUCKETS) {
+    const { data: downloadedBlob, error: dlErr } = await supabase.storage.from(bucketName).download(storagePath);
+    if (dlErr || !downloadedBlob) throw new Error(`Download verification failed for ${bucketName}/${fileName}: ${dlErr?.message}`);
+    const downloadedBuffer = Buffer.from(await downloadedBlob.arrayBuffer());
+    const dlHash = crypto.createHash("sha256").update(downloadedBuffer).digest("hex");
+    if (dlHash !== hash) {
+      throw new Error(`SHA-256 checksum mismatch for ${bucketName}/${fileName}! Expected ${hash}, got ${dlHash}`);
+    }
   }
 
   // Test Signed URL and HTTP fetch
-  const { data: signedUrlData, error: signErr } = await supabase.storage.from("path-documents").createSignedUrl(storagePath, 3600);
+  const { data: signedUrlData, error: signErr } = await supabase.storage.from(PRIMARY_STORAGE_BUCKET).createSignedUrl(storagePath, 3600);
   if (signErr || !signedUrlData?.signedUrl) throw new Error(`Signed URL generation failed for ${fileName}: ${signErr?.message}`);
 
   const httpRes = await fetch(signedUrlData.signedUrl);
@@ -1987,10 +2214,18 @@ if (fs.existsSync(markdownPath)) {
     created_at: now,
   });
 
-  await supabase.storage.from("path-documents").upload(mdStoragePath, mdContent, {
-    contentType: "text/markdown; charset=utf-8",
-    upsert: true,
-  });
+  for (const bucketName of STORAGE_BUCKETS) {
+    const { error: uploadErr } = await supabase.storage.from(bucketName).upload(mdStoragePath, mdContent, {
+      contentType: "text/markdown; charset=utf-8",
+      upsert: true,
+    });
+    if (uploadErr) throw new Error(`Storage upload failed for ${bucketName}/${mdFileName}: ${uploadErr.message}`);
+
+    const { data: downloaded, error: downloadError } = await supabase.storage.from(bucketName).download(mdStoragePath);
+    if (downloadError || !downloaded) throw new Error(`Roadmap download verification failed for ${bucketName}: ${downloadError?.message}`);
+    const downloadedHash = crypto.createHash("sha256").update(Buffer.from(await downloaded.arrayBuffer())).digest("hex");
+    if (downloadedHash !== mdHash) throw new Error(`Roadmap SHA-256 mismatch for ${bucketName}`);
+  }
 
   await supabase.from("document_versions").insert({
     id: `doc-v-${mdDocId}`,
@@ -2031,7 +2266,7 @@ console.log("===================================================================
 console.log(`Summary of Seeded Data:`);
 console.log(`  - Projects: ${projectsData.length}`);
 console.log(`  - Permit Types: ${permitTypesCatalog.length}`);
-console.log(`  - Workstreams: ${comprehensiveWorkstreams.length}`);
-console.log(`  - Tasks: ${comprehensiveWorkstreams.reduce((acc, ws) => acc + (ws.tasks?.length || 0), 0)}`);
+console.log(`  - Workstreams: ${allWorkstreams.length}`);
+console.log(`  - Tasks: ${allWorkstreams.reduce((acc, ws) => acc + (ws.tasks?.length || 0), 0)}`);
 console.log(`  - Verified Storage Deliverables: ${verifiedStorageDocs.length}`);
 console.log(`================================================================================\n`);

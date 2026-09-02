@@ -1,32 +1,25 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createRequestSupabaseClient } from "@/lib/supabase/server";
+import { resolveProjectRoute, resolveWorkstreamRoute } from "@/lib/supabase/route-resolvers";
 
 export const dynamic = "force-dynamic";
 
 export default async function GlobalWorkstreamRoute({ params }: { params: Promise<{ workstreamId: string }> }) {
   const { workstreamId: rawWorkstreamId } = await params;
-  const workstreamId = decodeURIComponent(rawWorkstreamId ?? "").trim();
+  const workstreamId = rawWorkstreamId ?? "";
 
   const client = await createRequestSupabaseClient();
   if (!client) return <main className="mx-auto max-w-4xl p-8"><h1 className="text-2xl font-bold">Supabase is not configured</h1></main>;
   const { data: user } = await client.auth.getUser();
   if (!user.user) return <main className="mx-auto max-w-4xl p-8"><h1 className="text-2xl font-bold">Sign in required</h1></main>;
 
-  const { data: workstream } = await client
-    .from("workstreams")
-    .select("id, code, title, category, project_id, current_stage_name, operational_state, operational_state_label, waiting_reason, waiting_on_entity, forecast_target_date, baseline_target_date")
-    .or(`id.eq."${workstreamId}",code.eq."${workstreamId}",code.ilike."${workstreamId}"`)
-    .maybeSingle();
+  const workstream = await resolveWorkstreamRoute(client, undefined, workstreamId);
 
   if (!workstream) return <main className="mx-auto max-w-4xl p-8"><h1 className="text-2xl font-bold">Workstream not found</h1><p className="mt-2 text-slate-600">The requested workstream could not be resolved.</p></main>;
 
   if (workstream.project_id) {
-    const { data: project } = await client
-      .from("projects")
-      .select("id, number")
-      .eq("id", workstream.project_id)
-      .maybeSingle();
+    const project = await resolveProjectRoute(client, workstream.project_id);
 
     if (project?.number) {
       redirect(`/projects/${encodeURIComponent(project.number)}/workstreams/${encodeURIComponent(workstream.id)}`);
