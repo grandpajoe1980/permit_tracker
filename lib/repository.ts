@@ -87,6 +87,7 @@ import {
   mutateClearWorkstreamBlocker,
   mutateCompleteWorkstreamStage,
   mutateCreateCommitment,
+  mutateUpdateCommitmentStatus,
   mutateCreateCoordinationRequest,
   mutateCreateCustomerRequest,
   mutateCreateCustomerRequestWithDocument,
@@ -1715,6 +1716,26 @@ class ProjectDeliveryRepository {
     this.auditEvents.unshift(audit);
 
     return com;
+  }
+
+  async updateCommitmentStatusPersisted(params: {
+    commitmentId: string;
+    status: CommitmentRecord["status"];
+    actorName: string;
+    actorOrgName: string;
+    notes?: string;
+  }): Promise<{ data: CommitmentRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      const commitment = this.updateCommitmentStatus(params.commitmentId, params.status, params.actorName, params.notes);
+      return { data: commitment, error: commitment ? null : new Error("Commitment not found.") };
+    }
+
+    const result = await mutateUpdateCommitmentStatus(params);
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Commitment status was not confirmed by the database.") };
+    await this.hydrateFromSupabase();
+    const commitment = this.commitments.find((entry) => entry.id === params.commitmentId);
+    return { data: commitment ?? null, error: commitment ? null : new Error("Commitment update was accepted but the saved row could not be reloaded.") };
   }
 
   createDocumentVersion(

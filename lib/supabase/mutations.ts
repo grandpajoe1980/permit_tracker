@@ -1462,6 +1462,44 @@ export async function mutateCreateCommitment(params: {
   };
 }
 
+export async function mutateUpdateCommitmentStatus(params: {
+  commitmentId: string;
+  status: CommitmentRecord["status"];
+  actorName: string;
+  actorOrgName: string;
+  notes?: string;
+}): Promise<MutationResult<{
+  commitmentId: string;
+  oldStatus: string;
+  newStatus: CommitmentRecord["status"];
+  fulfilledDate?: string;
+  updatedAt: string;
+}>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+
+  const { data, error } = await client.rpc("rpc_update_commitment_status", {
+    p_commitment_id: params.commitmentId,
+    p_status: params.status,
+    p_actor_name: params.actorName,
+    p_actor_org_name: params.actorOrgName,
+    p_notes: params.notes ?? null,
+  });
+  if (error || !data) return { data: null, error: new Error(error?.message ?? "Commitment status was not confirmed by the database.") };
+
+  const row = data as Record<string, unknown>;
+  return {
+    data: {
+      commitmentId: String(row.commitmentId ?? params.commitmentId),
+      oldStatus: String(row.oldStatus ?? ""),
+      newStatus: String(row.newStatus ?? params.status) as CommitmentRecord["status"],
+      fulfilledDate: row.fulfilledDate ? String(row.fulfilledDate) : undefined,
+      updatedAt: String(row.updatedAt ?? new Date().toISOString()),
+    },
+    error: null,
+  };
+}
+
 // ====================================================================
 // 7. USER PROFILES & PARTICIPANTS (SELF-SERVICE & ADMIN)
 // ====================================================================

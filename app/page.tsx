@@ -1228,7 +1228,17 @@ export default function Home() {
 
       if (item.kind === "commitment") {
         const commitmentNewStatus = statusUpdate === "fulfilled" ? "fulfilled" as const : statusUpdate === "cancelled" ? "missed" as const : statusUpdate === "on_hold" ? "at_risk" as const : "on_track" as const;
-        repository.updateCommitmentStatus(item.sourceId, commitmentNewStatus, actorName);
+        const result = await repository.updateCommitmentStatusPersisted({
+          commitmentId: item.sourceId,
+          status: commitmentNewStatus,
+          actorName,
+          actorOrgName,
+          notes: actionNote.trim() || undefined,
+        });
+        if (result.error || !result.data) {
+          setDialogError(result.error?.message ?? "The commitment status was not confirmed by the database.");
+          return;
+        }
         notify(`Status updated to "${statusLabel}" for ${item.title}.`);
         return;
       }
