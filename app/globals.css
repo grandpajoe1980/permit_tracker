@@ -375,6 +375,18 @@ a[href]:active,
   }
 }
 
+.site-header [title^="State committed directly"] {
+  display: none;
+}
+
+aside > div.mt-8 {
+  display: none;
+}
+
+aside nav > p:nth-of-type(2) {
+  display: none;
+}
+
 @media print {
   @page {
     margin: 0.55in;

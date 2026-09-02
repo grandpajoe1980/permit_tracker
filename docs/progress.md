@@ -192,6 +192,19 @@ Next ready task: UX-11 — improve escalation selection.
 
 Next ready task: UX-12 — remove noise and finish the shell.
 
+## UX-12 — shell noise and status placement (2026-09-02)
+
+- Footer now carries environment and connection health alongside PATH version,
+  commit hash/date, and persistence status.
+- Header health pill, persistent official-filing notice, and empty secondary
+  tools heading are hidden from the ordinary shell so current context, user,
+  notifications, and sign-out remain primary.
+- Focused shell/source/render tests — 20 passed; focused lint — 0 errors
+  (existing warnings only); `npm run build` — PASS.
+- Persistence, RLS, audit, notifications, uploads, and downloads were not changed.
+
+Next ready task: UX-13 — full regression and usability proof.
+
 ## Flow visibility checkpoint (2026-09-02)
 
 - Added a shared past/current/next workflow journey model and reusable UI.

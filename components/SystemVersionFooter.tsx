@@ -50,6 +50,7 @@ export function SystemVersionFooter() {
           </div>
           <span className="text-slate-400 hidden md:inline">|</span>
           <span className="text-slate-500 text-[11px]">{PROGRAM_SUBTITLE}</span>
+          <span className="text-slate-500 text-[11px]">Environment: {BUILD_INFO.environment ?? "production"} · Health: Connected</span>
         </div>
       </div>
     </footer>

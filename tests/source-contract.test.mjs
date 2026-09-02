@@ -39,6 +39,7 @@ const [page, layout, css, readme, productCopy, navigation, portalMigration, hard
 const workflowQueries = await readFile(new URL("../lib/supabase/queries.ts", import.meta.url), "utf8");
 const operationalUx = await readFile(new URL("../lib/operational-ux.ts", import.meta.url), "utf8");
 const routeResolvers = await readFile(new URL("../lib/supabase/route-resolvers.ts", import.meta.url), "utf8");
+const systemFooter = await readFile(new URL("../components/SystemVersionFooter.tsx", import.meta.url), "utf8");
 const [workItemPage, nextActionPanel, workItemFacts, activityFeed] = await Promise.all([
   readFile(new URL("../components/path/work/WorkItemPage.tsx", import.meta.url), "utf8"),
   readFile(new URL("../components/path/work/NextActionPanel.tsx", import.meta.url), "utf8"),
@@ -164,6 +165,15 @@ test("requires an explicit escalation target and preserves record association", 
   assert.match(escalation, /Document decision/);
   assert.match(page, /escalationTarget/);
   assert.match(page, /relatedWorkstreamId: workstreamId/);
+});
+
+test("keeps shell health in the footer and hides persistent noise", () => {
+  assert.match(page, /<SystemVersionFooter \/>/);
+  assert.match(systemFooter, /Environment:/);
+  assert.match(systemFooter, /Health: Connected/);
+  assert.match(css, /\.site-header \[title\^=/);
+  assert.match(css, /aside > div\.mt-8/);
+  assert.match(css, /aside nav > p:nth-of-type\(2\)/);
 });
 
 test("includes responsive, focus, reduced-motion, and print protections", () => {
