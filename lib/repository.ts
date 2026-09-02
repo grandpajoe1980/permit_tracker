@@ -1374,28 +1374,6 @@ class ProjectDeliveryRepository {
     return event;
   }
 
-  updateCommitmentStatus(commitmentId: string, newStatus: "on_track" | "at_risk" | "missed" | "fulfilled", actorName: string) {
-    const commitment = this.commitments.find((c) => c.id === commitmentId);
-    if (!commitment) return null;
-
-    const oldStatus = commitment.status;
-    commitment.status = newStatus;
-
-    const event = createAuditEvent({
-      entityType: "workstream",
-      entityId: commitment.workstreamId,
-      actorName,
-      actorOrgName: commitment.committingOrgCode,
-      actionType: "status_change",
-      previousValue: oldStatus,
-      newValue: newStatus,
-      reason: `Commitment ${commitmentId} status updated from "${oldStatus}" to "${newStatus}" by ${actorName}.`,
-    });
-    this.auditEvents.unshift(event);
-
-    return event;
-  }
-
   updateWorkstreamOperationalState(workstreamId: string, newState: string, actorName: string) {
     const ws = this.getWorkstreamById(workstreamId);
     if (!ws) return null;
@@ -1742,6 +1720,7 @@ class ProjectDeliveryRepository {
   createDocumentVersion(
     documentId: string,
     params: {
+      id?: string;
       versionNumber: number;
       versionLabel: string;
       storagePath: string;
@@ -1758,7 +1737,7 @@ class ProjectDeliveryRepository {
     const doc = this.documents.find((d) => d.id === documentId);
     if (!doc) return null;
 
-    const versionId = `doc-v-${doc.id.toLowerCase()}-v${params.versionNumber}`;
+    const versionId = params.id ?? `doc-v-${doc.id.toLowerCase()}-v${params.versionNumber}`;
     const newVersion: DocumentVersionRecord = {
       id: versionId,
       documentId: doc.id,

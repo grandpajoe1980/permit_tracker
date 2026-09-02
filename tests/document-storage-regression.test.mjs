@@ -18,6 +18,7 @@ after(async () => {
 });
 
 const { downloadDocumentVersion } = await vite.ssrLoadModule("/lib/document-download-utils.ts");
+const { resolveWorkItemDocuments } = await vite.ssrLoadModule("/lib/document-work-item-utils.ts");
 const { documentRowToDomain, documentVersionRowToDomain } = await vite.ssrLoadModule("/lib/supabase/mappings.ts");
 
 function records(overrides = {}) {
@@ -111,4 +112,38 @@ test("document mapping joins versions by database UUID and derives the real late
   }, mappedVersions);
   assert.equal(document.currentVersionNumber, 4);
   assert.equal(document.currentVersionId, "v4");
+});
+
+test("review work items resolve attachments to the authoritative document and exact version", () => {
+  const { document, version } = records();
+  const item = {
+    id: "document-1:version-1:DOTD",
+    sourceId: version.id,
+    kind: "document",
+    title: "Review v1.0 · Official Notes",
+    projectName: "Project",
+    workstreamTitle: "Wetlands review",
+    whyHere: "",
+    whatToDo: "",
+    removesFromQueue: "",
+    ageLabel: "",
+    scheduleImpact: "",
+    statusLabel: "",
+    statusTone: "amber",
+    priorityScore: 1,
+    isCriticalPath: true,
+    ownerName: "Test User",
+    ownerOrganization: "PATH",
+    requiredInputs: [],
+    documents: [{ id: version.id, label: document.title, version: version.versionTag }],
+    sourceDocument: document,
+    exactDocumentVersionId: version.id,
+    exactDocumentVersionLabel: version.versionTag,
+  };
+
+  const resolved = resolveWorkItemDocuments(item, [document]);
+  assert.equal(resolved.length, 1);
+  assert.equal(resolved[0].id, document.id);
+  assert.equal(resolved[0].versions[0].id, version.id);
+  assert.equal(resolved[0].versions[0].storagePath, version.storagePath);
 });

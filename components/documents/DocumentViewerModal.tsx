@@ -63,27 +63,30 @@ export function DocumentViewerModal({
 }: DocumentViewerModalProps) {
   const [copiedHash, setCopiedHash] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState<string>(
-    version?.id || document.versions[0]?.id || ""
+    version?.id || document.currentVersionId || document.versions[0]?.id || ""
   );
 
   if (!isOpen) return null;
 
-  const currentVersion =
-    document.versions.find((v) => v.id === selectedVersionId) ||
-    document.versions[0] || {
-      id: "unknown",
-      documentId: document.id,
-      versionTag: `v${document.currentVersionNumber}.0`,
-      fileName: `${document.title}.pdf`,
-      fileSizeBytes: 24500000,
-      mimeType: "application/pdf",
-      storageUri: `vault/${document.id}`,
-      sha256Hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      uploadedByName: "Authorized Project Participant",
-      changeSummary: "Official regulatory package filing.",
-      isMalwareClean: true,
-      uploadedAt: new Date().toISOString(),
-    };
+  const currentVersion = document.versions.find((v) => v.id === selectedVersionId) || document.versions[0];
+
+  if (!currentVersion) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#00284d]/60 p-4 backdrop-blur-xs" role="dialog" aria-modal="true" aria-labelledby="doc-modal-title">
+        <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-700">File unavailable</p>
+              <h2 id="doc-modal-title" className="mt-1 text-xl font-black text-slate-900">{document.title}</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600">No stored document version is linked to this record yet. Upload the document to the Document Vault before reviewing or downloading it.</p>
+            </div>
+            <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close document viewer" className="text-slate-500 hover:text-slate-900"><X className="size-5" /></Button>
+          </div>
+          <Button type="button" variant="outline" onClick={onClose} className="mt-5 font-bold text-xs">Close Preview</Button>
+        </div>
+      </div>
+    );
+  }
 
   const reviewsForVersion = document.agencyReviews.filter(
     (rev) => rev.documentVersionId === currentVersion.id

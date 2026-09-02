@@ -86,6 +86,7 @@ import { repository } from "@/lib/repository";
 import { allowsFixtureData } from "@/lib/data-mode";
 import { membershipRoleForRoleId, teamUsersFromMemberships } from "@/lib/admin-users";
 import { downloadDocumentFile, mutateUploadDocumentVersion } from "@/lib/supabase/storage";
+import { resolveWorkItemDocuments } from "@/lib/document-work-item-utils";
 import { downloadDocumentVersion } from "@/lib/document-download-utils";
 import {
   canUserModifyItem,
@@ -815,9 +816,13 @@ export default function Home() {
     if (!file) return;
 
     if (demoHydrationRef.current) await demoHydrationRef.current;
-    const document = repository.getDocuments().find((entry) => entry.id === documentId)
-      ?? repository.getDocuments()[0];
-    if (!document) return;
+    const document = repository.getDocuments().find((entry) => entry.id === documentId);
+    if (!document) {
+      setSaveStatus("error");
+      setToast("Upload failed: the selected document is no longer available.");
+      event.target.value = "";
+      return;
+    }
     setSaveStatus("saving");
     try {
       const versionNumber = document.currentVersionNumber + 1;
@@ -837,6 +842,7 @@ export default function Home() {
 
       if (res.data) {
         repository.createDocumentVersion(document.id, {
+          id: res.data.id,
           versionNumber: res.data.versionNumber ?? versionNumber,
           versionLabel: res.data.versionLabel ?? `v${versionNumber}.0`,
           storagePath: res.data.storagePath || "",
@@ -1571,33 +1577,8 @@ export default function Home() {
     const escalationPath = request?.escalationPath ?? [];
     const audit = repository.getAuditEvents().filter((event) => event.entityId === selectedItem.workstreamId || event.entityId === selectedItem.sourceId).slice(0, 6);
 
-    const wsDocs = selectedItem.workstreamId ? repository.getDocumentsByWorkstreamId(selectedItem.workstreamId) : [];
     const linkedWorkstream = selectedItem.workstreamId ? repository.getWorkstreamById(selectedItem.workstreamId) : undefined;
-    const docsToDisplay = wsDocs.length > 0 ? wsDocs : selectedItem.documents.length > 0 ? selectedItem.documents.map((d) => ({
-      id: d.id,
-      projectId: projectRecord.id,
-      workstreamId: selectedItem.workstreamId,
-      workstreamTitle: selectedItem.workstreamTitle,
-      title: d.label,
-      category: "engineering_drawing",
-      ownerOrgCode: "SPACEX",
-      currentVersionNumber: 1,
-      isConfidential: false,
-      versions: [{
-        id: `v-${d.id}`,
-        documentId: d.id,
-        versionTag: d.version ?? "v1.0",
-        fileName: `${d.label}.pdf`,
-        fileSizeBytes: 24500000,
-        mimeType: "application/pdf",
-        storageUri: `vault/${d.id}`,
-        sha256Hash: "8a4f9b8c2e1d0f5a7b6c3e9d8f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a",
-        uploadedByName: "SpaceX Engineering",
-        isMalwareClean: true,
-        uploadedAt: new Date().toISOString(),
-      }],
-      agencyReviews: [],
-    })) : [];
+    const docsToDisplay = resolveWorkItemDocuments(selectedItem, repository.getDocuments());
 
     return <div className="space-y-5"><nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500"><button type="button" onClick={() => navigate("my-work")} className="text-teal-800 underline-offset-2 hover:underline">My Work</button><span aria-hidden="true">›</span><button type="button" onClick={() => openProject()} className="text-teal-800 underline-offset-2 hover:underline font-bold" title="Go to SpaceX Pecan Island project page">SpaceX Pecan Island</button><span aria-hidden="true">›</span><button type="button" onClick={() => openProject(selectedItem.workstreamId)} className="text-teal-800 underline-offset-2 hover:underline" title="View workstream on project page">{selectedItem.workstreamTitle}</button><span aria-hidden="true">›</span><span className="text-slate-800">{selectedItem.title}</span></nav>
       <section className="rounded-2xl border border-teal-300 bg-white p-5 shadow-md sm:p-7"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-teal-800">{customer ? "PROJECT STATUS" : "YOUR ASSIGNMENT"}</p><h1 className="mt-2 max-w-3xl text-2xl font-black tracking-tight text-[#00284d] outline-none sm:text-4xl">{customer ? sanitizeCustomerItem(selectedItem).title : selectedItem.title}</h1><button type="button" onClick={() => openProject(selectedItem.workstreamId)} className="mt-2 text-sm font-semibold text-slate-600 hover:text-teal-800 hover:underline text-left cursor-pointer transition-colors" title="View workstream on project page">{selectedItem.workstreamTitle}</button></div><div className="flex items-center gap-2"><span className={`rounded-full border px-3 py-1.5 text-xs font-black uppercase ${toneClasses(selectedItem.statusTone).badge}`}>{selectedItem.statusLabel}</span><Button type="button" variant="outline" size="sm" onClick={() => openProject(selectedItem.workstreamId)} className="text-xs font-bold text-teal-800 border-teal-300 hover:bg-teal-50 gap-1.5"><Building2 className="size-3.5" /> Project Page</Button></div></div><div className="mt-6 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-4"><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Assignment</p><p className="mt-1 font-black text-[#00284d]">{customer ? "Shared project status" : "You own this step"}</p></div><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Due</p><p className="mt-1 font-black text-[#00284d]">{formatDate(selectedItem.dueDate)}</p></div><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Critical path</p><p className="mt-1 font-black text-[#00284d]">{selectedItem.isCriticalPath ? "Yes" : "No"}</p></div><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Float remaining</p><p className="mt-1 font-black text-[#00284d]">{selectedItem.isCriticalPath ? "3 days" : "Within float"}</p></div></div>{!customer && actions.length > 0 && <div className="sticky bottom-3 z-10 mt-6 flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur" aria-label="Work actions"><span className="mr-1 self-center text-xs font-black uppercase tracking-wider text-slate-500">Actions</span>{actions.map((action, index) => {

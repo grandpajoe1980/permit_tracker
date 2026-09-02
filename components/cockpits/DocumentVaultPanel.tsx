@@ -523,6 +523,7 @@ export function DocumentVaultPanel({
       {/* In-App Document Viewer Modal */}
       {previewingDoc && (
         <DocumentViewerModal
+          key={`${previewingDoc.id}:${previewingVersion?.id || "latest"}`}
           document={previewingDoc}
           version={previewingVersion}
           isOpen={Boolean(previewingDoc)}
