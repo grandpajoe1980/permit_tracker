@@ -81,6 +81,21 @@ Next ready task: UX-03 — stable navigation and return-context contract.
 
 Next ready task: UX-04 — rebuild the customer landing experience.
 
+## UX-04 — customer landing experience (2026-09-02)
+
+- Customer authentication now opens the project home by default.
+- Added the customer-home/request-launcher components and placed the primary
+  `Submit a Request` path before project status details.
+- Preserved all six persisted request intents, added a compact request list with
+  owner/status/update context and the empty state `No requests submitted yet.`.
+- Request attachments are selected from the request-center context rather than
+  a persistent My Work control; permit forms retain authoritative filing guidance.
+- Focused source, project-navigation, and rendered-shell tests — 19 passed;
+  focused ESLint — 0 errors (existing warnings only); `npm run build` — PASS.
+- Supabase, RLS, audit, notifications, uploads, and downloads were not changed.
+
+Next ready task: UX-05 — simplify My Work and correct counts.
+
 ## Flow visibility checkpoint (2026-09-02)
 
 - Added a shared past/current/next workflow journey model and reusable UI.

@@ -38,6 +38,11 @@ const [page, layout, css, readme, productCopy, navigation, portalMigration, hard
 ]);
 const workflowQueries = await readFile(new URL("../lib/supabase/queries.ts", import.meta.url), "utf8");
 const loginPage = await readFile(new URL("../components/path/LoginPage.tsx", import.meta.url), "utf8");
+const [customerHome, customerRequestList, submitRequestLauncher] = await Promise.all([
+  readFile(new URL("../components/path/customer/CustomerHome.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../components/path/customer/CustomerRequestList.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../components/path/customer/SubmitRequestLauncher.tsx", import.meta.url), "utf8"),
+]);
 
 test("uses the typed domain module without duplicating fixtures in the UI", () => {
   assert.match(page, /^"use client";/);
@@ -86,6 +91,15 @@ test("keeps the login surface focused and preserves demo access", () => {
   assert.match(loginPage, /Quick Demo Sign-In/);
   assert.match(loginPage, /id="login-error" role="alert"/);
   assert.doesNotMatch(loginPage, /PATH tells you what to do next|Your default landing page|See work assigned to you/);
+});
+
+test("gives the customer home a fast request path and truthful request states", () => {
+  assert.match(customerHome, /data-path-customer-home/);
+  assert.match(page, /<SubmitRequestLauncher/);
+  assert.match(submitRequestLauncher, /Submit a Request/);
+  assert.match(submitRequestLauncher, /CustomerRequestIntent/);
+  assert.match(customerRequestList, /No requests submitted yet/);
+  assert.match(page, /setRoute\(getOperationalPersona\(persona\)\.isCustomer \? "project"/);
 });
 
 test("includes responsive, focus, reduced-motion, and print protections", () => {
