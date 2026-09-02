@@ -78,6 +78,16 @@ test("ships final product metadata without starter preview markers", () => {
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);
 });
 
+test("keeps configuration under the authorized administration area", () => {
+  const secondary = page.slice(page.indexOf("function renderSecondary"), page.indexOf("function renderAdmin"));
+  const admin = page.slice(page.indexOf("function renderAdmin"), page.indexOf("function renderDetail"));
+  assert.doesNotMatch(secondary, /WorkflowDesignerPanel/);
+  assert.match(secondary, /PermitCatalogPanel/);
+  assert.match(admin, /WorkflowDesignerPanel/);
+  assert.match(page, /const canAdmin = isAdministrator\(activePersona\)/);
+  assert.match(page, /route === "admin".*Administrator access required/s);
+});
+
 test("centralizes PATH product and project display copy", () => {
   assert.match(productCopy, /PRODUCT_NAME\s*=\s*[\"']PATH[\"']/);
   assert.match(productCopy, /PROGRAM_SUBTITLE\s*=\s*[\"']Starbase Louisiana/);
