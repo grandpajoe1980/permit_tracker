@@ -13,6 +13,7 @@ import type {
   WorkflowTemplateRecord,
   WorkstreamRecord,
 } from "./domain-models";
+import { PROJECT_DISPLAY_NAME } from "./product-copy";
 
 // ==========================================
 // 1. ORGANIZATIONS REGISTRY (HIERARCHICAL)
@@ -2111,7 +2112,7 @@ export const workstreamsData: WorkstreamRecord[] = [
 export const spacexProjectRecord: ProjectRecord = {
   id: "proj-spacex-pecan",
   code: "SPACEX-PECAN-ISLAND",
-  name: "SpaceX Pecan Island Launch Complex & Orbital Support Facility",
+  name: PROJECT_DISPLAY_NAME,
   applicantOrgCode: "SPACEX",
   leadStateAgencyCode: "LA-PROJECTS",
   stateProjectManagerName: "Sarah Johnson (Louisiana State Project Director)",

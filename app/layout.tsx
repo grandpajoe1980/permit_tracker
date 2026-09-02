@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { PRODUCT_NAME, PROGRAM_SUBTITLE } from "@/lib/product-copy";
 
 export const metadata: Metadata = {
-  title: "Critical Path — SpaceX Louisiana Project Operations",
+  title: `${PRODUCT_NAME} — ${PROGRAM_SUBTITLE}`,
   description:
     "Cross-agency infrastructure coordination, government service requests, milestone Gantt tracking, and escalation paths.",
   icons: {

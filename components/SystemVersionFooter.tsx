@@ -2,6 +2,7 @@
 
 import React from "react";
 import { BUILD_INFO } from "@/lib/version";
+import { PRODUCT_NAME, PROGRAM_SUBTITLE } from "@/lib/product-copy";
 import { GitBranch, GitCommit, Clock3, Database, ShieldCheck, ExternalLink } from "lucide-react";
 
 export function SystemVersionFooter() {
@@ -14,7 +15,7 @@ export function SystemVersionFooter() {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="flex items-center gap-1.5 font-bold text-[#00284d]">
             <ShieldCheck className="size-4 text-teal-700" />
-            <span>PATH ITSM & Permitting Platform</span>
+            <span>{PRODUCT_NAME}</span>
             <span className="rounded-md bg-teal-100 border border-teal-300 px-2 py-0.5 font-mono text-[11px] font-black text-teal-950">
               v{BUILD_INFO.version}
             </span>
@@ -48,9 +49,7 @@ export function SystemVersionFooter() {
             <span>Supabase Authoritative Persistence</span>
           </div>
           <span className="text-slate-400 hidden md:inline">|</span>
-          <span className="text-slate-500 text-[11px]">
-            SpaceX Louisiana Operations · Vermilion Parish
-          </span>
+          <span className="text-slate-500 text-[11px]">{PROGRAM_SUBTITLE}</span>
         </div>
       </div>
     </footer>

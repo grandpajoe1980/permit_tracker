@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-test("renders the Critical Path shell and honest prototype disclosure", async () => {
+test("renders the PATH shell and honest prototype disclosure", async () => {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
@@ -27,9 +27,9 @@ test("renders the Critical Path shell and honest prototype disclosure", async ()
     /^text\/html\b/i,
   );
   const html = await response.text();
-  assert.match(html, /<title>Critical Path — SpaceX Louisiana Project Operations<\/title>/i);
-  assert.match(html, /Critical Path/i);
-  assert.match(html, /SpaceX Louisiana/i);
+  assert.match(html, /<title>PATH — Starbase Louisiana – SpaceX Coordination<\/title>/i);
+  assert.match(html, /PATH/i);
+  assert.match(html, /Starbase Louisiana/i);
   assert.doesNotMatch(html, /Starter Project|Ship something real/i);
   assert.doesNotMatch(html, /official state government website/i);
 });

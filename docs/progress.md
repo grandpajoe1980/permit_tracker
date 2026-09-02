@@ -35,6 +35,22 @@ findings below.
 Persistence and document download checks are regression gates for every
 stateful/navigation change; no UX-00 source behavior was changed.
 
+## UX-01 — centralized PATH product copy (2026-09-02)
+
+- Added `lib/product-copy.ts` with shared product, program, and full project
+  display-name constants.
+- Updated root metadata, login/shell labels, footer branding, operational
+  projections, and the seeded project record to use the shared copy.
+- Removed Vermilion Parish from the login hero and persistent footer while
+  retaining it as project location context and domain data.
+- Focused verification: `node --test tests/source-contract.test.mjs
+  tests/project-navigation.test.mjs tests/rendered-html.test.mjs` — 16 passed.
+- `npm run build` — PASS; regenerated `lib/version.ts` and Vinext output.
+- Supabase, RLS, audit, notifications, uploads, and downloads were not
+  changed.
+
+Next ready task: UX-02 — simplify the logged-out sign-in experience.
+
 ## Flow visibility checkpoint (2026-09-02)
 
 - Added a shared past/current/next workflow journey model and reusable UI.

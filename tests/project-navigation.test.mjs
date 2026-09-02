@@ -23,7 +23,7 @@ const { demoPersonas } = await vite.ssrLoadModule("/lib/demo-data.ts");
 test("spacexProjectRecord provides authoritative project page metadata", () => {
   assert.equal(spacexProjectRecord.id, "proj-spacex-pecan");
   assert.equal(spacexProjectRecord.code, "SPACEX-PECAN-ISLAND");
-  assert.ok(spacexProjectRecord.name.includes("SpaceX Pecan Island"));
+  assert.equal(spacexProjectRecord.name, "SpaceX – Starbase Louisiana Launch Complex and Orbital Support Facility");
   assert.equal(spacexProjectRecord.parish, "Vermilion Parish");
   assert.ok(spacexProjectRecord.workstreams.length >= 6);
   assert.ok(spacexProjectRecord.baselineLaunchDate);

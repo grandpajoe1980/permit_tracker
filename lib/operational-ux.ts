@@ -32,6 +32,7 @@ import {
   workflowTemplatesData,
 } from "./spacex-megaproject-fixture";
 import { participantForTask, participantForWorkstream, projectProfiles } from "./customer-portal";
+import { PROJECT_DISPLAY_NAME } from "./product-copy";
 
 export type WorkspaceMode = "reviewer" | "agency" | "supervisor" | "state_office" | "customer" | "admin";
 
@@ -129,7 +130,7 @@ export type RecipientPreview = {
   customerMessage?: string;
 };
 
-const PROJECT_NAME = "SpaceX Pecan Island Launch Complex";
+const PROJECT_NAME = PROJECT_DISPLAY_NAME;
 const AS_OF_DATE = "2026-08-30";
 
 const requestWorkstreamMap: Record<string, string> = {
@@ -486,7 +487,7 @@ function customerRequestToWorkItem(
     sourceId: request.id,
     kind: "customer_request",
     title: request.title,
-    projectName: "SpaceX Pecan Island Launch Complex",
+    projectName: PROJECT_NAME,
     workstreamId: request.relatedWorkstreamId ?? workstream?.id ?? "WS-CUSTOMER-INTAKE",
     workstreamTitle: workstream?.title ?? (request.knownAgencyCode ? `${request.knownAgencyCode} Request · ${request.title}` : `Customer Request · ${request.confirmationNumber}`),
     statusTone: tone,
