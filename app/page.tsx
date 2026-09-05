@@ -50,6 +50,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { AdminDirectory } from "@/components/admin/AdminDirectory";
+import { AdminExplorer } from "@/components/admin/AdminExplorer";
 import { DocumentViewerModal } from "@/components/documents/DocumentViewerModal";
 import type { CustomerRequestRecord, DocumentRecord, DocumentVersionRecord, ITSMState } from "@/lib/domain-models";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1734,7 +1735,7 @@ export default function Home() {
     else if (route === "notifications") content = renderNotifications();
     else if (route === "secondary") content = renderSecondary();
     else if (route === "intake") content = canTriage ? renderAdmin() : <div className="rounded-xl border border-amber-300 bg-amber-50 p-8"><h1 className="text-xl font-black text-amber-950">Access restricted</h1><p className="mt-2 text-sm text-amber-900">The customer intake queue is available to the State Project Office.</p><Button type="button" onClick={() => navigate("my-work")} className="mt-4 bg-[#00284d] font-bold">Back to My Work</Button></div>;
-    else if (route === "admin") content = canAdmin ? renderAdmin() : <div className="rounded-xl border border-amber-300 bg-amber-50 p-8"><h1 className="text-xl font-black text-amber-950">Administrator access required</h1><p className="mt-2 text-sm text-amber-900">Workflow, agency, and user configuration is restricted to authorized administrators.</p><Button type="button" onClick={() => navigate("my-work")} className="mt-4 bg-[#00284d] font-bold">Back to My Work</Button></div>;
+    else if (route === "admin") content = canAdmin ? <div className="space-y-6"><AdminExplorer onOpenWork={(resource, id) => { const kinds: Record<string, string> = { workstreams: "workflow", tasks: "task", customer_requests: "customer_request", rfis: "rfi", coordination_requests: "coordination", documents: "document", commitments: "commitment", decisions: "determination" }; const item = workItems.find(candidate => candidate.kind === kinds[resource] && candidate.sourceId === id); if (!item) return false; openItem(item); return true; }} />{renderAdmin()}</div> : <div className="rounded-xl border border-amber-300 bg-amber-50 p-8"><h1 className="text-xl font-black text-amber-950">Administrator access required</h1><p className="mt-2 text-sm text-amber-900">Workflow, agency, and user configuration is restricted to authorized administrators.</p><Button type="button" onClick={() => navigate("my-work")} className="mt-4 bg-[#00284d] font-bold">Back to My Work</Button></div>;
     else content = renderMyWork();
 
     return <>{hydrationError && <div role="alert" className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-950"><span className="flex-1">{hydrationError}</span><Button type="button" variant="outline" size="sm" onClick={() => void retryHydration()}>Retry</Button></div>}{content}</>;

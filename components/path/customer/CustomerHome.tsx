@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 type CustomerHomeProps = {
   projectName: string;
@@ -18,7 +19,7 @@ export function CustomerHome({ projectName, onSubmitRequest, children }: Custome
         <p className="mt-3 max-w-2xl text-base text-slate-200">Request a permit, government service, or help moving your project forward.</p>
         <div className="mt-5 flex flex-wrap gap-3">
           <button type="button" onClick={onSubmitRequest} className="rounded-lg bg-[#f4a100] px-6 py-3 text-base font-bold text-[#00284d] hover:bg-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">Submit a Request</button>
-          <a href="/?view=catalog" className="rounded-lg border border-white/40 px-5 py-3 font-bold hover:bg-white/10">Browse Services &amp; Permits</a>
+          <Link href="/?view=catalog" className="rounded-lg border border-white/40 px-5 py-3 font-bold hover:bg-white/10">Browse Services &amp; Permits</Link>
         </div>
       </section>
       {children}
