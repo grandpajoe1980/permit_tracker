@@ -93,16 +93,23 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
-* {
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
   border-color: var(--border);
 }
 
 html {
+  max-width: 100%;
+  overflow-x: hidden;
   background: var(--background);
 }
 
 body {
   min-width: 320px;
+  max-width: 100%;
+  overflow-x: hidden;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
@@ -177,6 +184,21 @@ a[href]:active,
 .site-header {
   background: #00284d;
   box-shadow: 0 1px 0 rgb(255 255 255 / 0.12);
+}
+
+/* Keep the application shell inside narrow mobile viewports. */
+.site-header > div,
+.road-stripe + .site-header + div {
+  width: 100%;
+  min-width: 0;
+}
+
+.site-header .min-w-0 {
+  flex: 1 1 0%;
+}
+
+#main-content {
+  width: 100%;
 }
 
 .road-stripe {

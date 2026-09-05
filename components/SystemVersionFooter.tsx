@@ -11,7 +11,7 @@ export function SystemVersionFooter() {
       aria-label="System version and build status"
       className="mt-16 border-t border-slate-200 bg-slate-100/90 py-5 text-slate-600 transition-colors backdrop-blur-sm"
     >
-      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4 px-4 sm:px-6 lg:px-10 text-xs">
+      <div className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-wrap items-center justify-between gap-4 px-4 sm:px-6 lg:px-10 text-xs">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="flex items-center gap-1.5 font-bold text-[#00284d]">
             <ShieldCheck className="size-4 text-teal-700" />
