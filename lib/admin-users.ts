@@ -1,6 +1,15 @@
 import type { OrganizationMembershipRecord, OrganizationRecord, UserProfileRecord } from "./domain-models";
 import { roleDefinitions, type RoleId, type TeamUser } from "./demo-data";
 
+export type MembershipRole = OrganizationMembershipRecord["role"];
+
+export const membershipRoleOptions: Array<{ value: MembershipRole; label: string; scope: string }> = [
+  { value: "contributor", label: "Contributor", scope: "Can do assigned work within their organization." },
+  { value: "supervisor", label: "Supervisor", scope: "Can supervise and coordinate work within their organization." },
+  { value: "organization_admin", label: "Organization administrator", scope: "Can manage people and roles for this organization." },
+  { value: "system_admin", label: "System administrator", scope: "Cross-organization administration. Only a system administrator can grant this role." },
+];
+
 function roleIdForMembership(role: OrganizationMembershipRecord["role"]): RoleId {
   if (role === "organization_admin" || role === "system_admin") return "admin";
   if (role === "supervisor") return "reviewer";
@@ -31,11 +40,13 @@ export function teamUsersFromMemberships(
         organizationalUnit: profile?.organizationalUnit,
         workEmail: profile?.workEmail,
         phone: profile?.officePhone,
+        membershipRole: membership.role,
       };
     });
 }
 
 export function membershipRoleForRoleId(roleId: RoleId): OrganizationMembershipRecord["role"] {
+  if (["contributor", "supervisor", "organization_admin", "system_admin"].includes(roleId)) return roleId as OrganizationMembershipRecord["role"];
   if (roleId === "admin") return "organization_admin";
   if (roleId === "reviewer") return "supervisor";
   return "contributor";
