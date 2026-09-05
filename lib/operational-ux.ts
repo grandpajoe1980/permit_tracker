@@ -768,11 +768,15 @@ export function canUserPerformAction(item: OperationalWorkItem, action: WorkActi
   return available.includes(action);
 }
 
-export function getCompletionRequirements(item: OperationalWorkItem) {
-  const template = workflowTemplatesData.find((candidate) => candidate.permitTypeId === item.sourceWorkstream?.permitTypeId) as WorkflowTemplateRecord | undefined;
-  const stage = template?.versions.find((version) => version.versionNumber === template.activeVersionNumber)?.stages.find((candidate) => candidate.id === item.sourceWorkstream?.currentStageId || item.sourceWorkstream?.currentStageName?.toLowerCase().includes(candidate.name.toLowerCase().split(" ")[0]));
-  const requirements = stage?.completionRequirements?.length ? stage.completionRequirements : ["Assigned work reviewed", "Required documents present", "Open dependencies acknowledged", "Reviewer determination recorded"];
-  return requirements.map((label, index) => ({ id: `${item.id}-requirement-${index}`, label, complete: index < 3 || item.statusTone === "green" }));
+export function getCompletionRequirements(item: OperationalWorkItem, templates: WorkflowTemplateRecord[] = []) {
+  const workstream = item.sourceWorkstream;
+  const version = templates.flatMap((template) => template.versions)
+    .find((candidate) => candidate.id === workstream?.workflowVersionId);
+  const stage = version?.stages.find((candidate) => candidate.id === workstream?.currentStageId);
+  const requirements = item.kind === "task"
+    ? ["Assigned work reviewed", "Task result recorded"]
+    : stage?.completionRequirements?.length ? stage.completionRequirements : ["Assigned work reviewed", "Reviewer determination recorded"];
+  return requirements.map((label, index) => ({ id: `${item.id}-requirement-${index}`, key: label, label, complete: false }));
 }
 
 export function getCompletionPreview(item: OperationalWorkItem) {

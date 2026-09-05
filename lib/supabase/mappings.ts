@@ -289,7 +289,7 @@ export function taskRowToDomain(row: Row): TaskRecord {
     assignedOrgId: str(row.assigned_org_id),
     assignedOrgCode: str(row.assigned_org_code || str(row.task_code).split("-")[0] || "DOTD"),
     assignedUserName: str(row.assigned_user_name) || undefined,
-    assignedUserId: str(row.assigned_user_id) || undefined,
+    assignedUserId: str(row.assigned_to_user_id || row.assigned_user_id) || undefined,
     status: (str(row.status, "pending")) as TaskRecord["status"],
     isMilestone: bool(row.is_milestone),
     isCriticalPath: bool(row.is_critical_path),

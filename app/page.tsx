@@ -606,8 +606,9 @@ export default function Home() {
     setSelectedItemId(item.id);
     setDialogError("");
     setActionNote("");
+    if (action === "advance_stage") action = "complete_step";
     if (action === "complete_step") {
-      const requirements = getCompletionRequirements(item);
+      const requirements = getCompletionRequirements(item, repository.getWorkflowTemplates());
       setCompletionChecks(Object.fromEntries(requirements.map((requirement) => [requirement.id, requirement.complete])));
     }
     if (action === "request_information") setQuestionText(`Please provide the information needed to move ${item.workstreamTitle} forward.`);
@@ -1015,19 +1016,19 @@ export default function Home() {
     setDialogError("");
 
     if (dialog.action === "complete_step") {
-      const requirements = getCompletionRequirements(item);
+      const requirements = getCompletionRequirements(item, repository.getWorkflowTemplates());
       if (!requirements.every((requirement) => completionChecks[requirement.id])) {
         setDialogError("Complete each required item before sending this step forward. The missing item is shown above.");
         return;
       }
       if (!workstreamId) {
-        notify(`${item.title} completed successfully.`);
+        setDialogError("This item has no linked workflow. Open its record to record the outcome.");
         return;
       }
       const result = await repository.completeWorkstreamStagePersisted({
         workstreamId,
-        completedChecklists: ["completeness_checklist_passed", "drainage_concurrence_received", "ecological_signoff", "public_comment_closed", "comment_response_package", "executive_director_signature", "reviewer_determination_recorded"],
-        providedDocs: ["site_plans", "wetlands_delineation", "drainage_model", "mitigation_plan", "public_notice_text", "final_order_doc"],
+        completedChecklists: requirements.map((requirement) => requirement.key),
+        providedDocs: [],
         actorName,
         actorOrgName,
       });
@@ -1036,7 +1037,7 @@ export default function Home() {
         return;
       }
       applyRepositoryWorkstream(item);
-      notify(`Technical review completed. The next configured stage is ${result.nextStageName ?? "the next workflow stage"}.`);
+      notify(`Step completed. The next configured stage is ${result.nextStageName ?? "the next workflow stage"}.`);
       return;
     }
 
@@ -1261,27 +1262,6 @@ export default function Home() {
       }
 
       setDialogError("Coordination request status changes must be recorded through its response action.");
-      return;
-    }
-
-    if (dialog.action === "advance_stage") {
-      if (!workstreamId) {
-        setDialogError("This work item is not connected to a configured workstream.");
-        return;
-      }
-      const result = await repository.completeWorkstreamStagePersisted({
-        workstreamId,
-        completedChecklists: ["completeness_checklist_passed", "reviewer_determination_recorded"],
-        providedDocs: ["required_documents_verified"],
-        actorName,
-        actorOrgName,
-      });
-      if (!result.success) {
-        setDialogError(result.error?.message ?? "The workflow did not accept this transition.");
-        return;
-      }
-      applyRepositoryWorkstream(item);
-      notify(`Stage advanced. The next configured stage is ${result.nextStageName ?? "the next workflow stage"}.`);
       return;
     }
 
@@ -1719,7 +1699,7 @@ export default function Home() {
 
   function renderDialog() {
     if (!dialog || !selectedItem) return null;
-    const requirements = getCompletionRequirements(selectedItem);
+    const requirements = getCompletionRequirements(selectedItem, repository.getWorkflowTemplates());
     const recipientPreview = getRecipientPreview(selectedItem, dialog.action, activePersona);
     const completionPreview = getCompletionPreview(selectedItem);
     const isCompletion = dialog.action === "complete_step";

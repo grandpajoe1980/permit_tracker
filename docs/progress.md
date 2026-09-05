@@ -653,3 +653,23 @@ CHECKPOINT:
 | `npm test` | PASS; build plus 358 tests passed |
 | `node --check scripts/seed-spacex-demo.mjs` | PASS |
 | `npx playwright test --project=chromium tests/e2e/supabase-persistence.spec.ts tests/e2e/document-management.spec.ts` | EXECUTED; 4 browser assertions fail because the browser session lacks the expected seeded document/queue fixture state |
+
+## Workflow repair checkpoint — September 5, 2026
+
+Fresh GitHub checkout started at `e56bdc8` on main. The live PATH database is
+`zomzacaxwqfwjstkxbpv`; its ledger includes the September 2 hardening migrations.
+The older ledger-blocked notes above are historical.
+
+- Confirmed completion currently leaves tasks open; newly generated tasks have
+  no persisted stage link. Existing workstreams also lack pinned workflows.
+- Completion now reads the pinned workflow requirements and requires explicit
+  checks. Removed hardcoded evidence submissions and the false-success path for
+  records without a workstream. Advance Stage opens the same completion dialog.
+- Journey prefers configured stages over task titles and respects the pinned
+  version even when permit catalog keys differ. Fixed task assignee readback.
+- Active work: transactional task completion, task links from queues/project,
+  stage/task handoff, and live database verification with disposable test rows.
+- Baseline TypeScript and four journey tests passed. The existing live task test
+  cannot run without local authenticated credentials; it fails at configuration
+  before performing any writes. Use isolated SQL verification instead of
+  changing existing project tasks during testing.

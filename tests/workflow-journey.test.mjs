@@ -87,3 +87,32 @@ test("renders role-safe full journey and hides internal assignees for customers"
   assert.match(html, /Technical review/);
   assert.doesNotMatch(html, /Internal Reviewer/);
 });
+
+test("pinned stages remain visible when tasks exist and terminal work never becomes current", async () => {
+  const { buildWorkflowJourney } = await vite.ssrLoadModule("/lib/workflow-journey.ts");
+  const stages = ["Intake", "Review", "Decision"].map((name, index) => ({
+    id: `s${index}`, name, customerVisibilityLabel: name, stageKey: name.toLowerCase(),
+    sequenceOrder: index + 1, requiredInputs: [],
+  }));
+  const templates = [{ permitTypeId: "a-different-catalog-key", versions: [{ id: "pinned", stages }] }];
+  const source = { workflowVersionId: "pinned", currentStageId: "s1", operationalState: "running",
+    tasks: [{ id: "t1", title: "Check one document", status: "in_progress", stageId: "s1" }],
+    stageRuns: [{ stageId: "s0", stageKey: "intake", status: "completed" }],
+  };
+  const journey = buildWorkflowJourney(source, templates);
+  assert.deepEqual(journey.stages.map((stage) => stage.label), ["Intake", "Review", "Decision"]);
+  assert.deepEqual(journey.stages.map((stage) => stage.state), ["completed", "current", "upcoming"]);
+  assert.equal(buildWorkflowJourney({ ...source, operationalState: "complete" }, templates).currentStages.length, 0);
+});
+
+test("completion checks come from the pinned version and require explicit confirmation", async () => {
+  const { getCompletionRequirements } = await vite.ssrLoadModule("/lib/operational-ux.ts");
+  const item = { id: "w", kind: "workflow", sourceWorkstream: { workflowVersionId: "v1", currentStageId: "s1" } };
+  const templates = [{ versions: [
+    { id: "v2", stages: [{ id: "s2", completionRequirements: ["New draft requirement"] }] },
+    { id: "v1", stages: [{ id: "s1", completionRequirements: ["Verify survey", "Sign determination"] }] },
+  ] }];
+  const checks = getCompletionRequirements(item, templates);
+  assert.deepEqual(checks.map((check) => check.key), ["Verify survey", "Sign determination"]);
+  assert.ok(checks.every((check) => !check.complete));
+});

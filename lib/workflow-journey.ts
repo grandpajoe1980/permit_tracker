@@ -77,6 +77,10 @@ function sameStage(a?: string, b?: string) {
 }
 
 function activeTemplateStages(source: WorkflowJourneySource, templates: WorkflowTemplateRecord[]) {
+  if (source.workflowVersionId) {
+    return templates.flatMap((template) => template.versions)
+      .find((version) => version.id === source.workflowVersionId)?.stages ?? [];
+  }
   const template = templates.find((candidate) => candidate.permitTypeId === source.permitTypeId);
   if (!template) return [];
   const version = source.workflowVersionId
@@ -101,10 +105,10 @@ function stateForTask(task: Partial<TaskRecord>, stageRun?: WorkflowJourneyStage
 export function buildWorkflowJourney(source: WorkflowJourneySource, templates: WorkflowTemplateRecord[] = []): WorkflowJourneyModel {
   const tasks = (source.tasks ?? []).filter((task) => task.id && task.title);
   const definitions = source.stages?.length ? source.stages : activeTemplateStages(source, templates);
-  const stages: WorkflowJourneyStage[] = tasks.length > 0
+  const stages: WorkflowJourneyStage[] = definitions.length === 0 && tasks.length > 0
     ? tasks.map((task, index) => {
         const definition = definitions.find((candidate) => candidate.id === task.stageId || candidate.stageKey === (task as { stageKey?: string }).stageKey) ?? definitions[index];
-        const stageRun = (source.stageRuns ?? []).find((run) => run.stageId === task.stageId || run.stageKey === (task as { stageKey?: string }).stageKey);
+        const stageRun = (source.stageRuns ?? []).find((run) => Boolean(task.stageId) && run.stageId === task.stageId);
         const state = stateForTask(task, stageRun);
         return {
           id: task.id,
@@ -151,9 +155,10 @@ export function buildWorkflowJourney(source: WorkflowJourneySource, templates: W
   );
   const firstActive = stages.findIndex((stage) => ["current", "waiting", "blocked"].includes(stage.state));
   const firstUpcoming = stages.findIndex((stage) => stage.state === "upcoming");
-  const currentStageIndex = currentByIdentity >= 0 ? currentByIdentity : firstActive >= 0 ? firstActive : firstUpcoming;
+  const isTerminal = ["complete", "cancelled"].includes(source.operationalState ?? "");
+  const currentStageIndex = isTerminal ? -1 : currentByIdentity >= 0 ? currentByIdentity : firstActive >= 0 ? firstActive : firstUpcoming;
 
-  if (tasks.length === 0 && currentStageIndex >= 0) {
+  if (definitions.length > 0 && currentStageIndex >= 0) {
     stages.forEach((stage, index) => {
       if (index < currentStageIndex && !["completed", "waived"].includes(stage.state)) stage.state = "not_recorded";
       else if (index === currentStageIndex) stage.state = source.operationalState?.includes("blocked")
