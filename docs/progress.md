@@ -1,5 +1,15 @@
 # PATH Progress
 
+## Basic admin/customer portal checkpoint — September 5, 2026
+
+- Fresh GitHub checkout from `f3e33d4`; existing workflow repairs preserved.
+- `19583c6`: visible customer Submit a Request hero, Services & Permits deep link/navigation, six demo service request starters using existing durable intake.
+- `b7d3316`: RLS-bound, membership-guarded read-only admin explorer over twenty allowlisted record types; pagination, counts, page-local search, field inspection, and current-project work-editor handoff. Existing people/workflow tools retained.
+- Verified: TypeScript PASS; focused lint PASS; 18 focused Node tests PASS; production build and build-secret scan PASS. Existing large-bundle warning remains.
+- Live authenticated database and browser tests were not run. No database migration or permission expansion was made. Service suggestions are static shortcuts, not editable database catalog entities.
+- Scope and remaining work: `docs/admin-portal-basic.md`. Full field editing, global search, and cross-project editor hydration are future work, not claimed complete.
+- GitHub push was blocked by auto-review pending explicit approval to push main. Checkpoints are committed locally; no deployment performed.
+
 ## Current status
 
 Wave 0 (truth/baseline) is complete. The repository is runnable with the

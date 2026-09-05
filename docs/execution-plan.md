@@ -1,5 +1,9 @@
 # PATH Execution Plan
 
+## Budget-limited portal slice — September 5, 2026
+
+Completed visible request CTA → dedicated customer catalog/service starters → protected admin record explorer → focused tests/build → local micro-checkpoints. See `docs/admin-portal-basic.md` for the implemented scope and limits. Existing database write paths and permissions are unchanged. Global arbitrary editing and a database-backed service catalog remain deferred; preserve the separately active workflow repair effort. Push to GitHub requires explicit approval after the tool's auto-review rejection.
+
 ## Objective
 
 Deliver the persisted customer-to-government project workflow described in
