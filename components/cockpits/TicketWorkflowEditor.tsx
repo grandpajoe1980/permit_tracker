@@ -46,7 +46,10 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
   const operationalPersona = "permissions" in persona ? persona : getOperationalPersona(persona);
   const isAdmin = isAdministrator(operationalPersona);
   const isAuthorized = isAdmin || (!operationalPersona.isCustomer && canUserModifyItem(item, operationalPersona));
-  const canEditWorkflow = item.kind === "workflow" || item.kind === "task";
+  // Process design belongs in Administration. Operational users may still
+  // inspect the pinned stages and persist assignment changes, but cannot make
+  // local-only edits that look like published workflow changes.
+  const canEditWorkflow = isAdmin && (item.kind === "workflow" || item.kind === "task");
 
   const workstream = item.workstreamId ? repository.getWorkstreamById(item.workstreamId) : undefined;
   const assignmentGroups = repository.getAssignmentGroups();
@@ -58,8 +61,9 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
       ? repository.getWorkflowTemplates().flatMap((template) => template.versions).find((version) => version.id === workstream.workflowVersionId)?.stages
       : undefined;
     if (persistedStages?.length) return persistedStages;
-    // Fallback standard 5-stage ITSM lifecycle for this workstream
-    const leadOrg = workstream?.regulatoryLead?.orgCode ?? "DOTD";
+    // Do not invent a workflow when the record has no pinned configuration.
+    return [];
+    /* const leadOrg = workstream?.regulatoryLead?.orgCode ?? "DOTD";
     return [
       {
         id: `stg-${item.id}-1`,
@@ -129,7 +133,7 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
         canRunInParallel: false,
         isMilestoneGate: true,
       },
-    ];
+    ]; */
   }, [workstream, item.id]);
 
   const [stages, setStages] = useState<WorkflowStageRecord[]>(initialStages);
@@ -293,10 +297,10 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
                  {isAdmin
-                   ? "Administrator Mode: You have full authority to modify any stage, gate, dependency, or assignee."
+                   ? "Administrator Mode: edit the published workflow in Administration, then review its pinned version here."
                    : isAuthorized
-                   ? "As an Authorized Fulfiller / Reviewer, you can modify stages, insert custom gates, and adjust routing."
-                   : "Read-only mode: You do not have permission to modify this work item. All modification controls are disabled."}
+                   ? "Operational view: assignment changes are available here; workflow design is managed in Administration."
+                   : "Read-only mode: you can inspect the pinned workflow and current assignment."}
               </CardDescription>
             </div>
           </div>
