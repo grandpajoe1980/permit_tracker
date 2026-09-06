@@ -670,7 +670,7 @@ export default function Home() {
     setProfileDraft(profileDraftForPersona(persona));
     setCurrentUser({ username: user.email ?? username, name: persona.name, agencyId: "spaceport", applicationIds: permits.map((item) => item.id), scenario: persona.role });
     setUserPermits(permits);
-    setRoute(getOperationalPersona(persona).isCustomer ? "project" : "my-work");
+    setRoute(getOperationalPersona(persona).isCustomer ? "customer-home" : "my-work");
   }
 
   async function handleDemoPersonaSelect(persona: DemoPersona) {
@@ -688,7 +688,7 @@ export default function Home() {
     setCurrentUser({ username: persona.email, name: persona.name, agencyId: "spaceport", applicationIds: finalPermits.map((item) => item.id), scenario: `${persona.role} · ${persona.scenario}` });
     setUserPermits(permits);
     setSelectedItemId(null);
-    setRoute(getOperationalPersona(persona).isCustomer ? "project" : "my-work");
+    setRoute(getOperationalPersona(persona).isCustomer ? "customer-home" : "my-work");
     setLoadingData(false);
     setShowDemoPeople(false);
     const demoPassword = persona.password;
@@ -1386,6 +1386,11 @@ export default function Home() {
     ? [{ id: "catalog", label: "Services & Permits", icon: <Landmark className="size-4" /> }, { id: "project", label: "Home / Project overview", icon: <Building2 className="size-4" /> }, { id: "my-work", label: "My actions", icon: <LayoutList className="size-4" />, count: actionableCount }, { id: "requests", label: "Requests & permits", icon: <FilePlus2 className="size-4" /> }, { id: "schedule", label: "Schedule", icon: <CalendarClock className="size-4" /> }, { id: "documents", label: "Documents", icon: <FileCheck2 className="size-4" /> }, { id: "contacts", label: "Contacts", icon: <Users className="size-4" /> }, { id: "help", label: "Help & escalation", icon: <ShieldAlert className="size-4" /> }, { id: "notifications", label: "Notifications", icon: <Bell className="size-4" /> }]
     : [{ id: "my-work", label: "My Work", icon: <LayoutList className="size-4" />, count: actionableCount }, { id: "agency-queue", label: activePersona.workspace === "supervisor" ? "Supervisor queue" : "My agency queue", icon: <Building2 className="size-4" /> }, { id: "rfis", label: "RFIs", icon: <HelpCircle className="size-4" /> }, { id: "coordination", label: "Coordination requests", icon: <Users className="size-4" /> }, { id: "documents", label: "Documents to review", icon: <FileCheck2 className="size-4" /> }, { id: "project", label: "Project", icon: <Route className="size-4" /> }, ...(canTriage ? [{ id: "intake" as Route, label: "Customer intake queue", icon: <ClipboardCheck className="size-4" /> }] : []), { id: "notifications", label: "Notifications", icon: <Bell className="size-4" /> }];
 
+  if (activePersona.isCustomer) {
+    primaryNav.splice(1, 1, { id: "customer-home", label: "Home", icon: <LayoutList className="size-4" /> });
+    primaryNav.splice(2, 0, { id: "project", label: "Project overview", icon: <Building2 className="size-4" /> });
+  }
+
   function renderWorkCard(item: OperationalWorkItem) {
     const tone = toneClasses(item.statusTone);
     const actions = getAvailableActions(item, activePersona);
@@ -1753,7 +1758,8 @@ export default function Home() {
     if (route === "detail") content = <WorkItemPage item={selectedItem} saving={saveStatus === "saving"} escalationTarget={escalationTarget} onEscalationTargetChange={setEscalationTarget} events={selectedItem ? repository.getAuditEvents().filter((event) => event.entityId === selectedItem.workstreamId || event.entityId === selectedItem.sourceId) : []}>{renderDetail()}</WorkItemPage>;
     else if (route === "my-work") content = renderMyWork();
     else if (route === "agency-queue" || route === "rfis" || route === "coordination" || route === "documents") content = activePersona.isCustomer && route === "documents" ? renderCustomerDocuments() : renderQueue(route);
-    else if (route === "project") content = activePersona.isCustomer ? renderCustomerOverview() : renderProject();
+    else if (route === "customer-home") content = renderCustomerOverview();
+    else if (route === "project") content = renderProject();
     else if (route === "requests") content = <><div className="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><Label htmlFor="request-attachment">Supporting attachment for this request (optional)</Label><Input key={requestFileInputKey} id="request-attachment" type="file" onChange={(event) => setRequestFile(event.target.files?.[0] ?? null)} className="mt-1 cursor-pointer" /><p className="mt-1 text-xs text-slate-500">Attach supporting material to the selected permit or service request.</p></div>{renderCustomerRequestCenter()}</>;
     else if (route === "schedule") content = <div className="space-y-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Read-only project delivery schedule for SpaceX. Internal government notes and control actions are not shown.</p></div><WorkstreamGraphGantt project={projectRecord} customerSafe onSelectWorkstream={(workstreamId) => openProject(workstreamId)} /></div>;
     else if (route === "contacts" || route === "profile") content = renderContacts();
