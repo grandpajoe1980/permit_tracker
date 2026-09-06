@@ -1,4 +1,5 @@
 export type AppRoute =
+  | "customer-home"
   | "my-work"
   | "agency-queue"
   | "rfis"
@@ -27,6 +28,7 @@ export type NavigationDefinition = {
 };
 
 export const NAVIGATION_DEFINITIONS: NavigationDefinition[] = [
+  { id: "customer-home", label: "Home", scope: "project", audiences: ["customer"] },
   { id: "catalog", label: "Services & Permits", scope: "support", audiences: ["customer", "staff", "supervisor", "admin"] },
   { id: "admin", label: "Administration", scope: "system", audiences: ["admin"] },
   { id: "secondary", label: "Project resources", scope: "support", audiences: ["staff", "supervisor", "admin"] },
