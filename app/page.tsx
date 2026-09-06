@@ -298,7 +298,7 @@ function CustomerRequestTriageQueue({
 }) {
   const pending = requests.filter((request) => request.status !== "in_progress" && request.status !== "resolved");
   if (pending.length === 0) return null;
-  return <Card className="mb-6 border-amber-200 bg-amber-50/60"><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Customer intake queue</CardTitle><p className="text-sm text-slate-600">Create a linked workstream only after the request is confirmed in the database.</p></CardHeader><CardContent className="space-y-3">{pending.slice(0, 8).map((request) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white p-3"><div><p className="text-sm font-black text-[#00284d]">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-slate-600">{request.requestType.replaceAll("_", " ")} · {request.submittedByName}</p></div><Button type="button" size="sm" onClick={() => onTriage(request)} className="bg-[#00284d] text-xs font-bold">Create workstream</Button></div>)}</CardContent></Card>;
+  return <Card className="mb-6 border-amber-200 bg-amber-50/60"><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Customer intake queue</CardTitle><p className="text-sm text-slate-600">Review the complete request before routing it to one or more teams. All submitted requests are shown.</p></CardHeader><CardContent className="space-y-3">{pending.map((request) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white p-3"><div><p className="text-sm font-black text-[#00284d]">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-slate-600">{request.requestType.replaceAll("_", " ")} · {request.submittedByName}</p></div><Button type="button" size="sm" onClick={() => onTriage(request)} className="bg-[#00284d] text-xs font-bold">Review and route</Button></div>)}</CardContent></Card>;
 }
 
 export default function Home() {
@@ -398,7 +398,7 @@ export default function Home() {
   });
   const selectedItem = selectedItemId ? workItems.find((item) => item.id === selectedItemId) ?? null : null;
   const queueGroups = groupMyWork(activeQueueItems);
-  const actionableCount = activeQueueItems.filter((item) => requiresCurrentUserAction(item)).length;
+  const actionableCount = queueGroups.find((group) => group.id === "needs_action")?.items.length ?? 0;
   const ragSummary = calculateRAGSummary(userPermits);
   const intakePreview = intakeText.trim() ? parsePlainEnglishIntake(intakeText) : null;
   const loggedIn = Boolean(currentUser && currentPersona);
@@ -1010,21 +1010,46 @@ export default function Home() {
   async function handleConfirmAction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaveStatus("saving");
-    if (!dialog || !selectedItem) return;
+    if (!dialog || !selectedItem) { setSaveStatus("idle"); return; }
     const item = selectedItem;
     const actorName = activePersona.name;
     const actorOrgName = activePersona.organization;
     const workstreamId = item.workstreamId ?? requestWorkstreamMap[item.sourceId];
     setDialogError("");
 
-    if (dialog.action === "complete_step") {
+    if (dialog.action === "complete_step" || dialog.action === "advance_stage") {
       const requirements = getCompletionRequirements(item, repository.getWorkflowTemplates());
       if (!requirements.every((requirement) => completionChecks[requirement.id])) {
         setDialogError("Complete each required item before sending this step forward. The missing item is shown above.");
+        setSaveStatus("error");
+        return;
+      }
+      if (item.kind === "task") {
+        const result = await repository.updateTaskPersisted({ taskId: item.sourceId, updates: { status: "completed", actualCompletionDate: new Date().toISOString().slice(0, 10) }, actorName, actorOrgName });
+        if (result.error) { setDialogError(result.error.message); setSaveStatus("error"); return; }
+        notify(`Task completed: ${item.title}. The parent stage was not advanced.`);
+        return;
+      }
+      if (item.kind === "commitment") {
+        const result = await repository.updateCommitmentStatusPersisted({ commitmentId: item.sourceId, status: "fulfilled", actorName, actorOrgName, notes: actionNote.trim() || undefined });
+        if (result.error) { setDialogError(result.error.message); setSaveStatus("error"); return; }
+        notify(`Commitment fulfilled: ${item.title}.`);
+        return;
+      }
+      if (item.kind === "customer_request") {
+        const result = await repository.updateTicketITSMStatePersisted({ ticketType: "customer_request", ticketId: item.sourceId, targetState: "resolved", actorName, actorUserId: actorUserId(), reason: actionNote.trim() || "Request outcome recorded." });
+        if (result.error || !result.data) { setDialogError(result.error?.message ?? "The request outcome was not confirmed by the database."); setSaveStatus("error"); return; }
+        notify(`Request outcome recorded for ${item.title}.`);
+        return;
+      }
+      if (item.kind !== "workflow") {
+        setDialogError("This action is not available for the selected record type.");
+        setSaveStatus("error");
         return;
       }
       if (!workstreamId) {
         setDialogError("This item has no linked workflow. Open its record to record the outcome.");
+        setSaveStatus("error");
         return;
       }
       const result = await repository.completeWorkstreamStagePersisted({
@@ -1195,7 +1220,7 @@ export default function Home() {
         setDialogError("This work item is not connected to a configured workstream.");
         return;
       }
-      const transferResult = await repository.transferWorkstreamPersisted({ workstreamId, transferType, targetName: "Maya Chen", actorName, actorOrgName, note: actionNote.trim() });
+      const transferResult = await repository.transferWorkstreamPersisted({ workstreamId, transferType, targetName: item.nextOwner ?? "Configured supervisor", actorName, actorOrgName, note: actionNote.trim() });
       if (!transferResult.success) {
         setDialogError(transferResult.error?.message ?? "The transfer request was not confirmed by the database.");
         return;
@@ -1671,6 +1696,7 @@ export default function Home() {
 
     const linkedWorkstream = selectedItem.workstreamId ? repository.getWorkstreamById(selectedItem.workstreamId) : undefined;
     const docsToDisplay = resolveWorkItemDocuments(selectedItem, repository.getDocuments());
+    const assignmentLabel = customer ? "Shared project status" : selectedItem.assignedUserId ? (selectedItem.ownerName || "Assigned worker") : selectedItem.assignmentGroupName ? `Unassigned · ${selectedItem.assignmentGroupName}` : selectedItem.ownerName || "Unassigned";
 
     return <div className="space-y-5"><nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500"><button type="button" onClick={() => navigate("my-work")} className="text-teal-800 underline-offset-2 hover:underline">My Work</button><span aria-hidden="true">›</span><button type="button" onClick={() => openProject()} className="text-teal-800 underline-offset-2 hover:underline font-bold" title="Go to project page">{PROJECT_DISPLAY_NAME}</button><span aria-hidden="true">›</span><button type="button" onClick={() => openProject(selectedItem.workstreamId)} className="text-teal-800 underline-offset-2 hover:underline" title="View workstream on project page">{selectedItem.workstreamTitle}</button><span aria-hidden="true">›</span><span className="text-slate-800">{selectedItem.title}</span></nav>
       <section className="rounded-2xl border border-teal-300 bg-white p-5 shadow-md sm:p-7"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-teal-800">{customer ? "PROJECT STATUS" : "YOUR ASSIGNMENT"}</p><h1 className="mt-2 max-w-3xl text-2xl font-black tracking-tight text-[#00284d] outline-none sm:text-4xl">{customer ? sanitizeCustomerItem(selectedItem).title : selectedItem.title}</h1><button type="button" onClick={() => openProject(selectedItem.workstreamId)} className="mt-2 text-sm font-semibold text-slate-600 hover:text-teal-800 hover:underline text-left cursor-pointer transition-colors" title="View workstream on project page">{selectedItem.workstreamTitle}</button></div><div className="flex items-center gap-2"><span className={`rounded-full border px-3 py-1.5 text-xs font-black uppercase ${toneClasses(selectedItem.statusTone).badge}`}>{selectedItem.statusLabel}</span><Button type="button" variant="outline" size="sm" onClick={() => openProject(selectedItem.workstreamId)} className="text-xs font-bold text-teal-800 border-teal-300 hover:bg-teal-50 gap-1.5"><Building2 className="size-3.5" /> Project Page</Button></div></div><div className="mt-6 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-4"><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Assignment</p><p className="mt-1 font-black text-[#00284d]">{customer ? "Shared project status" : "You own this step"}</p></div><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Due</p><p className="mt-1 font-black text-[#00284d]">{formatDate(selectedItem.dueDate)}</p></div><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Critical path</p><p className="mt-1 font-black text-[#00284d]">{selectedItem.isCriticalPath ? "Yes" : "No"}</p></div><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Float remaining</p><p className="mt-1 font-black text-[#00284d]">{selectedItem.isCriticalPath ? "3 days" : "Within float"}</p></div></div>{!customer && actions.length > 0 && <div className="sticky bottom-3 z-10 mt-6 flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur" aria-label="Work actions"><span className="mr-1 self-center text-xs font-black uppercase tracking-wider text-slate-500">Actions</span>{actions.map((action, index) => {
@@ -1727,7 +1753,7 @@ export default function Home() {
     if (route === "detail") content = <WorkItemPage item={selectedItem} saving={saveStatus === "saving"} escalationTarget={escalationTarget} onEscalationTargetChange={setEscalationTarget} events={selectedItem ? repository.getAuditEvents().filter((event) => event.entityId === selectedItem.workstreamId || event.entityId === selectedItem.sourceId) : []}>{renderDetail()}</WorkItemPage>;
     else if (route === "my-work") content = renderMyWork();
     else if (route === "agency-queue" || route === "rfis" || route === "coordination" || route === "documents") content = activePersona.isCustomer && route === "documents" ? renderCustomerDocuments() : renderQueue(route);
-    else if (route === "project") content = renderProject();
+    else if (route === "project") content = activePersona.isCustomer ? renderCustomerOverview() : renderProject();
     else if (route === "requests") content = <><div className="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><Label htmlFor="request-attachment">Supporting attachment for this request (optional)</Label><Input key={requestFileInputKey} id="request-attachment" type="file" onChange={(event) => setRequestFile(event.target.files?.[0] ?? null)} className="mt-1 cursor-pointer" /><p className="mt-1 text-xs text-slate-500">Attach supporting material to the selected permit or service request.</p></div>{renderCustomerRequestCenter()}</>;
     else if (route === "schedule") content = <div className="space-y-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Read-only project delivery schedule for SpaceX. Internal government notes and control actions are not shown.</p></div><WorkstreamGraphGantt project={projectRecord} customerSafe onSelectWorkstream={(workstreamId) => openProject(workstreamId)} /></div>;
     else if (route === "contacts" || route === "profile") content = renderContacts();
