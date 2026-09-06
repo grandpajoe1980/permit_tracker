@@ -413,7 +413,7 @@ function documentToWorkItem(document: DocumentRecord, persona: OperationalPerson
     whyHere: `You are reviewing ${currentVersion.versionTag} because ${review.reviewingOrgCode} signoff is required for this exact version.`,
     whatToDo: "Review this revision and approve, approve with comments, or request a revision.",
     removesFromQueue: "Record a decision against this exact document version.",
-    dueDate: AS_OF_DATE,
+    dueDate: undefined,
     ageLabel: `${daysBetween(currentVersion.uploadedAt.slice(0, 10))} days since upload`,
     scheduleImpact: "Document gate · downstream review waits for this decision",
     statusLabel: "Awaiting signoff",
@@ -508,7 +508,7 @@ function customerRequestToWorkItem(
       ? "Review the customer's request, accept into workflow, or request clarification."
       : "Complete the technical action and notify the customer.",
     removesFromQueue: isSubmitter ? "Providing the requested information" : "Accepting into workflow or completing the request",
-    dueDate: request.desiredDate ?? new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0],
+    dueDate: request.desiredDate,
     ageLabel: `Submitted ${request.createdAt ? new Date(request.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "recently"}`,
     scheduleImpact: request.blocksActiveWork ? "Blocks active SpaceX project work" : "Routine customer coordination",
     nextHandoff: isSubmitter ? "State Project Office Review" : `${assignedAgency} Technical Reviewer`,
