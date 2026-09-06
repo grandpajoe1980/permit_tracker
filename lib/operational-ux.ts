@@ -361,24 +361,26 @@ function coordinationToWorkItem(request: CoordinationRequestRecord, persona: Ope
 function rfiToWorkItem(rfi: RFIRecord, persona: OperationalPersona): OperationalWorkItem {
   const response = rfi.responses?.find((entry) => !entry.reviewDecision);
   const forCustomer = persona.isCustomer && sameAgency(rfi.recipientOrgCode, "SPACEX");
+  const responseSubmitted = Boolean(response);
+  const waitingForApplicant = !responseSubmitted && !["accepted", "closed", "cancelled"].includes(rfi.status);
   return {
     id: rfi.code,
     sourceId: rfi.id,
     kind: "rfi",
-    title: forCustomer ? `Action required · ${rfi.title}` : response ? `RFI response ready for review · ${rfi.title}` : rfi.title,
+    title: forCustomer && waitingForApplicant ? `Action required · ${rfi.title}` : responseSubmitted ? `RFI response ready for review · ${rfi.title}` : rfi.title,
     projectName: PROJECT_NAME,
     workstreamId: rfi.workstreamId,
     workstreamTitle: rfi.workstreamTitle,
-    whyHere: forCustomer ? `Visible because ${rfi.requestingOrgCode} requested information from SpaceX.` : `Visible because ${rfi.requestingOrgCode} owns the review and ${response ? "a response is ready for your decision" : "the RFI affects your workstream"}.`,
-    whatToDo: forCustomer ? `Respond with the requested information by ${humanDate(rfi.responseDeadline)}.` : response ? "Accept the response or request clarification before resuming the review." : "Monitor the applicant response and accept it when received.",
+    whyHere: forCustomer ? `Visible because ${rfi.requestingOrgCode} requested information from SpaceX.` : `Visible because ${rfi.requestingOrgCode} owns the review and ${responseSubmitted ? "a response is ready for your decision" : "the RFI affects your workstream"}.`,
+    whatToDo: forCustomer && waitingForApplicant ? `Respond with the requested information by ${humanDate(rfi.responseDeadline)}.` : responseSubmitted ? "Accept the response or request clarification before resuming the review." : "No action required from you right now; monitor the applicant response.",
     removesFromQueue: forCustomer ? "Submit the response and required documents." : "Accept the response, request clarification, or record the review decision.",
     dueDate: rfi.responseDeadline,
     ageLabel: `${daysBetween(rfi.issuedDate)} days since issued`,
-    waitLabel: forCustomer ? "Waiting on SpaceX" : "Response received",
+    waitLabel: forCustomer && waitingForApplicant ? "Waiting on SpaceX" : responseSubmitted ? undefined : "Waiting on applicant",
     scheduleImpact: rfi.clockImpact === "clock_paused" ? `Clock paused · ${rfi.scheduleImpactDays} days added to forecast` : "Review clock running",
-    statusLabel: response ? "Response ready" : rfi.status.replaceAll("_", " "),
-    statusTone: response ? "amber" : forCustomer ? "red" : "blue",
-    priorityScore: response ? 94 : forCustomer ? 88 : 35,
+    statusLabel: responseSubmitted ? "Response ready" : rfi.status.replaceAll("_", " "),
+    statusTone: responseSubmitted ? "amber" : forCustomer && waitingForApplicant ? "red" : "blue",
+    priorityScore: responseSubmitted ? 94 : forCustomer && waitingForApplicant ? 88 : 35,
     isCriticalPath: rfi.clockImpact === "clock_paused",
     ownerName: forCustomer ? rfi.requestingOrgCode : "Assigned reviewer",
     ownerOrganization: rfi.requestingOrgCode,
@@ -389,9 +391,9 @@ function rfiToWorkItem(rfi: RFIRecord, persona: OperationalPersona): Operational
     sourceRfi: rfi,
     hasRfiResponse: Boolean(response),
     customerVisibleSummary: forCustomer ? `Action required from SpaceX: ${rfi.questionText}` : "A response is available for reviewer acceptance.",
-    requiresCurrentUserAction: forCustomer || Boolean(response && persona.workspace !== "customer"),
-    requiresOrganizationAction: forCustomer || sameAgency(rfi.requestingOrgCode, persona.agencyCode),
-    visibilityOnly: !forCustomer && !response,
+    requiresCurrentUserAction: (forCustomer && waitingForApplicant) || Boolean(responseSubmitted && persona.workspace !== "customer"),
+    requiresOrganizationAction: (forCustomer && waitingForApplicant) || sameAgency(rfi.requestingOrgCode, persona.agencyCode),
+    visibilityOnly: (!forCustomer || !waitingForApplicant) && !responseSubmitted,
   };
 }
 
@@ -652,7 +654,7 @@ export function getAvailableActions(item: OperationalWorkItem, persona: Operatio
     actions.push("request_information", "add_note");
   } else if (item.kind === "coordination") {
     if (item.statusTone !== "green") {
-      actions.push("update_status", "complete_step", "mark_blocked");
+      actions.push("mark_blocked");
     }
     actions.push("request_information", "add_note");
   } else if (item.kind === "workflow" || item.kind === "task") {
