@@ -13,7 +13,7 @@ export default async function WorkstreamRoute({ params }: { params: Promise<{ pr
   const client = await createRequestSupabaseClient();
   if (!client) return <main className="mx-auto max-w-4xl p-8"><h1 className="text-2xl font-bold">Supabase is not configured</h1></main>;
   const { data: user } = await client.auth.getUser();
-  if (!user.user) return <main className="mx-auto max-w-4xl p-8"><h1 className="text-2xl font-bold">Sign in required</h1></main>;
+  if (!user.user) return <main className="mx-auto max-w-4xl space-y-4 p-8"><h1 className="text-2xl font-bold">Sign in required</h1><p className="text-slate-600">Sign in to view this authorized workstream. After signing in, return to this URL to continue.</p><Link href={`/?view=project&workstream=${encodeURIComponent(workstreamId)}`} className="inline-flex text-sm font-bold text-teal-800 hover:underline">Open PATH sign-in</Link></main>;
 
   const project = await resolveProjectRoute(client, projectNumber);
   if (!project) return <main className="mx-auto max-w-4xl space-y-4 p-8"><h1 className="text-2xl font-bold">Project not found</h1><p className="text-slate-600">The requested project could not be found.</p><Link href="/" className="inline-flex text-sm font-bold text-teal-800 hover:underline">Back to Projects</Link></main>;
