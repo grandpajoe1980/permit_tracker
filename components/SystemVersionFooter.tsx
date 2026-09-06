@@ -3,7 +3,7 @@
 import React from "react";
 import { BUILD_INFO } from "@/lib/version";
 import { PRODUCT_NAME, PROGRAM_SUBTITLE } from "@/lib/product-copy";
-import { GitBranch, GitCommit, Clock3, Database, ShieldCheck, ExternalLink } from "lucide-react";
+import { GitCommit, Clock3, Database, ShieldCheck, ExternalLink } from "lucide-react";
 
 export function SystemVersionFooter() {
   return (
@@ -50,7 +50,7 @@ export function SystemVersionFooter() {
           </div>
           <span className="text-slate-400 hidden md:inline">|</span>
           <span className="text-slate-500 text-[11px]">{PROGRAM_SUBTITLE}</span>
-          <span className="text-slate-500 text-[11px]">Environment: {BUILD_INFO.environment ?? "production"} · Health: Connected</span>
+          <span className="text-slate-500 text-[11px]">Environment: {BUILD_INFO.environment ?? "production"}</span>
         </div>
       </div>
     </footer>
