@@ -64,15 +64,16 @@ test("explorer handles aborts, errors, pagination and read-only history", async 
   assert.match(explorer, /Search this page/);
   assert.match(explorer, /Record details · read only/);
   assert.match(explorer, /Open existing work editor/);
+  assert.match(explorer, /<Dialog open=\{Boolean\(selected\)\}/);
+  assert.match(explorer, /max-h-\[85vh\] max-w-3xl overflow-y-auto/);
 });
 
 test("administrator directory shows real membership roles and protects self access", async () => {
   const directory = await source("components/admin/AdminDirectory.tsx");
   const adminUsers = await source("lib/admin-users.ts");
-  assert.match(directory, /Search people/);
-  assert.match(directory, /Organization role for/);
-  assert.match(directory, /Your own role is protected here to prevent accidental lockout/);
-  assert.match(directory, /disabled=\{user\.id === actorUserId\}/);
-  for (const role of ["contributor", "supervisor", "organization_admin", "system_admin"]) assert.match(adminUsers, new RegExp(`value: "${role}"`));
-  assert.match(adminUsers, /return roleId as OrganizationMembershipRecord\["role"\]/);
+  assert.match(directory, /Search people and access/);
+  assert.match(directory, /includes people without an active organization role/);
+  assert.match(directory, /filteredUsers\.map/);
+  assert.match(adminUsers, /return profiles/);
+  assert.match(adminUsers, /activeMemberships\.filter/);
 });

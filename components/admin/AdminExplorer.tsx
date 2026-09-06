@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ADMIN_RESOURCES, type AdminResource } from "@/lib/admin-resources";
 
@@ -49,11 +50,6 @@ export function AdminExplorer({ onOpenWork }: { onOpenWork?: (resource: string, 
       {!filtered.length && <p className="rounded-lg bg-slate-50 p-5 text-sm text-slate-600">No matching records on this page.</p>}
       <div className="flex gap-2"><Button variant="outline" disabled={page === 0} onClick={() => { beginLoad(); setPage(p => p - 1); }}>Previous</Button><Button variant="outline" disabled={(page + 1) * 50 >= total} onClick={() => setPage(p => p + 1)}>Next</Button></div>
     </>}
-    {selected && <section aria-label="Record details" className="rounded-xl border border-teal-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-lg font-bold text-[#00284d]">Record details · read only</h3><Button variant="outline" onClick={() => setSelected(null)}>Close details</Button></div>
-      <p className="my-3 text-sm text-slate-600">Use existing work and configuration screens for audited edits. History and published versions are not editable here.</p>
-      {onOpenWork && <Button onClick={() => { if (!onOpenWork(resource, String(selected.id))) setNotice("This record has no work editor in the current project. Use the configuration tools below, or inspect its fields here."); }}>Open existing work editor</Button>}
-      {notice && <p role="status" className="mt-3 text-sm text-amber-900">{notice}</p>}
-      <dl className="mt-4 space-y-3">{Object.entries(selected).map(([key, field]) => <div key={key} className="border-t border-slate-200 pt-2"><dt className="text-sm font-bold text-slate-600">{key.replaceAll("_", " ")}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800">{typeof field === "object" && field !== null ? JSON.stringify(field, null, 2) : String(field ?? "Not set")}</dd></div>)}</dl>
-    </section>}
+    <Dialog open={Boolean(selected)} onOpenChange={(open) => { if (!open) setSelected(null); }}><DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto"><DialogHeader><DialogTitle>Record details · read only</DialogTitle><DialogDescription>Use existing work and configuration screens for audited edits. History and published versions are not editable here.</DialogDescription></DialogHeader>{selected && <><div className="flex flex-wrap gap-2">{onOpenWork && <Button onClick={() => { if (!onOpenWork(resource, String(selected.id))) setNotice("This record has no work editor in the current project. Use the configuration tools below, or inspect its fields here."); }}>Open existing work editor</Button>}</div>{notice && <p role="status" className="text-sm text-amber-900">{notice}</p>}<dl className="space-y-3">{Object.entries(selected).map(([key, field]) => <div key={key} className="border-t border-slate-200 pt-2"><dt className="text-sm font-bold text-slate-600">{key.replaceAll("_", " ")}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800">{typeof field === "object" && field !== null ? JSON.stringify(field, null, 2) : String(field ?? "Not set")}</dd></div>)}</dl></>}</DialogContent></Dialog>
   </section>;
 }

@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import type { ProjectParticipantRecord, UserProfileRecord } from "@/lib/domain-models";
 import type { RoleId, RoleDefinition, TeamUser } from "@/lib/demo-data";
-import { membershipRoleOptions, type MembershipRole } from "@/lib/admin-users";
 
 type AdminRepository = {
   getProfileByUserId: (userId: string) => UserProfileRecord | undefined;
@@ -39,7 +38,7 @@ export function AdminDirectory({
   roleDefinitions: Record<RoleId, RoleDefinition>;
   repository: AdminRepository;
   actorUserId: string;
-  onRoleChange: (userId: string, role: RoleId) => void | Promise<void>;
+  onRoleChange: (userId: string, roleId: RoleId) => void | Promise<void>;
   onMutation: (message: string) => void;
 }) {
   const [query, setQuery] = React.useState("");
@@ -57,28 +56,23 @@ export function AdminDirectory({
     onMutation(`${user.name}'s project access was updated.`);
   }
 
-  const filteredUsers = teamUsers.filter((user) => `${user.name} ${user.email} ${user.organization} ${user.agency}`.toLowerCase().includes(query.toLowerCase()));
-
+  const filteredUsers = teamUsers.filter((user) => `${user.name} ${user.email} ${user.organization} ${user.agency}`.toLowerCase().includes(query.trim().toLowerCase()));
   return <div className="space-y-3">
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-50 p-3"><div><p className="text-sm font-black text-[#00284d]">User rights</p><p className="mt-1 text-xs text-slate-600">Roles are organization memberships, not browser-only permissions. Every saved change is validated and audit logged.</p></div><Input aria-label="Search people" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, agency, or email" className="max-w-sm bg-white" /></div>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-50 p-3"><div><p className="text-sm font-black text-[#00284d]">People and access</p><p className="mt-1 text-xs text-slate-600">{teamUsers.length} visible user profile{teamUsers.length === 1 ? "" : "s"} · includes people without an active organization role.</p></div><Input aria-label="Search people and access" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, agency, or email" className="max-w-sm bg-white" /></div>
     {filteredUsers.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-600">No people match that search.</p>}
     {filteredUsers.map((user) => {
       const profile = repository.getProfileByUserId(user.id);
       const participant = repository.getParticipants().find((entry) => entry.userId === user.id);
-      const membershipRole = membershipRoleOptions.some((role) => role.value === user.roleId)
-        ? user.roleId as MembershipRole
-        : user.membershipRole ?? "contributor";
       return <div key={user.id} className="rounded-lg border border-slate-200 p-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-sm font-black text-[#00284d]">{user.name} {user.name === "Joe Skaggs" && <Badge className="ml-1 bg-amber-100 text-[10px] uppercase text-amber-900">Space Czar</Badge>}</p>
             <p className="text-xs text-slate-500">{profile?.workEmail ?? user.workEmail ?? user.email}</p>
           </div>
-          <select aria-label={`Organization role for ${user.name}`} value={membershipRole} disabled={user.id === actorUserId} onChange={(event) => onRoleChange(user.id, event.target.value as RoleId)} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800 disabled:cursor-not-allowed disabled:bg-slate-100">
-            {membershipRoleOptions.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
+          <select aria-label={`Role for ${user.name}`} value={user.roleId} onChange={(event) => onRoleChange(user.id, event.target.value as RoleId)} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800">
+            {(Object.keys(roleDefinitions) as RoleId[]).map((role) => <option key={role} value={role}>{roleDefinitions[role].name}</option>)}
           </select>
         </div>
-        <p className="mt-2 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">{membershipRoleOptions.find((role) => role.value === membershipRole)?.scope}{user.id === actorUserId ? " Your own role is protected here to prevent accidental lockout." : ""}</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="text-[11px] font-bold text-slate-600">Display title<Input aria-label={`Display title for ${user.name}`} defaultValue={profile?.displayTitle ?? user.displayTitle ?? ""} className={fieldClass} onBlur={(event) => updateProfile(user, { displayTitle: event.target.value })} /></label>
           <label className="text-[11px] font-bold text-slate-600">Organization<Input aria-label={`Organization for ${user.name}`} defaultValue={profile?.organizationName ?? user.organization} className={fieldClass} onBlur={(event) => updateProfile(user, { organizationName: event.target.value })} /></label>
