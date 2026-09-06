@@ -68,7 +68,7 @@ export function LoginPage({
             {loginError && <p id="login-error" role="alert" aria-live="assertive" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-900">{loginError}</p>}
             <div className="border-t border-slate-100 pt-4">
               <Button id="demo-login-trigger" type="button" variant="outline" aria-expanded={showDemoPeople} className="w-full justify-between border-teal-300 bg-teal-50 font-bold text-teal-950" onClick={onToggleDemoPeople}><span className="flex items-center gap-2"><Sparkles className="size-4 text-teal-700" aria-hidden="true" /> Quick Demo Sign-In</span><ChevronDown className={`size-4 transition-transform ${showDemoPeople ? "rotate-180" : ""}`} aria-hidden="true" /></Button>
-              {showDemoPeople && <div className="mt-3 space-y-2" aria-label="Demo personas">
+              {showDemoPeople && <div className="mt-3 max-h-[52vh] space-y-2 overflow-y-auto pr-1" aria-label="Demo personas">
                 {demoPersonas.map((persona) => <button key={persona.id} id={`demo-persona-${demoPersonaDomId(persona)}`} type="button" onClick={() => void onDemoPersonaSelect(persona)} className="flex w-full items-start justify-between rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-teal-500 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><span><span className="block text-sm font-black text-[#00284d]">{persona.name}</span><span className="block text-xs font-semibold text-slate-500">{persona.role}</span></span><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase text-slate-600">{persona.badge}</span></button>)}
               </div>}
             </div>

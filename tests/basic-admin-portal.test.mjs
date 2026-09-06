@@ -45,6 +45,14 @@ test("visible home CTA precedes project content", async () => {
   assert.match(home, /view=catalog/);
 });
 
+test("quick demo sign-in includes executive sponsor personas", async () => {
+  const login = await source("components/path/LoginPage.tsx");
+  const data = await source("lib/demo-data.ts");
+  for (const name of ["Elon Musk", "Jeff Landry", "Susan Bourgeois"]) assert.match(data, new RegExp(`name: "${name}"`));
+  assert.match(login, /max-h-\[52vh\] space-y-2 overflow-y-auto/);
+  assert.match(login, /demoPersonas\.map/);
+});
+
 test("service starters carry a title into the existing persisted intake", async () => {
   const services = await source("components/path/customer/GovernmentServices.tsx");
   const page = await source("app/page.tsx");
