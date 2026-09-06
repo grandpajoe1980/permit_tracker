@@ -574,6 +574,69 @@ class ProjectDeliveryRepository {
     return { data: memberships.find((membership) => membership.id === result.data?.id) ?? result.data, error: null };
   }
 
+  async manageAssignmentGroupPersisted(params: {
+    action: "create" | "update" | "deactivate";
+    id?: string;
+    orgCode?: string;
+    name?: string;
+    description?: string;
+    leadUserId?: string;
+    active?: boolean;
+    actorUserId?: string;
+  }): Promise<{ data: AssignmentGroupRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      if (params.action === "create") {
+        if (!params.orgCode || !params.name) return { data: null, error: new Error("Organization code and team name are required.") };
+        const lead = params.leadUserId ? this.getProfileByUserId(params.leadUserId) : undefined;
+        return { data: this.createAssignmentGroup({ orgCode: params.orgCode, name: params.name, description: params.description ?? "", leadUserId: params.leadUserId, leadUserName: lead?.fullName, active: params.active }), error: null };
+      }
+      const group = params.id ? this.getAssignmentGroupById(params.id) : undefined;
+      if (!group) return { data: null, error: new Error("Assignment group not found.") };
+      const lead = params.leadUserId ? this.getProfileByUserId(params.leadUserId) : undefined;
+      Object.assign(group, {
+        ...(params.orgCode !== undefined ? { orgCode: params.orgCode } : {}),
+        ...(params.name !== undefined ? { name: params.name } : {}),
+        ...(params.description !== undefined ? { description: params.description } : {}),
+        ...(params.leadUserId !== undefined ? { leadUserId: params.leadUserId, leadUserName: lead?.fullName } : {}),
+        active: params.action === "deactivate" ? false : (params.active ?? group.active),
+        updatedAt: new Date().toISOString(),
+      });
+      return { data: group, error: null };
+    }
+    const result = await mutateManageAssignmentGroup(params);
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Assignment group update was not confirmed by the database.") };
+    this.assignmentGroups = await fetchAssignmentGroups();
+    return { data: this.getAssignmentGroupById(result.data.id) ?? result.data, error: null };
+  }
+
+  async manageAssignmentGroupMembershipPersisted(params: {
+    action: "upsert" | "delete";
+    assignmentGroupId: string;
+    userId: string;
+    role?: AssignmentGroupMembershipRecord["role"];
+  }): Promise<{ data: AssignmentGroupMembershipRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      const existingIndex = this.assignmentGroupMemberships.findIndex((entry) => entry.assignmentGroupId === params.assignmentGroupId && entry.userId === params.userId);
+      if (params.action === "delete") {
+        if (existingIndex < 0) return { data: null, error: new Error("Team membership not found.") };
+        this.assignmentGroupMemberships.splice(existingIndex, 1);
+        return { data: null, error: null };
+      }
+      const profile = this.getProfileByUserId(params.userId);
+      const saved = existingIndex >= 0
+        ? Object.assign(this.assignmentGroupMemberships[existingIndex], { role: params.role ?? "member", updatedAt: new Date().toISOString() })
+        : this.addAssignmentGroupMember({ assignmentGroupId: params.assignmentGroupId, userId: params.userId, role: params.role ?? "member", userName: profile?.fullName, userEmail: profile?.workEmail });
+      return { data: saved, error: null };
+    }
+    const result = await mutateManageAssignmentGroupMembership(params);
+    if (result.error) return { data: null, error: result.error };
+    this.assignmentGroupMemberships = await fetchAssignmentGroupMemberships();
+    if (params.action === "delete") return { data: null, error: null };
+    return { data: this.assignmentGroupMemberships.find((entry) => entry.assignmentGroupId === params.assignmentGroupId && entry.userId === params.userId) ?? null, error: null };
+  }
+
   // ==========================================
   // AUTHORITATIVE MUTATION METHODS
   // ==========================================

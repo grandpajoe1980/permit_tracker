@@ -85,3 +85,18 @@ test("administrator directory shows real membership roles and protects self acce
   assert.match(adminUsers, /return profiles/);
   assert.match(adminUsers, /activeMemberships\.filter/);
 });
+
+test("administrator directory manages searchable assignment groups and queue membership", async () => {
+  const directory = await source("components/admin/AdminDirectory.tsx");
+  const repository = await source("lib/repository.ts");
+  assert.match(directory, /Teams & assignment groups/);
+  assert.match(directory, /Search teams and assignment groups/);
+  assert.match(directory, /Create team/);
+  assert.match(directory, /Eligible members/);
+  assert.match(directory, /manageAssignmentGroupPersisted/);
+  assert.match(directory, /manageAssignmentGroupMembershipPersisted/);
+  assert.match(repository, /async manageAssignmentGroupPersisted/);
+  assert.match(repository, /async manageAssignmentGroupMembershipPersisted/);
+  assert.match(repository, /mutateManageAssignmentGroup/);
+  assert.match(repository, /mutateManageAssignmentGroupMembership/);
+});
