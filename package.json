@@ -16,6 +16,7 @@
     "supabase:probe": "node scripts/supabase-probe.mjs",
     "supabase:rls": "node scripts/test-supabase-rls-isolation.mjs",
     "supabase:seed:spacex": "node scripts/seed-spacex-demo.mjs",
+    "supabase:seed:scenarios": "node scripts/seed-demo-scenarios.mjs",
     "security:scan": "node scripts/scan-build-secrets.mjs",
     "db:generate": "drizzle-kit generate"
   },

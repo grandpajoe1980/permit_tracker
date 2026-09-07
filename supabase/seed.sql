@@ -1,6 +1,8 @@
 -- Repeatable baseline for the self-contained Louisiana space-development demo.
 -- Auth-linked personas and project participants are created by
 -- scripts/seed-spacex-demo.mjs because they require auth.users IDs.
+-- The non-destructive lifecycle scenarios used by the current development plan
+-- are created by scripts/seed-demo-scenarios.mjs after this baseline exists.
 insert into public.organizations (code, name, organization_type, jurisdiction_level, active)
 values
   ('SPACEPORT', 'Space Exploration Technologies Corp.', 'applicant', 'external_partner', true),
