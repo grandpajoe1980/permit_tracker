@@ -1395,6 +1395,23 @@ export async function mutateCreateCoordinationRequest(params: {
   };
 }
 
+export async function mutateUpdateCoordinationRequest(params: {
+  requestId: string;
+  requestCode: string;
+  status: "in_review" | "concurred" | "objection_raised" | "closed";
+  responseSummary: string;
+  actorName: string;
+  actorOrgName: string;
+}): Promise<MutationResult<CoordinationRequestRecord>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const now = new Date().toISOString();
+  const { data, error } = await client.from("coordination_requests").update({ status: params.status, response_summary: params.responseSummary, response_date: now.split("T")[0], concurred_at: params.status === "concurred" ? now : null }).or(`id.eq.${params.requestId},code.eq.${params.requestCode}`).select().single();
+  if (error || !data) return { data: null, error: new Error(error?.message ?? "Coordination response was not confirmed by the database.") };
+  await insertAuditEvent({ entityType: "coordination_request", entityId: params.requestCode, actorName: params.actorName, actorOrgName: params.actorOrgName, actionType: "response_recorded", newValue: params.status, reason: params.responseSummary });
+  return { data: { id: String(data.id), code: String(data.code), workstreamId: String(data.workstream_id), workstreamTitle: String(data.workstream_title), requestingOrgId: String(data.requesting_org_id), requestingOrgCode: String(data.requesting_org_code), targetOrgId: String(data.target_org_id), targetOrgCode: String(data.target_org_code), requestingUserName: String(data.requesting_user_name), assignedToUserName: data.assigned_to_user_name ? String(data.assigned_to_user_name) : undefined, title: String(data.title), needDescription: String(data.need_description), requestedDate: String(data.requested_date), dueDate: String(data.due_date), responseDate: data.response_date ? String(data.response_date) : undefined, attachedDocumentVersionIds: (data.attached_document_version_ids ?? []) as string[], blocksWorkstreamTitle: String(data.blocks_workstream_title), priority: String(data.priority) as CoordinationRequestRecord["priority"], status: params.status, responseSummary: params.responseSummary, concurredAt: data.concurred_at ? String(data.concurred_at) : undefined }, error: null };
+}
+
 export async function mutateCreateCommitment(params: {
   id: string;
   workstreamId: string;
