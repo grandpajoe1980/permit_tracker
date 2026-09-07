@@ -620,6 +620,9 @@ export function WorkstreamGraphGantt({
                             {stateConfig.shortLabel}
                           </span>
                         </div>
+                        <p className="mt-1 truncate text-[11px] text-slate-500" title={`Current owner: ${ws.regulatoryLead.assignedReviewerName}`}>
+                          Owner: {ws.regulatoryLead.assignedReviewerName || "Unassigned"} · {ws.regulatoryLead.orgCode}
+                        </p>
                       </div>
 
                       {/* Right Timeline Column with Traditional Bars */}
