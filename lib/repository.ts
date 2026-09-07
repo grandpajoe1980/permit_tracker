@@ -98,12 +98,14 @@ import {
   mutateCreateRFI,
   mutateCreateWorkstreamFromRequest,
   mutateEscalateWorkstream,
+  mutateLinkCustomerRequestToWorkstream,
   mutateManageAssignmentGroup,
   mutateManageAssignmentGroupMembership,
   mutateMarkWorkstreamBlocked,
   mutateSetOrganizationMemberRole,
   mutateSetTicketPriority,
   mutateSubmitRFIResponse,
+  mutateRequestCustomerIntakeClarification,
   mutateTriageCustomerRequest,
   mutateTransferWorkstream,
   mutateUpdateExternalFiling,
@@ -878,7 +880,10 @@ class ProjectDeliveryRepository {
       permitTypeId?: string;
       leadOrgCode?: string;
       leadOrgName?: string;
+      assignmentGroupId?: string;
+      assignedToUserId?: string;
       workflowVersionId?: string;
+      targetDate?: string;
     }>;
   }): Promise<{ data: { requestId: string; workstreamIds: string[]; workstreamCodes: string[] } | null; error: Error | null }> {
     if (!isSupabaseConfigured()) return { data: null, error: new Error("Supabase is required for atomic customer triage.") };
@@ -886,6 +891,49 @@ class ProjectDeliveryRepository {
     if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Customer triage was not confirmed by the database.") };
     await this.hydrateFromSupabase();
     return { data: result.data, error: null };
+  }
+
+  async requestCustomerIntakeClarificationPersisted(params: {
+    requestId: string;
+    notes: string;
+  }): Promise<{ data: CustomerRequestRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required for intake clarification.") };
+      const request = this.customerRequests.find((entry) => entry.id === params.requestId);
+      if (!request) return { data: null, error: new Error("Customer request not found.") };
+      request.status = "pending_customer";
+      request.itsmState = "pending_customer";
+      request.updatedAt = new Date().toISOString();
+      this.auditEvents.unshift(createAuditEvent({ entityType: "customer_request", entityId: request.id, actorName: "PATH coordinator", actorOrgName: "State Project Office", actionType: "customer_intake_clarification_requested", oldValue: "submitted", newValue: "pending_customer", reason: params.notes }));
+      return { data: request, error: null };
+    }
+    const result = await mutateRequestCustomerIntakeClarification(params);
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Clarification request was not confirmed by the database.") };
+    await this.hydrateFromSupabase();
+    return { data: this.customerRequests.find((entry) => entry.id === params.requestId) ?? result.data, error: null };
+  }
+
+  async linkCustomerRequestToWorkstreamPersisted(params: {
+    requestId: string;
+    workstreamId: string;
+    notes: string;
+  }): Promise<{ data: CustomerRequestRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required to link existing work.") };
+      const request = this.customerRequests.find((entry) => entry.id === params.requestId);
+      const workstream = this.workstreams.find((entry) => entry.id === params.workstreamId || entry.code === params.workstreamId);
+      if (!request || !workstream || workstream.projectId !== request.projectId) return { data: null, error: new Error("Choose an existing workstream in the same project.") };
+      request.relatedWorkstreamId = workstream.id;
+      request.status = "in_progress";
+      request.itsmState = "in_progress";
+      request.updatedAt = new Date().toISOString();
+      this.auditEvents.unshift(createAuditEvent({ entityType: "customer_request", entityId: request.id, actorName: "PATH coordinator", actorOrgName: "State Project Office", actionType: "customer_request_linked_to_workstream", newValue: workstream.code, reason: params.notes }));
+      return { data: request, error: null };
+    }
+    const result = await mutateLinkCustomerRequestToWorkstream(params);
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Existing workstream link was not confirmed by the database.") };
+    await this.hydrateFromSupabase();
+    return { data: this.customerRequests.find((entry) => entry.id === params.requestId) ?? result.data, error: null };
   }
 
   createExternalFiling(params: Omit<ExternalFilingRecord, "id" | "createdAt" | "updatedAt">): ExternalFilingRecord {

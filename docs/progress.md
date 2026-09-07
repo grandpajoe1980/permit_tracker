@@ -563,8 +563,9 @@ CHECKPOINT:
 - The direct Vite dev server is the reproducible browser-test runtime here;
   `vinext start` served the shell but returned 404s for built `/assets/*` in
   this Sites-configured environment and needs deployment-runtime validation.
-- The checked-in atomic triage RPC is not yet live-verified because the remote
-  migration ledger must be reconciled before applying local migrations.
+- The deliberate intake-routing RPC is now live-verified on the connected demo
+  project with rollback-safe auth-context probes. The remaining acceptance
+  boundary is fresh browser sessions and cross-user queue read-back.
 - The checked-in request-actor hardening RPC is not yet live-verified because
   the remote migration ledger must be reconciled before applying local
   migrations.
@@ -585,11 +586,45 @@ CHECKPOINT:
 
 1. Add the remaining failure/workflow negative tests and validate every
    forward migration against a running Supabase database.
-2. Reconcile the live migration ledger before applying the checked-in forward
-   hardening/action/notification migrations.
+2. Complete fresh-browser cross-user acceptance for deliberate intake routing,
+   including personal/team queue read-back after a confirmed assignment.
 3. Complete the clean-context SpaceX → triage → three workstreams → RFI →
    accepted response → stage handoff journey; the current Chromium suite
    proves only the request/RFI/document slices independently.
+
+## Deliberate intake routing checkpoint — September 7, 2026
+
+S2 is implemented and applied to the connected demo project. The coordinator
+review now requires persisted agency, assignment group, optional eligible
+member, published workflow, and intentional target date selections. Stable row
+keys, unique-code validation, disabled pending actions, and the server
+transaction protect the fan-out from incomplete, invalid, or repeated submits.
+
+The same dialog also supports two non-fan-out outcomes: request clarification
+and link to existing work. Both are project-scoped, authenticated RPCs that
+write the request state, audit event, and customer notification without
+creating an unintended workstream.
+
+Live evidence, all rollback-safe under Joe's authenticated system-admin
+context:
+
+- Invalid assignment group, ineligible member, and duplicate codes were
+  rejected with the expected server errors.
+- A valid route created one workstream with the persisted team/member,
+  workflow, and target date. A second confirmation returned the original
+  identifiers with `idempotent=true`; the transaction was rolled back.
+- Clarification read back `pending_customer`, one audit event, and one
+  customer notification.
+- Link-existing read back `in_progress`, the existing workstream ID, one audit
+  event, and one customer notification, with no new workstream.
+- The tagged request remained `submitted`, unlinked, and unchanged after every
+  probe rollback.
+
+Verification: focused source contracts 23/23 pass; lint, production build,
+build secret scan, migration read-back, and function privilege read-back pass.
+The full local Node discovery run reports 370 passed, 3 credential-dependent
+script failures, and 26 explicit skips because this checkout has no local
+Supabase URL/key environment variables.
 
 ## Historical verification from the prior checkpoint
 

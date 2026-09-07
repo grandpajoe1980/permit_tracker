@@ -209,10 +209,34 @@ test("includes responsive, focus, reduced-motion, and print protections", () => 
 
 test("intake routing requires an explicit editable review before fan-out", async () => {
   const triageDialog = await readFile(new URL("../components/path/intake/TriageRoutingDialog.tsx", import.meta.url), "utf8");
-  assert.match(triageDialog, /Review the request and edit each proposed workstream/);
+  assert.match(triageDialog, /Choose the deliberate outcome for this request/);
   assert.match(triageDialog, /Confirm routing and create work/);
+  assert.match(triageDialog, /Ask for clarification/);
+  assert.match(triageDialog, /Link existing work/);
+  assert.match(triageDialog, /Choose a persisted team/);
+  assert.match(triageDialog, /Choose an intentional target date/);
   assert.match(page, /setTriageRequest\(request\)/);
   assert.match(page, /triageCustomerRequest\(triageRequest, rows\)/);
+});
+
+test("keeps deliberate intake outcomes persisted and duplicate-safe", async () => {
+  const routingMigration = await readFile(new URL("../supabase/migrations/20260907180000_deliberate_intake_routing.sql", import.meta.url), "utf8");
+  assert.match(routingMigration, /assignment_group_id/);
+  assert.match(routingMigration, /assigned_to_user_id/);
+  assert.match(routingMigration, /workflow_version_id/);
+  assert.match(routingMigration, /target_date/);
+  assert.match(routingMigration, /early_finish/);
+  assert.doesNotMatch(routingMigration, /baseline_due_date|forecast_due_date/);
+  assert.match(routingMigration, /membership/);
+  assert.match(routingMigration, /on conflict \(dedupe_key\) do nothing/i);
+  assert.match(routingMigration, /rpc_request_customer_intake_clarification/);
+  assert.match(routingMigration, /rpc_link_customer_request_workstream/);
+  assert.match(routingMigration, /revoke execute on function public\.rpc_triage_customer_request/);
+  assert.match(mutations, /rpc_request_customer_intake_clarification/);
+  assert.match(mutations, /rpc_link_customer_request_workstream/);
+  assert.match(repository, /requestCustomerIntakeClarificationPersisted/);
+  assert.match(repository, /linkCustomerRequestToWorkstreamPersisted/);
+  assert.match(page, /pending_customer/);
 });
 
 test("documents the public-demo boundary and production security gap", () => {

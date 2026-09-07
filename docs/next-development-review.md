@@ -24,7 +24,7 @@ Use four distinct statuses: implemented, behavior-verified, browser-verified, an
 | T08 | Historical response and explicit dependency-clear proof exists; receiving-user browser/notification acceptance open. |
 | T09 | Persisted assignment selectors implemented; full recipient, help/escalation and authorization matrix open. |
 | T11 | Home/search/receipt implemented; incorrect linkage and external-filing recovery need development. |
-| T12 | Partially implemented, not complete: editable agency/title/workflow fan-out exists; team/person/date, clarification and link-existing options remain. |
+| T12 | Implemented and live-probe verified: persisted agency/team/member/workflow/date routing, clarification, link-existing work, stable rows, validation and retry protection are in place; browser cross-user acceptance remains. |
 | T13 | Honest dates and parallel-stage improvements implemented; full shared stage/history/hold reconciliation open. |
 | T14 | Responsive source changes implemented; accessible dialogs, navigation and rendered viewport acceptance remain. |
 | T15 | Historical suite: 361 passed, zero failed, 26 skipped. Live browser and authenticated integration acceptance remain. |
@@ -66,19 +66,24 @@ Evidence:
 
 Remaining S1 acceptance boundary: a browser file chooser in this environment still cannot transfer non-empty bytes, so the attachment-byte portion remains part of S5. The request/filing persistence boundary itself is complete.
 
-### S2 — Finish deliberate intake routing (T12)
+### S2 — Finish deliberate intake routing (T12) — completed implementation
 
-Evidence: `components/path/intake/TriageRoutingDialog.tsx` and `lib/repository.ts::triageCustomerRequestPersisted` expose agency code/name, title and workflow version, but not team, assignee or target date. Agency fields are free text. New row codes derive from current row count, so remove/add can repeat codes. Confirmation has no pending-state guard in this component.
+Implemented in the application and live Supabase project:
 
-Tasks:
-- Use persisted agency/team/member selectors with eligibility checks.
-- Add intentional target date and compatible published workflow selection.
-- Add clarification and link-existing-work alternatives, maintaining request identity across all linked workstreams.
-- Use stable row identity and validated unique workstream codes.
-- Add pending state, field errors and a final readable routing preview.
-- Prove concurrent and repeated confirmation are duplicate-safe at the server, not only via the UI guard.
+- The routing dialog now selects persisted agencies, assignment groups and eligible members rather than accepting free-text ownership.
+- Every route requires a published workflow and an intentional target date; the RPC writes those dates to the existing task/workstream schedule fields without inventing a deadline.
+- Stable row keys, unique-code validation, disabled pending states and server-side duplicate protection cover remove/add and repeated confirmation.
+- Coordinators can ask for clarification or link a request to existing project work; neither alternative creates a new workstream.
+- The forward migration validates project-admin authorization, agency/team compatibility, membership eligibility, published workflow state, request state and project scope. It grants execution only to authenticated callers and uses a fixed search path.
 
-Acceptance: route one request to three teams; remove/add a row; reject invalid agency/member/workflow combinations; double-submit concurrently; confirm exactly three linked workstreams and actual assignments after fresh login. Clarification and link-existing paths must not create unwanted work.
+Evidence:
+
+- Migration `deliberate_intake_routing` is applied to project `zomzacaxwqfwjstkxbpv`; the live read-back shows anonymous/public execution denied and authenticated execution allowed for the three intended RPCs.
+- Rollback-safe live probes rejected an invalid team, an ineligible member and duplicate workstream codes. A valid route created one workstream and a second confirmation returned the original IDs with `idempotent=true`; the transaction was rolled back.
+- Separate rollback-safe probes read back `pending_customer` plus audit/notification for clarification, and `in_progress` plus the existing workstream, audit and notification for link-existing. The tagged request remained `submitted` and unlinked after rollback.
+- Focused source contracts pass (23/23), lint passes, production build and secret scan pass. Full local Node discovery reports 370 passed, 3 credential-dependent failures and 26 explicit skips; the failures are the existing scripts that require local Supabase environment variables.
+
+Remaining S2 acceptance: complete the same route/clarification/link flows in two fresh browser sessions and read back the personal/team queues as the actual assigned users. This is an evidence boundary, not an implementation gap.
 
 ### S3 — Accessible interactions and runtime stability (T14)
 
@@ -147,10 +152,10 @@ Acceptance: no unclassified skipped release checks, current deployment SHA match
 
 ## Working order and guardrails
 
-Recommended next implementation sprint: S2 — finish deliberate intake routing. Run S5 acceptance incrementally with each affected workflow, not only at the end. S3 follows the routing slice for accessible/error-state verification; S4 follows core correctness; S6 is targeted completeness, and S7 runs throughout.
+Recommended next implementation sprint: S3 — accessible interactions and runtime stability. Run S5 acceptance incrementally with each affected workflow, not only at the end. S4 follows the accessibility slice; S6 is targeted completeness, and S7 runs throughout.
 
 The next logical end-to-end journey is: Alex submits two different permit requests (one with an optional attachment), refreshes after the receipt, and confirms each request keeps its own permit identity and no workstream is guessed; Sarah opens the intake queue, edits agency/team/member/workflow routing, previews the fan-out, confirms exactly the intended workstreams, and Jordan/Sam read back their respective queues after a fresh sign-in. A failed routing confirmation must be retryable without duplicate workstreams.
 
 Keep Supabase authoritative, preserve immutable documents and identifiers, do not weaken RLS/auth or rewrite historical migrations, use forward repairs only after reproduced failures and approval. Commit coherent changes with relevant tests. At each sprint end report evidence, unresolved items and the next logical end-to-end sprint; await Joe's go before starting it.
 
-The scenario seed is source-complete and designed for live read-back; its connected execution is recorded above and its cross-user browser acceptance remains open. S1 now adds a live request-linked filing/RPC read-back, while the browser attachment-byte boundary remains open. Supabase advisors still report pre-existing authenticated SECURITY DEFINER and permissive-policy warnings; the new RPC follows the same reviewed application transaction boundary with a fixed `search_path` and no anonymous execution. Signed-in/mobile browser review remains a clearly open acceptance item rather than an assumed pass.
+The scenario seed is source-complete and designed for live read-back; its connected execution is recorded above and its cross-user browser acceptance remains open. S1 adds a live request-linked filing/RPC read-back, while the browser attachment-byte boundary remains open. Supabase advisors still report pre-existing authenticated SECURITY DEFINER and permissive-policy warnings; the S2 RPCs follow the reviewed application transaction boundary with a fixed `search_path` and no anonymous execution. Signed-in/mobile browser review remains a clearly open acceptance item rather than an assumed pass.

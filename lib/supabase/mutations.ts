@@ -547,7 +547,10 @@ export async function mutateTriageCustomerRequest(params: {
     permitTypeId?: string;
     leadOrgCode?: string;
     leadOrgName?: string;
+    assignmentGroupId?: string;
+    assignedToUserId?: string;
     workflowVersionId?: string;
+    targetDate?: string;
   }>;
 }): Promise<MutationResult<{ requestId: string; workstreamIds: string[]; workstreamCodes: string[] }>> {
   const client = getSupabaseBrowser();
@@ -566,6 +569,36 @@ export async function mutateTriageCustomerRequest(params: {
     },
     error: null,
   };
+}
+
+export async function mutateRequestCustomerIntakeClarification(params: {
+  requestId: string;
+  notes: string;
+}): Promise<MutationResult<CustomerRequestRecord>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data, error } = await client.rpc("rpc_request_customer_intake_clarification", {
+    p_request_id: params.requestId,
+    p_notes: params.notes,
+  });
+  if (error || !data) return { data: null, error: new Error(error?.message ?? "Clarification request was not confirmed by the database.") };
+  return { data: customerRequestFromRow(data as Record<string, unknown>), error: null };
+}
+
+export async function mutateLinkCustomerRequestToWorkstream(params: {
+  requestId: string;
+  workstreamId: string;
+  notes: string;
+}): Promise<MutationResult<CustomerRequestRecord>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data, error } = await client.rpc("rpc_link_customer_request_workstream", {
+    p_request_id: params.requestId,
+    p_workstream_id: params.workstreamId,
+    p_notes: params.notes,
+  });
+  if (error || !data) return { data: null, error: new Error(error?.message ?? "Existing workstream link was not confirmed by the database.") };
+  return { data: customerRequestFromRow(data as Record<string, unknown>), error: null };
 }
 
 export async function mutateCreateExternalFiling(params: {
