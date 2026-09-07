@@ -21,7 +21,7 @@ Starting revision: `928926a089599181c6bd08ffc72069e314c01c92`
 | T13 | in_progress | Gantt avoids invented impact figures, shows current owner, and formats baseline/forecast dates in the summary and tooltips. Stage/history reconciliation remains. |
 | T13 | in_progress | Removed invented customer-request due dates and document-review due dates; missing dates now display as unscheduled. |
 | T14 | verified | Removed the unverified “Health: Connected” footer claim and unused branch icon. |
-| T11 | in_progress | Customer Home has a direct View My Requests action; request lists support search and owner/team/next-state context. Full receipt/workstream proof remains. |
+| T11 | in_progress | Customer Home has direct View My Requests and a post-submit receipt card with confirmation number, assignment status, and Open request. Full cross-reload/workstream proof remains. |
 | T15 | pending | Final behavioral journeys and live persistence proof require configured isolated Supabase credentials. |
 
 ## Confirmed baseline findings
