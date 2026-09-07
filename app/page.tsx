@@ -224,6 +224,7 @@ function actionLabel(action: WorkActionId) {
     accept_rfi_response: "Accept & Resume Review",
     request_clarification: "Request Clarification",
     respond: "Respond",
+    coordination_response: "Respond to agency",
     upload_documents: "Upload Documents",
   };
   return labels[action];
@@ -238,6 +239,7 @@ function actionIcon(action: WorkActionId) {
   if (action === "request_information" || action === "request_clarification") return <HelpCircle className="size-4" aria-hidden="true" />;
   if (action === "approve_document" || action === "approve_with_comments" || action === "accept_rfi_response") return <CheckCircle2 className="size-4" aria-hidden="true" />;
   if (action === "respond" || action === "upload_documents") return <Send className="size-4" aria-hidden="true" />;
+  if (action === "coordination_response") return <Send className="size-4" aria-hidden="true" />;
   if (action === "request_revision") return <FileText className="size-4" aria-hidden="true" />;
   if (action === "update_status") return <ClipboardCheck className="size-4" aria-hidden="true" />;
   if (action === "advance_stage") return <ArrowRight className="size-4" aria-hidden="true" />;
@@ -1241,6 +1243,22 @@ export default function Home() {
         return;
       }
       notify("Note added to the activity history.");
+      return;
+    }
+
+    if (dialog.action === "coordination_response") {
+      if (item.kind !== "coordination" || !actionNote.trim()) {
+        setDialogError("Record the agency response before saving.");
+        setSaveStatus("error");
+        return;
+      }
+      const result = await repository.updateCoordinationRequestPersisted({ requestId: item.sourceId, status: statusUpdate === "fulfilled" ? "concurred" : statusUpdate === "cancelled" ? "closed" : statusUpdate === "on_hold" ? "in_review" : "in_review", responseSummary: actionNote.trim(), actorName, actorOrgName });
+      if (result.error || !result.data) {
+        setDialogError(result.error?.message ?? "The coordination response was not confirmed by the database.");
+        setSaveStatus("error");
+        return;
+      }
+      notify(`${item.title} response recorded as ${result.data.status.replaceAll("_", " ")}. The dependency remains visible until explicitly resolved.`);
       return;
     }
 
