@@ -118,19 +118,19 @@ test("gives the customer home a fast request path and truthful request states", 
   assert.match(submitRequestLauncher, /Submit a Request/);
   assert.match(submitRequestLauncher, /CustomerRequestIntent/);
   assert.match(customerRequestList, /No requests submitted yet/);
-  assert.match(page, /setRoute\(getOperationalPersona\(persona\)\.isCustomer \? "project"/);
+  assert.match(page, /customer-home/);
 });
 
 test("keeps My Work groups exclusive and counts structured actionable items", () => {
   assert.match(operationalUx, /requiresCurrentUserAction/);
   assert.match(operationalUx, /"due_soon"/);
   assert.match(operationalUx, /QueueSectionId = "needs_action" \| "due_soon" \| "waiting" \| "recently_completed"/);
-  assert.match(page, /const actionableCount = activeQueueItems\.filter/);
+  assert.match(page, /const actionableCount = queueGroups\.find/);
 });
 
 test("renders the unified work-item summary and saved activity surface", () => {
   assert.match(page, /<WorkItemPage/);
-  assert.match(workItemPage, /NextActionPanel/);
+  assert.match(workItemPage, /Current responsibility/);
   assert.match(nextActionPanel, /Your next action/);
   assert.match(workItemFacts, /Completed/);
   assert.match(workItemFacts, /Current/);
@@ -153,7 +153,7 @@ test("normalizes encoded project and workstream route identities", () => {
 
 test("keeps focused project workstreams visibly in view", async () => {
   const projectOverviewPage = await readFile(new URL("../components/cockpits/ProjectOverviewPage.tsx", import.meta.url), "utf8");
-  assert.match(projectOverviewPage, /aria-pressed=\{focused\}/);
+  assert.match(projectOverviewPage, /aria-current=\{focused \? "page" : undefined\}/);
   assert.match(projectOverviewPage, /scrollIntoView/);
 });
 
@@ -180,7 +180,7 @@ test("requires an explicit escalation target and preserves record association", 
 test("keeps shell health in the footer and hides persistent noise", () => {
   assert.match(page, /<SystemVersionFooter \/>/);
   assert.match(systemFooter, /Environment:/);
-  assert.match(systemFooter, /Health: Connected/);
+  assert.doesNotMatch(systemFooter, /Health: Connected/);
   assert.match(css, /\.site-header \[title\^=/);
   assert.match(css, /aside > div\.mt-8/);
   assert.match(css, /aside nav > p:nth-of-type\(2\)/);
@@ -191,6 +191,14 @@ test("includes responsive, focus, reduced-motion, and print protections", () => 
   assert.match(css, /:focus-visible/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.match(css, /@media print/);
+});
+
+test("intake routing requires an explicit editable review before fan-out", async () => {
+  const triageDialog = await readFile(new URL("../components/path/intake/TriageRoutingDialog.tsx", import.meta.url), "utf8");
+  assert.match(triageDialog, /Review the request and edit each proposed workstream/);
+  assert.match(triageDialog, /Confirm routing and create work/);
+  assert.match(page, /setTriageRequest\(request\)/);
+  assert.match(page, /triageCustomerRequest\(triageRequest, rows\)/);
 });
 
 test("documents the public-demo boundary and production security gap", () => {
