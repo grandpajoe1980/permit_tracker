@@ -306,7 +306,9 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(mutations, /canonicalProjectReference\(params\.projectId\)/);
   assert.match(projectRoute, /createRequestSupabaseClient/);
   assert.match(workstreamRoute, /\.eq\("project_id", project\.id\)/);
+  assert.match(workstreamRoute, /buildDetailShellPath\("workflow"/);
   assert.match(requestRoute, /createRequestSupabaseClient/);
+  assert.match(requestRoute, /buildDetailShellPath\("customer_request"/);
   assert.match(requestApi, /\.eq\("id", requested\)/);
   assert.match(requestApi, /\.eq\("number", requested\)/);
 });
