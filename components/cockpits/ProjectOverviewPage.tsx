@@ -62,7 +62,7 @@ export function ProjectOverviewPage({ project, customerSafe = false, workflowTem
   const onTrackCount = project.workstreams.length - blockedCount - attentionCount;
   const attentionWorkstream = project.workstreams.find((workstream) => workstream.operationalState === "blocked" || workstream.ragHealth === "red" || workstream.operationalState === "waiting_government" || workstream.operationalState === "waiting_applicant" || workstream.operationalState === "waiting_external") ?? project.workstreams.find((workstream) => workstream.ragHealth === "yellow");
   const activeWorkstream = project.workstreams.find((workstream) => workstream.operationalState === "running") ?? project.workstreams.find((workstream) => workstream.operationalState === "waiting_government" || workstream.operationalState === "waiting_applicant" || workstream.operationalState === "waiting_external") ?? project.workstreams.find((workstream) => workstream.operationalState !== "complete");
-  const nextWorkstream = [...project.workstreams].filter((workstream) => workstream.operationalState !== "complete").sort((left, right) => left.forecastTargetDate.localeCompare(right.forecastTargetDate))[0];
+  const nextWorkstream = [...project.workstreams].filter((workstream) => workstream.operationalState !== "complete").sort((left, right) => (left.forecastTargetDate ?? "9999-12-31").localeCompare(right.forecastTargetDate ?? "9999-12-31"))[0];
 
   useEffect(() => {
     if (!focusedWorkstreamId) return;
