@@ -18,7 +18,7 @@ Starting revision: `928926a089599181c6bd08ffc72069e314c01c92`
 | T09 | in_progress | Work detail now states current owner/team; transfer dialog distinguishes help (assignment unchanged) from transfer. Persisted recipient/authorization proof remains. |
 | T10 | in_progress | Core routes exist and deep-link handling improved; full navigation convergence remains. |
 | T12 | in_progress | Intake queue is searchable, excludes drafts/terminal records, previews suggested fan-out, and blocks obvious duplicate retries. Editable routing rows remain. |
-| T13 | in_progress | Gantt avoids invented impact figures and shows current owner; stage/history reconciliation remains. |
+| T13 | in_progress | Gantt avoids invented impact figures, shows current owner, and formats baseline/forecast dates for readable tooltips. Stage/history reconciliation remains. |
 | T13 | in_progress | Removed invented customer-request due dates and document-review due dates; missing dates now display as unscheduled. |
 | T14 | verified | Removed the unverified “Health: Connected” footer claim and unused branch icon. |
 | T11 | in_progress | Customer Home has a direct View My Requests action; request lists support search and owner/team/next-state context. Full receipt/workstream proof remains. |
