@@ -342,9 +342,9 @@ export default function Home() {
   const [blockReason, setBlockReason] = useState("another_agency");
   const [blockAgency, setBlockAgency] = useState("CPRA");
   const [blockNeed, setBlockNeed] = useState("");
-  const [blockDueDate, setBlockDueDate] = useState("2026-09-05");
+  const [blockDueDate, setBlockDueDate] = useState("");
   const [questionText, setQuestionText] = useState("");
-  const [questionDueDate, setQuestionDueDate] = useState("2026-09-05");
+  const [questionDueDate, setQuestionDueDate] = useState("");
   const [transferType, setTransferType] = useState("Ask another reviewer");
   const [escalationType, setEscalationType] = useState("Supervisor decision");
   const [escalationTarget, setEscalationTarget] = useState("");
