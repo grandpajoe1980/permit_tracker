@@ -12,7 +12,8 @@ export function CustomerRequestList({ requests, onOpenRequest }: CustomerRequest
   return <div className="space-y-3">
     {requests.map((request) => <button key={request.id} type="button" onClick={() => onOpenRequest?.(request)} className="w-full rounded-lg border border-slate-200 p-3 text-left transition hover:border-teal-400 hover:bg-teal-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600">
       <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-black text-[#00284d]">{request.confirmationNumber} · {request.title}</p><span className="text-xs font-bold text-teal-800">{request.status.replaceAll("_", " ")}</span></div>
-      <p className="mt-1 text-xs text-slate-500">Owner: {request.knownAgencyCode ?? "State Project Office"} · Updated {request.updatedAt ? new Date(request.updatedAt).toLocaleDateString() : "Not yet updated"}</p>
+      <p className="mt-1 text-xs text-slate-500">Assigned to: {request.assignedToUserName ?? "Unassigned"} · Team: {request.assignmentGroupName ?? request.knownAgencyCode ?? "State Project Office"}</p>
+      <p className="mt-1 text-xs font-semibold text-slate-600">{request.status === "submitted" || request.status === "triage" ? "Waiting for intake review" : request.status === "resolved" || request.status === "closed" ? "No action required" : "In progress"} · Updated {request.updatedAt ? new Date(request.updatedAt).toLocaleDateString() : "Not yet updated"}</p>
     </button>)}
   </div>;
 }
