@@ -39,6 +39,7 @@ const [page, layout, css, readme, productCopy, navigation, portalMigration, hard
 const workflowQueries = await readFile(new URL("../lib/supabase/queries.ts", import.meta.url), "utf8");
 const operationalUx = await readFile(new URL("../lib/operational-ux.ts", import.meta.url), "utf8");
 const routeResolvers = await readFile(new URL("../lib/supabase/route-resolvers.ts", import.meta.url), "utf8");
+const canonicalWorkRoute = await readFile(new URL("../app/work/[kind]/[id]/page.tsx", import.meta.url), "utf8");
 const systemFooter = await readFile(new URL("../components/SystemVersionFooter.tsx", import.meta.url), "utf8");
 const [workItemPage, nextActionPanel, workItemFacts, activityFeed] = await Promise.all([
   readFile(new URL("../components/path/work/WorkItemPage.tsx", import.meta.url), "utf8"),
@@ -98,6 +99,10 @@ test("defines canonical shell and work-item navigation contracts", () => {
   assert.match(navigation, /buildWorkItemPath/);
   assert.match(navigation, /\/work\//);
   assert.match(navigation, /parseWorkItemPath/);
+  assert.match(navigation, /buildDetailShellPath/);
+  assert.match(navigation, /requestId/);
+  assert.match(canonicalWorkRoute, /Sign in required/);
+  assert.match(canonicalWorkRoute, /buildDetailShellPath/);
   assert.match(page, /window\.history\.pushState/);
   assert.match(page, /window\.addEventListener\("popstate"/);
   assert.match(page, /requestedWorkItemPath/);
