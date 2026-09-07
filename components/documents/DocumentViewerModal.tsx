@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { DocumentRecord, DocumentVersionRecord } from "@/lib/domain-models";
 import { downloadDocumentVersion } from "@/lib/document-download-utils";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 
 interface DocumentViewerModalProps {
   document: DocumentRecord;
@@ -65,6 +66,7 @@ export function DocumentViewerModal({
   const [selectedVersionId, setSelectedVersionId] = useState<string>(
     version?.id || document.currentVersionId || document.versions[0]?.id || ""
   );
+  const dialogRef = useDialogFocus(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -72,7 +74,7 @@ export function DocumentViewerModal({
 
   if (!currentVersion) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#00284d]/60 p-4 backdrop-blur-xs" role="dialog" aria-modal="true" aria-labelledby="doc-modal-title">
+      <div ref={dialogRef} tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center bg-[#00284d]/60 p-4 backdrop-blur-xs" role="dialog" aria-modal="true" aria-labelledby="doc-modal-title">
         <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -80,7 +82,7 @@ export function DocumentViewerModal({
               <h2 id="doc-modal-title" className="mt-1 text-xl font-black text-slate-900">{document.title}</h2>
               <p className="mt-3 text-sm leading-6 text-slate-600">No stored document version is linked to this record yet. Upload the document to the Document Vault before reviewing or downloading it.</p>
             </div>
-            <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close document viewer" className="text-slate-500 hover:text-slate-900"><X className="size-5" /></Button>
+            <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close document viewer" data-dialog-initial-focus className="text-slate-500 hover:text-slate-900"><X className="size-5" /></Button>
           </div>
           <Button type="button" variant="outline" onClick={onClose} className="mt-5 font-bold text-xs">Close Preview</Button>
         </div>
@@ -111,6 +113,8 @@ export function DocumentViewerModal({
 
   return (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       className="fixed inset-0 z-50 flex items-center justify-center bg-[#00284d]/60 p-4 backdrop-blur-xs"
       role="dialog"
       aria-modal="true"
@@ -147,6 +151,7 @@ export function DocumentViewerModal({
             size="icon"
             onClick={onClose}
             aria-label="Close document viewer"
+            data-dialog-initial-focus
             className="text-slate-500 hover:text-slate-900"
           >
             <X className="size-5" />

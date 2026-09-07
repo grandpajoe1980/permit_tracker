@@ -6,7 +6,7 @@ Review date: 2026-09-07. Baseline: `6e83dbac20b5e5931939abd7b15856c28b77b483`.
 
 The initial review was read-only; the follow-up seed checkpoint adds only the tagged, non-destructive scenario script and its contract test. Git fetch confirmed HEAD and origin/main had zero divergence before this checkpoint. The live https://permit-tracker-iota.vercel.app/ sign-in page displays the same commit and production environment. The scenario seed does not create auth users, delete rows, or fabricate Storage bytes.
 
-Reviewed the original conversation's T00–T15 goals, `PATH_UX_LUNA_IMPLEMENTATION_PLAN.md`, `workflow-clarity-progress.md`, and the customer submission, triage, navigation, catalog, modal and repository paths. This is a targeted review, not an exhaustive security audit. The signed-in workspace and mobile viewports were not freshly exercised. Previous test and database results below are historical evidence, not tests rerun today.
+Reviewed the original conversation's T00–T15 goals, `PATH_UX_LUNA_IMPLEMENTATION_PLAN.md`, `workflow-clarity-progress.md`, and the customer submission, triage, navigation, catalog, modal and repository paths. This is a targeted review, not an exhaustive security audit. S3 implementation checks were rerun on the synced checkout; rendered signed-in browser and mobile viewport evidence remains blocked by the local browser runtime.
 
 ## Assessment
 
@@ -26,8 +26,8 @@ Use four distinct statuses: implemented, behavior-verified, browser-verified, an
 | T11 | Home/search/receipt implemented; incorrect linkage and external-filing recovery need development. |
 | T12 | Implemented and live-probe verified: persisted agency/team/member/workflow/date routing, clarification, link-existing work, stable rows, validation and retry protection are in place; browser cross-user acceptance remains. |
 | T13 | Honest dates and parallel-stage improvements implemented; full shared stage/history/hold reconciliation open. |
-| T14 | Responsive source changes implemented; accessible dialogs, navigation and rendered viewport acceptance remain. |
-| T15 | Historical suite: 361 passed, zero failed, 26 skipped. Live browser and authenticated integration acceptance remain. |
+| T14 | Accessibility/runtime implementation is complete for the reviewed shell, dialogs, feedback, and narrow-screen layout; rendered keyboard/viewport acceptance remains blocked by the local browser runtime. |
+| T15 | Current suite: 395 discovered, 369 passed, zero failed, 26 explicitly skipped for missing local Supabase credentials. Live browser and authenticated integration acceptance remain. |
 
 ## Findings and recommended sprints
 
@@ -85,21 +85,24 @@ Evidence:
 
 Remaining S2 acceptance: complete the same route/clarification/link flows in two fresh browser sessions and read back the personal/team queues as the actual assigned users. This is an evidence boundary, not an implementation gap.
 
-### S3 — Accessible interactions and runtime stability (T14)
+### S3 — Accessible interactions and runtime stability (T14) — implementation complete
 
-Live evidence: sign-in page console emitted application-origin minified React error #418 on this visit. Diagnose the exact cause; do not assume its source. A separate extension-origin console error is excluded from application findings. Footer renders `Committed: unknown` despite showing the correct SHA.
+Implemented on the synced checkout:
 
-Code evidence: triage and action dialogs use hand-written `role=dialog` overlays; full focus behavior needs verification. Shell sign-out text is hidden at mobile widths without an explicit aria-label on the button. Mobile menu lacks expanded/control state. Shared toast always uses green success styling and a check icon even when populated with failure messages.
+- Added a shared dialog-focus hook used by work actions, intake routing, and document preview. It captures the opener, moves focus into the dialog, traps Tab, closes on Escape, and restores focus after close.
+- Added `aria-expanded`, `aria-controls`, `aria-current`, an explicit mobile navigation ID, and a mobile sign-out label. Escape and navigation both return focus to the menu control.
+- Corrected the mobile drawer's fixed position for the road-stripe offset and retained narrow-screen scrolling rather than clipping controls.
+- Replaced the always-green toast with success, warning, info, and alert semantics, including appropriate live-region behavior.
+- Closed the no-Supabase hydration cleanup gap so the scheduled hydration frame is cancelled on the early-return path.
 
-Tasks:
-- Reproduce and fix the React mismatch/error; add a clean-console public-page smoke test.
-- Adopt the existing accessible dialog primitive or implement focus containment, Escape, initial focus and focus restoration explicitly.
-- Add accurate mobile menu and sign-out accessible semantics.
-- Give success, warning, partial-success and error feedback distinct semantics and recovery actions.
-- Verify all major screens at 390/768/1440px and 200% zoom, including on-screen-keyboard forms, long names and nested schedule scrolling.
-- Make build metadata deterministic across server/client and identify unknown timestamps honestly.
+Evidence:
 
-Acceptance: keyboard-only open/edit/cancel/confirm, focus restored, no background focus escape, screen-reader control names present, no unreachable mobile controls, and no application-origin error on reload.
+- `npm run lint -- --quiet`: pass.
+- `npm test`: 395 discovered, 369 passed, 0 failed, 26 explicitly skipped for unavailable local Supabase credentials. Build and artifact secret scan pass as part of the command.
+- Loopback HTTP smoke check returned the real login shell with status 200 and no server-side error text.
+- Playwright browser launch is blocked because no system browser or `agent-browser` executable is installed; the Playwright Chromium download timed out/returned 502 from its CDN. A rendered 390/768/1440px screenshot, keyboard journey, and browser-console confirmation therefore remain evidence gaps. The footer's `Committed: unknown` in the unauthenticated local shell also remains a separate metadata follow-up.
+
+S3 is an implementation-complete checkpoint, not a claim of browser acceptance. Keep the browser boundary open until a browser-capable environment can verify focus restoration, 200% zoom, on-screen keyboards, long labels, nested schedule scrolling, and any application-origin console error on reload.
 
 ### S4 — Navigation and one coherent work story (T10/T13)
 
@@ -152,10 +155,10 @@ Acceptance: no unclassified skipped release checks, current deployment SHA match
 
 ## Working order and guardrails
 
-Recommended next implementation sprint: S3 — accessible interactions and runtime stability. Run S5 acceptance incrementally with each affected workflow, not only at the end. S4 follows the accessibility slice; S6 is targeted completeness, and S7 runs throughout.
+Recommended next implementation sprint: S4 — navigation and one coherent work story. Run S5 acceptance incrementally with each affected workflow, not only at the end. S6 is targeted completeness, and S7 runs throughout.
 
 The next logical end-to-end journey is: Alex submits two different permit requests (one with an optional attachment), refreshes after the receipt, and confirms each request keeps its own permit identity and no workstream is guessed; Sarah opens the intake queue, edits agency/team/member/workflow routing, previews the fan-out, confirms exactly the intended workstreams, and Jordan/Sam read back their respective queues after a fresh sign-in. A failed routing confirmation must be retryable without duplicate workstreams.
 
 Keep Supabase authoritative, preserve immutable documents and identifiers, do not weaken RLS/auth or rewrite historical migrations, use forward repairs only after reproduced failures and approval. Commit coherent changes with relevant tests. At each sprint end report evidence, unresolved items and the next logical end-to-end sprint; await Joe's go before starting it.
 
-The scenario seed is source-complete and designed for live read-back; its connected execution is recorded above and its cross-user browser acceptance remains open. S1 adds a live request-linked filing/RPC read-back, while the browser attachment-byte boundary remains open. Supabase advisors still report pre-existing authenticated SECURITY DEFINER and permissive-policy warnings; the S2 RPCs follow the reviewed application transaction boundary with a fixed `search_path` and no anonymous execution. Signed-in/mobile browser review remains a clearly open acceptance item rather than an assumed pass.
+The scenario seed is source-complete and designed for live read-back; its connected execution is recorded above and its cross-user browser acceptance remains open. S1 adds a live request-linked filing/RPC read-back, while the browser attachment-byte boundary remains open. Supabase advisors still report pre-existing authenticated SECURITY DEFINER and permissive-policy warnings; the S2 RPCs follow the reviewed application transaction boundary with a fixed `search_path` and no anonymous execution. S3 closes the accessibility/runtime implementation slice, while signed-in/mobile browser review remains a clearly open acceptance item rather than an assumed pass.

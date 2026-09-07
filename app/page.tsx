@@ -123,6 +123,7 @@ import { WorkflowMiniStepper } from "@/components/cockpits/WorkflowJourney";
 import { SystemVersionFooter } from "@/components/SystemVersionFooter";
 import { TicketWorkflowEditor } from "@/components/cockpits/TicketWorkflowEditor";
 import { PRODUCT_NAME, PROGRAM_SUBTITLE, PROJECT_DISPLAY_NAME } from "@/lib/product-copy";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { LoginPage } from "@/components/path/LoginPage";
 import { CustomerHome } from "@/components/path/customer/CustomerHome";
 import { GovernmentServices } from "@/components/path/customer/GovernmentServices";
@@ -380,7 +381,8 @@ export default function Home() {
   const [hydrated, setHydrated] = useState(false);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [dialogError, setDialogError] = useState("");
-  const [toast, setToast] = useState("");
+  const [toast, setToastRaw] = useState("");
+  const [toastTone, setToastTone] = useState<"success" | "error" | "warning" | "info">("success");
   const [mutationVersion, setMutationVersion] = useState(0);
   const [completionChecks, setCompletionChecks] = useState<Record<string, boolean>>({});
   const [determination, setDetermination] = useState("Complete / Approved");
@@ -431,6 +433,9 @@ export default function Home() {
   const [viewerModalDoc, setViewerModalDoc] = useState<DocumentRecord | null>(null);
   const [viewerModalVer, setViewerModalVer] = useState<DocumentVersionRecord | undefined>(undefined);
   const usernameRef = useRef<HTMLInputElement>(null);
+  const mobileNavButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileNavRef = useRef<HTMLElement>(null);
+  const actionDialogRef = useDialogFocus(Boolean(dialog), () => setDialog(null));
   const demoHydrationRef = useRef<Promise<void> | null>(null);
   const restoringScrollRef = useRef<number | null>(null);
   const [requestedWorkItemPath, setRequestedWorkItemPath] = useState<string | null>(null);
@@ -480,6 +485,60 @@ export default function Home() {
     } : profileDraft;
   }
 
+  function setToast(message: string) {
+    const inferredTone = /failed|could not|error|not available|no production data|no organization/i.test(message)
+      ? "error"
+      : /waiting|still needs|retry|switch to|invalid|no duplicate/i.test(message)
+        ? "warning"
+        : "success";
+    setToastTone(inferredTone);
+    setToastRaw(message);
+  }
+
+  function showToast(message: string, tone: "success" | "error" | "warning" | "info" = "success") {
+    setToastTone(tone);
+    setToastRaw(message);
+  }
+
+  function renderToast() {
+    if (!toast) return null;
+    const ToastIcon = toastTone === "success" ? CheckCircle2 : toastTone === "error" ? AlertOctagon : Info;
+    const toneClasses = toastTone === "success"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-950"
+      : toastTone === "error"
+        ? "border-red-200 bg-red-50 text-red-950"
+        : toastTone === "warning"
+          ? "border-amber-200 bg-amber-50 text-amber-950"
+          : "border-sky-200 bg-sky-50 text-sky-950";
+    const iconClasses = toastTone === "success"
+      ? "text-emerald-700"
+      : toastTone === "error"
+        ? "text-red-700"
+        : toastTone === "warning"
+          ? "text-amber-700"
+          : "text-sky-700";
+    return <div role={toastTone === "error" ? "alert" : "status"} aria-live={toastTone === "error" ? "assertive" : "polite"} aria-atomic="true" className={`mb-5 flex items-start gap-2 rounded-xl border p-4 text-sm font-bold ${toneClasses}`}><ToastIcon className={`mt-0.5 size-5 shrink-0 ${iconClasses}`} aria-hidden="true" />{toast}</div>;
+  }
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      mobileNavRef.current?.querySelector<HTMLElement>("button")?.focus();
+    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setMobileNavOpen(false);
+      mobileNavButtonRef.current?.focus();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.requestAnimationFrame(() => mobileNavButtonRef.current?.focus());
+    };
+  }, [mobileNavOpen]);
+
   useEffect(() => {
     let active = true;
     const hydrationFrame = window.requestAnimationFrame(() => {
@@ -487,7 +546,12 @@ export default function Home() {
     });
     const client = getSupabaseBrowserClient();
 
-    if (!client) return;
+    if (!client) {
+      return () => {
+        active = false;
+        window.cancelAnimationFrame(hydrationFrame);
+      };
+    }
     void getBrowserUser().then(async (user) => {
       if (!active || !user) return;
       const hydratedFromDb = await repository.hydrateFromSupabase();
@@ -777,7 +841,7 @@ export default function Home() {
       setSelectedItemId(refreshed?.id ?? selectedItem?.id ?? null);
     }
     setSaveStatus("saved");
-    setToast(message);
+    showToast(message);
     setDialog(null);
     setEscalationTarget("");
     setMutationVersion((value) => value + 1);
@@ -891,7 +955,7 @@ export default function Home() {
   async function triageCustomerRequest(request: CustomerRequestRecord, routedRows?: TriageRoutingRow[]) {
     if (triageBusy) return;
     if (request.relatedWorkstreamId || request.status === "in_progress") {
-      setToast(`${request.confirmationNumber} is already linked to work. No duplicate workstream was created.`);
+      showToast(`${request.confirmationNumber} is already linked to work. No duplicate workstream was created.`, "info");
       return;
     }
     setTriageBusy(true);
@@ -914,11 +978,11 @@ export default function Home() {
         })),
       });
       if (result.error || !result.data) {
-        setToast(`Triage failed: ${result.error?.message ?? "the database did not confirm the workstreams"}`);
+        showToast(`Triage failed: ${result.error?.message ?? "the database did not confirm the workstreams"}`, "error");
         return;
       }
       setTriageRequest(null);
-      setToast(`${workstreamPlan.length} workstream${workstreamPlan.length === 1 ? "" : "s"} created from ${request.confirmationNumber}.`);
+      showToast(`${workstreamPlan.length} workstream${workstreamPlan.length === 1 ? "" : "s"} created from ${request.confirmationNumber}.`);
       setMutationVersion((value) => value + 1);
     } finally {
       setTriageBusy(false);
@@ -931,11 +995,11 @@ export default function Home() {
     try {
       const result = await repository.requestCustomerIntakeClarificationPersisted({ requestId: request.id, notes });
       if (result.error || !result.data) {
-        setToast(`Clarification request failed: ${result.error?.message ?? "the database did not confirm the request"}`);
+        showToast(`Clarification request failed: ${result.error?.message ?? "the database did not confirm the request"}`, "error");
         return;
       }
       setTriageRequest(null);
-      setToast(`${request.confirmationNumber} is waiting on customer clarification.`);
+      showToast(`${request.confirmationNumber} is waiting on customer clarification.`, "warning");
       setMutationVersion((value) => value + 1);
     } finally {
       setTriageBusy(false);
@@ -948,11 +1012,11 @@ export default function Home() {
     try {
       const result = await repository.linkCustomerRequestToWorkstreamPersisted({ requestId: request.id, workstreamId, notes });
       if (result.error || !result.data) {
-        setToast(`Link failed: ${result.error?.message ?? "the database did not confirm the existing workstream"}`);
+        showToast(`Link failed: ${result.error?.message ?? "the database did not confirm the existing workstream"}`, "error");
         return;
       }
       setTriageRequest(null);
-      setToast(`${request.confirmationNumber} was linked to existing work without creating a duplicate.`);
+      showToast(`${request.confirmationNumber} was linked to existing work without creating a duplicate.`);
       setMutationVersion((value) => value + 1);
     } finally {
       setTriageBusy(false);
@@ -1056,7 +1120,7 @@ export default function Home() {
         attachmentFile: requestFile ?? undefined,
       });
       if (requestResult.error || !requestResult.data) {
-        setToast(`Request could not be saved: ${requestResult.error?.message ?? "the database did not confirm the submission"}`);
+        showToast(`Request could not be saved: ${requestResult.error?.message ?? "the database did not confirm the submission"}`, "error");
         return;
       }
       const request = requestResult.data;
@@ -1065,7 +1129,7 @@ export default function Home() {
         setPendingFilingRecovery(requestRecovery);
         const filingResult = await persistExternalFilingForRequest(request, requestRecovery);
         if (filingResult.error) {
-          setToast(`${request.confirmationNumber} was saved, but its external filing tracker still needs to be recorded. Retry the filing from the receipt.`);
+          showToast(`${request.confirmationNumber} was saved, but its external filing tracker still needs to be recorded. Retry the filing from the receipt.`, "warning");
           navigate("customer-home");
           setMutationVersion((value) => value + 1);
           return;
@@ -1083,7 +1147,7 @@ export default function Home() {
       setExternalRecordUrl("");
       setRequestCenterMode("menu");
       navigate("customer-home");
-      setToast(`${request.confirmationNumber} submitted. The State Project Office triage queue was notified.`);
+      showToast(`${request.confirmationNumber} submitted. The State Project Office triage queue was notified.`);
       setMutationVersion((value) => value + 1);
     } finally {
       setIsSubmittingRequest(false);
@@ -1096,19 +1160,19 @@ export default function Home() {
     if (!recovery) return;
     const request = repository.getCustomerRequests().find((entry) => entry.id === recovery.requestId || entry.confirmationNumber === recovery.confirmationNumber);
     if (!request) {
-      setToast("The saved request could not be loaded. Refresh the workspace and try again.");
+      showToast("The saved request could not be loaded. Refresh the workspace and try again.", "error");
       return;
     }
     setIsSubmittingRequest(true);
     try {
       const filingResult = await persistExternalFilingForRequest(request, recovery);
       if (filingResult.error) {
-        setToast(`The filing tracker still could not be saved: ${filingResult.error.message}`);
+        showToast(`The filing tracker still could not be saved: ${filingResult.error.message}`, "error");
         return;
       }
       clearCustomerSubmissionRecovery();
       setPendingFilingRecovery(null);
-      setToast(`${request.confirmationNumber} external filing tracking is now saved.`);
+      showToast(`${request.confirmationNumber} external filing tracking is now saved.`);
       setMutationVersion((value) => value + 1);
     } finally {
       setIsSubmittingRequest(false);
@@ -1138,7 +1202,7 @@ export default function Home() {
       status: "draft",
     });
     if (requestResult.error || !requestResult.data) {
-      setToast(`Draft could not be saved: ${requestResult.error?.message ?? "the database did not confirm the draft"}`);
+      showToast(`Draft could not be saved: ${requestResult.error?.message ?? "the database did not confirm the draft"}`, "error");
       return;
     }
     const request = requestResult.data;
@@ -1146,7 +1210,7 @@ export default function Home() {
     setIntakeFile(null);
     setRequestFileInputKey((value) => value + 1);
     setRequestCenterMode("menu");
-    setToast(`${request.confirmationNumber} saved as a draft.`);
+    showToast(`${request.confirmationNumber} saved as a draft.`);
     setMutationVersion((value) => value + 1);
   }
 
@@ -1162,7 +1226,7 @@ export default function Home() {
     }
     setSaveStatus("saved");
     setProfileStatus("Profile saved. Your updated contact details are now available to authorized project participants.");
-    setToast("Profile updated.");
+    showToast("Profile updated.");
     setMutationVersion((value) => value + 1);
   }
 
@@ -1174,7 +1238,7 @@ export default function Home() {
     const result = await downloadDocumentVersion(document, version, downloadDocumentFile);
     if (!result.success) {
       setSaveStatus("error");
-      setToast(`Download failed: ${result.error?.message ?? "the document could not be retrieved"}`);
+      showToast(`Download failed: ${result.error?.message ?? "the document could not be retrieved"}`, "error");
       return;
     }
     /* legacy fallback intentionally disabled
@@ -1203,7 +1267,7 @@ export default function Home() {
     }
     */
     setSaveStatus("saved");
-    setToast(`Verified ${version.fileName} and started the download.`);
+    showToast(`Verified ${version.fileName} and started the download.`);
   }
 
   async function uploadProjectRevision(documentId: string, event: ChangeEvent<HTMLInputElement>, uploadedByOrgName = CUSTOMER_ORGANIZATION_NAME) {
@@ -1214,7 +1278,7 @@ export default function Home() {
     const document = repository.getDocuments().find((entry) => entry.id === documentId);
     if (!document) {
       setSaveStatus("error");
-      setToast("Upload failed: the selected document is no longer available.");
+      showToast("Upload failed: the selected document is no longer available.", "error");
       event.target.value = "";
       return;
     }
@@ -1250,7 +1314,7 @@ export default function Home() {
           changeNotes: "Revision uploaded through the PATH document center.",
           reviewingAgencyCodes: ["DOTD", "CPRA"],
         });
-        setToast(`${res.data.versionLabel} uploaded to Supabase Storage. Agency review assignments were reset.`);
+        showToast(`${res.data.versionLabel} uploaded to Supabase Storage. Agency review assignments were reset.`);
         setSaveStatus("saved");
         setMutationVersion((value) => value + 1);
       } else {
@@ -1259,7 +1323,7 @@ export default function Home() {
     } catch (err) {
       console.error("Upload error:", err);
       setSaveStatus("error");
-      setToast(`Failed to upload document to Supabase Storage: ${err instanceof Error ? err.message : "unknown storage error"}`);
+      showToast(`Failed to upload document to Supabase Storage: ${err instanceof Error ? err.message : "unknown storage error"}`, "error");
     }
     event.target.value = "";
   }
@@ -2005,7 +2069,7 @@ export default function Home() {
       try {
         url = new URL(linkUrl, window.location.origin);
       } catch {
-        setToast("This notification has an invalid link.");
+        showToast("This notification has an invalid link.", "error");
         navigate("notifications");
         return;
       }
@@ -2026,7 +2090,7 @@ export default function Home() {
           return;
         }
       }
-      setToast("This notification points to a record that is no longer available in your workspace.");
+      showToast("This notification points to a record that is no longer available in your workspace.", "warning");
       navigate("notifications");
     };
     return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Action center</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Notifications</h1><p className="mt-2 text-sm text-slate-600">Only material events that change what someone needs to do appear here; routine audit history stays on the work item.</p></div><div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Bell className="size-5 text-teal-700" /> Action required</CardTitle></CardHeader><CardContent className="space-y-3">{notifications.length > 0 ? notifications.slice(0, 8).map((notification) => <button type="button" key={notification.id} onClick={() => openNotification(notification.linkUrl)} className="w-full rounded-lg border border-amber-200 bg-amber-50 p-3 text-left hover:border-amber-400 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><p className="text-sm font-black text-amber-950">{notification.title}</p><p className="mt-1 text-sm text-amber-900">{notification.message}</p><p className="mt-2 text-[11px] font-bold uppercase text-amber-800">{notification.type.replaceAll("_", " ")} · Open related work</p></button>) : <p className="text-sm text-slate-500">No new action notifications.</p>}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Clock3 className="size-5 text-teal-700" /> Status updates</CardTitle></CardHeader><CardContent className="space-y-3">{events.map((event) => <div key={event.id} className="border-b border-slate-100 pb-3 last:border-0"><p className="text-sm font-bold text-[#00284d]">{event.actionType.replaceAll("_", " ")}</p><p className="mt-1 text-xs text-slate-600">{event.reason ?? event.newValue ?? "Recorded activity"}</p><p className="mt-1 text-[11px] text-slate-400">{event.actorName} · {formatDate(event.occurredAt)}</p></div>)}</CardContent></Card></div></div>;
@@ -2043,7 +2107,7 @@ export default function Home() {
   }
 
   function renderSecondary() {
-    return <div className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Project resources</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">{secondaryTool === "schedule" ? "Schedule" : secondaryTool === "vault" ? "Document Vault" : "Permit Catalog"}</h1></div><div className="flex flex-wrap gap-2">{([["schedule", "Schedule"], ["vault", "Document Vault"], ["catalog", "Permit Catalog"]] as Array<[SecondaryTool, string]>).map(([tool, label]) => <Button key={tool} type="button" variant={secondaryTool === tool ? "default" : "outline"} onClick={() => setSecondaryTool(tool)} className="text-xs font-bold">{label}</Button>)}</div></div>{secondaryTool === "schedule" && <WorkstreamGraphGantt project={projectRecord} onSelectWorkstream={(workstreamId) => openProject(workstreamId)} />}{secondaryTool === "vault" && <DocumentVaultPanel project={projectRecord} onUploadRevision={(documentId, event) => void uploadProjectRevision(documentId, event, activePersona.organization)} onDownloadDocument={(docId, verId) => void downloadVersion(docId, verId)} onSelectWorkstream={(workstreamId) => openProject(workstreamId)} />}{secondaryTool === "catalog" && <PermitCatalogPanel catalog={repository.getCatalog()} templates={repository.getWorkflowTemplates()} onStartRequest={(permitId) => { setSelectedCatalogPermitId(permitId); if (activePersona.isCustomer) { setRequestCenterMode("permit"); navigate("requests"); } else { setToast("Permit selected. Switch to a SpaceX demo persona to start a request."); } }} />}</div>;
+    return <div className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Project resources</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">{secondaryTool === "schedule" ? "Schedule" : secondaryTool === "vault" ? "Document Vault" : "Permit Catalog"}</h1></div><div className="flex flex-wrap gap-2">{([["schedule", "Schedule"], ["vault", "Document Vault"], ["catalog", "Permit Catalog"]] as Array<[SecondaryTool, string]>).map(([tool, label]) => <Button key={tool} type="button" variant={secondaryTool === tool ? "default" : "outline"} onClick={() => setSecondaryTool(tool)} className="text-xs font-bold">{label}</Button>)}</div></div>{secondaryTool === "schedule" && <WorkstreamGraphGantt project={projectRecord} onSelectWorkstream={(workstreamId) => openProject(workstreamId)} />}{secondaryTool === "vault" && <DocumentVaultPanel project={projectRecord} onUploadRevision={(documentId, event) => void uploadProjectRevision(documentId, event, activePersona.organization)} onDownloadDocument={(docId, verId) => void downloadVersion(docId, verId)} onSelectWorkstream={(workstreamId) => openProject(workstreamId)} />}{secondaryTool === "catalog" && <PermitCatalogPanel catalog={repository.getCatalog()} templates={repository.getWorkflowTemplates()} onStartRequest={(permitId) => { setSelectedCatalogPermitId(permitId); if (activePersona.isCustomer) { setRequestCenterMode("permit"); navigate("requests"); } else { showToast("Permit selected. Switch to a SpaceX demo persona to start a request.", "info"); } }} />}</div>;
   }
 
   function renderAdmin() {
@@ -2098,7 +2162,7 @@ export default function Home() {
     const recipientPreview = getRecipientPreview(selectedItem, dialog.action, activePersona);
     const completionPreview = getCompletionPreview(selectedItem);
     const isCompletion = dialog.action === "complete_step";
-    return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#00284d]/60 p-3 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="action-dialog-title" aria-describedby="action-dialog-description"><div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 bg-slate-50 p-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Work action</p><h2 id="action-dialog-title" className="mt-1 text-xl font-black text-[#00284d]">{actionLabel(dialog.action)}</h2><p id="action-dialog-description" className="mt-1 text-sm text-slate-600">{selectedItem.title}</p></div><Button type="button" variant="ghost" size="icon" onClick={() => setDialog(null)} aria-label="Close action dialog"><X className="size-5" /></Button></div><form onSubmit={handleConfirmAction} className="space-y-5 p-5 sm:p-6">
+    return <div ref={actionDialogRef} tabIndex={-1} className="fixed inset-0 z-50 flex items-end justify-center bg-[#00284d]/60 p-3 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="action-dialog-title" aria-describedby="action-dialog-description"><div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-start justify-between border-b border-slate-100 bg-slate-50 p-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Work action</p><h2 id="action-dialog-title" className="mt-1 text-xl font-black text-[#00284d]">{actionLabel(dialog.action)}</h2><p id="action-dialog-description" className="mt-1 text-sm text-slate-600">{selectedItem.title}</p></div><Button type="button" variant="ghost" size="icon" onClick={() => setDialog(null)} aria-label="Close action dialog" data-dialog-initial-focus><X className="size-5" /></Button></div><form onSubmit={handleConfirmAction} className="space-y-5 p-5 sm:p-6">
       {dialog.action === "respond" && <div className="rounded-xl border border-teal-200 bg-teal-50 p-4"><Label htmlFor="rfi-response-file">Supporting file (optional)</Label><Input id="rfi-response-file" type="file" onChange={(event) => setRfiResponseFile(event.target.files?.[0] ?? null)} className="mt-1 cursor-pointer bg-white" /><p className="mt-1 text-xs text-teal-900">The file will be saved as an immutable version and linked to this information request.</p></div>}
       {isCompletion && <><div><p className="text-xs font-black uppercase tracking-wider text-slate-500">You are completing</p><p className="mt-1 text-lg font-black text-[#00284d]">{selectedItem.title}</p><p className="mt-1 text-sm text-slate-600">Required before completion:</p></div><div className="space-y-2">{requirements.map((requirement) => <label key={requirement.id} className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 hover:bg-slate-50"><input type="checkbox" checked={Boolean(completionChecks[requirement.id])} onChange={(event) => setCompletionChecks((current) => ({ ...current, [requirement.id]: event.target.checked }))} className="mt-0.5 size-4 accent-teal-700" /><span className="text-sm font-semibold text-slate-800">{requirement.label}</span></label>)}</div><div className="rounded-xl border border-teal-200 bg-teal-50 p-4"><p className="text-xs font-black uppercase tracking-wider text-teal-900">What happens next</p><ul className="mt-2 space-y-1 text-sm text-teal-950">{completionPreview.effects.map((effect) => <li key={effect} className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{effect}</li>)}</ul></div><div><Label htmlFor="determination">Reviewer determination</Label><select id="determination" value={determination} onChange={(event) => setDetermination(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>Complete / Approved</option><option>Complete with Conditions</option><option>Not Applicable</option></select></div></>}
       {dialog.action === "clear_blocker" && <><div><p className="text-xs font-black uppercase tracking-wider text-teal-800">Clear Blocker & Resume</p><p className="mt-1 text-lg font-black text-[#00284d]">Resume active review for {selectedItem.workstreamTitle}</p><p className="mt-1 text-sm text-slate-600">The blocker will be removed, the review clock will resume, and project participants will be notified.</p></div><div><Label htmlFor="unblock-note">Resolution notes (optional)</Label><textarea id="unblock-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Concurrence received / dependency resolved..." /></div></>}
@@ -2132,7 +2196,7 @@ export default function Home() {
     const triageOrganizations: TriageRoutingOrganizationOption[] = repository.getOrganizations().filter((organization) => organization.isActive && triageOrgCodes.has(organization.code)).map((organization) => ({ code: organization.code, name: organization.name }));
     const publishedTriageWorkflows = repository.getWorkflowTemplates().flatMap((template) => template.versions.filter((version) => version.status === "published").map((version) => ({ id: version.id, label: template.name, versionNumber: version.versionNumber })));
     const triageExistingWorkstreams = triageRequest ? repository.getWorkstreams().filter((workstream) => workstream.projectId === triageRequest.projectId) : [];
-    if (route === "catalog") return <div className="space-y-8"><h1 className="text-3xl font-black text-[#00284d]">Services &amp; Permits</h1><GovernmentServices onRequest={(title, details) => { openRequestCenter("service"); setRequestTitle(title); setRequestOutcome(title); setRequestDescription(""); setRequestAgency(""); setRequestArea(""); setRequestDate(""); setRequestBlocksWork(false); setSelectedCatalogPermitId(""); setRequestFile(null); setToast(`Include in your request: ${details}`); }} /><PermitCatalogPanel catalog={repository.getCatalog()} templates={repository.getWorkflowTemplates()} onStartRequest={(permitId) => { setSelectedCatalogPermitId(permitId); setRequestCenterMode("permit"); setRequestTitle(""); navigate("requests"); }} /></div>;
+    if (route === "catalog") return <div className="space-y-8"><h1 className="text-3xl font-black text-[#00284d]">Services &amp; Permits</h1><GovernmentServices onRequest={(title, details) => { openRequestCenter("service"); setRequestTitle(title); setRequestOutcome(title); setRequestDescription(""); setRequestAgency(""); setRequestArea(""); setRequestDate(""); setRequestBlocksWork(false); setSelectedCatalogPermitId(""); setRequestFile(null); showToast(`Include in your request: ${details}`); }} /><PermitCatalogPanel catalog={repository.getCatalog()} templates={repository.getWorkflowTemplates()} onStartRequest={(permitId) => { setSelectedCatalogPermitId(permitId); setRequestCenterMode("permit"); setRequestTitle(""); navigate("requests"); }} /></div>;
     let content: ReactNode;
     if (route === "detail") content = <WorkItemPage item={selectedItem} saving={saveStatus === "saving"} escalationTarget={escalationTarget} onEscalationTargetChange={setEscalationTarget} events={selectedItem ? repository.getAuditEvents().filter((event) => event.entityId === selectedItem.workstreamId || event.entityId === selectedItem.sourceId) : []}>{renderDetail()}</WorkItemPage>;
     else if (route === "my-work") content = renderMyWork();
@@ -2152,5 +2216,5 @@ export default function Home() {
     return <>{hydrationError && <div role="alert" className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-950"><span className="flex-1">{hydrationError}</span><Button type="button" variant="outline" size="sm" onClick={() => void retryHydration()}>Retry</Button></div>}{content}{triageRequest && <TriageRoutingDialog request={triageRequest} initialRows={suggestedTriageRows(triageRequest)} organizations={triageOrganizations} assignmentGroups={triageGroups} workflowVersions={publishedTriageWorkflows} existingWorkstreams={triageExistingWorkstreams} busy={triageBusy} onCancel={() => setTriageRequest(null)} onConfirm={(rows) => void triageCustomerRequest(triageRequest, rows)} onRequestClarification={(notes) => void requestCustomerIntakeClarification(triageRequest, notes)} onLinkExisting={(workstreamId, notes) => void linkCustomerRequestToWorkstream(triageRequest, workstreamId, notes)} />}</>;
   }
 
-  return <div className="min-h-screen bg-[#f3f6f7] text-[#172033] flex flex-col justify-between"><a className="skip-link" href="#main-content">Skip to main content</a><div className="road-stripe" /><header className="site-header sticky top-0 z-30"><div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6"><Button type="button" variant="ghost" size="icon" onClick={() => setMobileNavOpen((value) => !value)} className="text-white hover:bg-white/10 lg:hidden" aria-label="Toggle navigation"><Menu className="size-5" /></Button><span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d] sm:size-9"><Zap className="size-5 fill-current" aria-hidden="true" /></span><div className="min-w-0"><p className="text-xs font-black text-white sm:text-sm">{PRODUCT_NAME}</p><button type="button" onClick={() => openProject()} className="block max-w-[42vw] truncate text-left text-[11px] font-semibold text-slate-300 hover:text-white hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 cursor-pointer sm:max-w-none" title="Go to project page">{workspaceTitle(activePersona.workspace)} · {PROGRAM_SUBTITLE}</button></div><div className="ml-auto hidden items-center gap-2 text-xs text-slate-200 md:flex"><span className="rounded-full border border-white/20 px-3 py-1.5">{activePersona.name}</span><span className="rounded-full border border-teal-300/40 bg-teal-900/40 px-3 py-1.5 font-bold text-teal-100">{activePersona.roleLabel}</span></div><Button type="button" variant="ghost" size="icon" onClick={() => navigate("notifications")} className="relative shrink-0 text-white hover:bg-white/10" aria-label="Open notifications"><Bell className="size-5" /><span className="absolute right-1 top-1 size-2 rounded-full bg-[#f4a100]" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => void signOut()} className="shrink-0 px-2 text-white hover:bg-white/10 sm:px-3"><LogOut className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Sign out</span></Button></div></header><div className="mx-auto flex max-w-[1600px] items-start flex-1 w-full"><aside className={`${mobileNavOpen ? "block" : "hidden"} fixed inset-x-0 top-[69px] z-20 max-h-[calc(100vh-69px)] overflow-y-auto border-b border-slate-200 bg-white p-3 shadow-xl lg:sticky lg:top-[69px] lg:block lg:min-h-[calc(100vh-69px)] lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}><button type="button" onClick={() => openProject()} className="group mb-4 w-full rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-left transition hover:border-teal-400 hover:bg-teal-50 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 cursor-pointer" aria-label="Open project page" title="Open project page"><div className="flex items-center justify-between"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500 group-hover:text-teal-800">Current context</p><ArrowRight className="size-3 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-teal-700" aria-hidden="true" /></div><p className="mt-1 text-sm font-black text-[#00284d] group-hover:text-teal-950">{PROJECT_DISPLAY_NAME}</p><p className="mt-1 text-xs text-slate-500 group-hover:text-teal-900">Vermilion Parish · Louisiana</p></button><nav aria-label="Primary navigation" className="space-y-1"><p className="px-3 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Work</p>{primaryNav.map((item) => <button key={item.id} type="button" onClick={() => navigate(item.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${route === item.id ? "bg-[#00284d] text-white shadow-sm" : "text-slate-700 hover:bg-teal-50 hover:text-teal-950"}`}>{item.icon}<span className="flex-1">{item.label}</span>{typeof item.count === "number" && <span className={`rounded-full px-2 py-0.5 text-[10px] ${route === item.id ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700"}`}>{item.count}</span>}</button>)}{!activePersona.isCustomer && <p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Secondary tools</p>}{!activePersona.isCustomer && <><button type="button" onClick={() => { setSecondaryTool("schedule"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "schedule" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><CalendarClock className="size-4" />Schedule</button><button type="button" onClick={() => { setSecondaryTool("vault"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "vault" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><BookOpen className="size-4" />Document Vault</button><button type="button" onClick={() => { setSecondaryTool("catalog"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "catalog" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><Landmark className="size-4" />Permit Catalog</button></>}{canAdmin && <><p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Administration</p><button type="button" onClick={() => navigate("admin")} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "admin" ? "bg-[#00284d] text-white" : "text-slate-700 hover:bg-teal-50"}`}><Settings2 className="size-4" />Administration</button></>}</nav></aside><main id="main-content" className="min-w-0 flex-1 px-3 py-5 sm:px-6 sm:py-6 lg:px-10 lg:py-8">{toast && <div role="status" aria-live="polite" className="mb-5 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-950"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" aria-hidden="true" />{toast}</div>}{renderMain()}</main></div><SystemVersionFooter />{renderDialog()}{viewerModalDoc && <DocumentViewerModal document={viewerModalDoc} version={viewerModalVer} isOpen={Boolean(viewerModalDoc)} onClose={() => { setViewerModalDoc(null); setViewerModalVer(undefined); }} onDownload={(docId, verId) => void downloadVersion(docId, verId)} />}</div>;
+  return <div className="min-h-screen bg-[#f3f6f7] text-[#172033] flex flex-col justify-between"><a className="skip-link" href="#main-content">Skip to main content</a><div className="road-stripe" /><header className="site-header sticky top-0 z-30"><div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6"><Button type="button" variant="ghost" size="icon" onClick={() => setMobileNavOpen((value) => !value)} className="text-white hover:bg-white/10 lg:hidden" aria-label="Toggle navigation" aria-expanded={mobileNavOpen} aria-controls="mobile-navigation"><Menu className="size-5" /></Button><span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d] sm:size-9"><Zap className="size-5 fill-current" aria-hidden="true" /></span><div className="min-w-0"><p className="text-xs font-black text-white sm:text-sm">{PRODUCT_NAME}</p><button type="button" onClick={() => openProject()} className="block max-w-[42vw] truncate text-left text-[11px] font-semibold text-slate-300 hover:text-white hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 cursor-pointer sm:max-w-none" title="Go to project page">{workspaceTitle(activePersona.workspace)} · {PROGRAM_SUBTITLE}</button></div><div className="ml-auto hidden items-center gap-2 text-xs text-slate-200 md:flex"><span className="rounded-full border border-white/20 px-3 py-1.5">{activePersona.name}</span><span className="rounded-full border border-teal-300/40 bg-teal-900/40 px-3 py-1.5 font-bold text-teal-100">{activePersona.roleLabel}</span></div><Button type="button" variant="ghost" size="icon" onClick={() => navigate("notifications")} className="relative shrink-0 text-white hover:bg-white/10" aria-label="Open notifications"><Bell className="size-5" /><span className="absolute right-1 top-1 size-2 rounded-full bg-[#f4a100]" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => void signOut()} className="shrink-0 px-2 text-white hover:bg-white/10 sm:px-3" aria-label="Sign out"><LogOut className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Sign out</span></Button></div></header><div className="mx-auto flex max-w-[1600px] items-start flex-1 w-full"><aside id="mobile-navigation" ref={mobileNavRef} className={`${mobileNavOpen ? "block" : "hidden"} fixed inset-x-0 top-[calc(69px+0.45rem)] z-20 max-h-[calc(100vh-69px-0.45rem)] overflow-y-auto border-b border-slate-200 bg-white p-3 shadow-xl lg:sticky lg:top-[69px] lg:block lg:min-h-[calc(100vh-69px)] lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}><button type="button" onClick={() => openProject()} className="group mb-4 w-full rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-left transition hover:border-teal-400 hover:bg-teal-50 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 cursor-pointer" aria-label="Open project page" title="Open project page"><div className="flex items-center justify-between"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500 group-hover:text-teal-800">Current context</p><ArrowRight className="size-3 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-teal-700" aria-hidden="true" /></div><p className="mt-1 text-sm font-black text-[#00284d] group-hover:text-teal-950">{PROJECT_DISPLAY_NAME}</p><p className="mt-1 text-xs text-slate-500 group-hover:text-teal-900">Vermilion Parish · Louisiana</p></button><nav aria-label="Primary navigation" className="space-y-1"><p className="px-3 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Work</p>{primaryNav.map((item) => <button key={item.id} type="button" onClick={() => navigate(item.id)} aria-current={route === item.id ? "page" : undefined} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${route === item.id ? "bg-[#00284d] text-white shadow-sm" : "text-slate-700 hover:bg-teal-50 hover:text-teal-950"}`}>{item.icon}<span className="flex-1">{item.label}</span>{typeof item.count === "number" && <span className={`rounded-full px-2 py-0.5 text-[10px] ${route === item.id ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700"}`}>{item.count}</span>}</button>)}{!activePersona.isCustomer && <p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Secondary tools</p>}{!activePersona.isCustomer && <><button type="button" onClick={() => { setSecondaryTool("schedule"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "schedule" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><CalendarClock className="size-4" />Schedule</button><button type="button" onClick={() => { setSecondaryTool("vault"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "vault" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><BookOpen className="size-4" />Document Vault</button><button type="button" onClick={() => { setSecondaryTool("catalog"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "catalog" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><Landmark className="size-4" />Permit Catalog</button></>}{canAdmin && <><p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Administration</p><button type="button" onClick={() => navigate("admin")} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "admin" ? "bg-[#00284d] text-white" : "text-slate-700 hover:bg-teal-50"}`}><Settings2 className="size-4" />Administration</button></>}</nav></aside><main id="main-content" className="min-w-0 flex-1 px-3 py-5 sm:px-6 sm:py-6 lg:px-10 lg:py-8">{renderToast()}{renderMain()}</main></div><SystemVersionFooter />{renderDialog()}{viewerModalDoc && <DocumentViewerModal document={viewerModalDoc} version={viewerModalVer} isOpen={Boolean(viewerModalDoc)} onClose={() => { setViewerModalDoc(null); setViewerModalVer(undefined); }} onDownload={(docId, verId) => void downloadVersion(docId, verId)} />}</div>;
 }
