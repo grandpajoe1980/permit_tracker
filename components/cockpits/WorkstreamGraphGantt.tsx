@@ -321,11 +321,11 @@ export function WorkstreamGraphGantt({
           <div className="flex flex-wrap items-center gap-3">
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-center">
               <div className="text-xs font-semibold text-slate-500">Immutable Baseline</div>
-              <div className="text-sm font-bold text-slate-900">{project.baselineLaunchDate}</div>
+              <div className="text-sm font-bold text-slate-900">{displayDate(project.baselineLaunchDate)}</div>
             </div>
             <div className="rounded-xl border border-purple-200 bg-purple-50 px-4 py-2.5 text-center">
               <div className="text-xs font-semibold text-purple-700">Current Forecast</div>
-              <div className="text-sm font-black text-purple-900">{project.currentForecastLaunchDate}</div>
+              <div className="text-sm font-black text-purple-900">{displayDate(project.currentForecastLaunchDate)}</div>
             </div>
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-center">
               <div className="text-xs font-semibold text-rose-700">Net Project Variance</div>
