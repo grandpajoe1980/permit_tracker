@@ -44,7 +44,22 @@ export async function startVinextServer() {
         return {
           baseUrl,
           async stop() {
-            if (child.exitCode === null) child.kill();
+            if (child.exitCode !== null) return;
+            await new Promise((resolve) => {
+              let settled = false;
+              const finish = () => {
+                if (settled) return;
+                settled = true;
+                resolve();
+              };
+              child.once("exit", finish);
+              child.kill();
+              const killTimer = setTimeout(() => {
+                if (child.exitCode === null) child.kill("SIGKILL");
+                finish();
+              }, 1_000);
+              killTimer.unref();
+            });
           },
         };
       }

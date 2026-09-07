@@ -9,7 +9,7 @@ const vite = await createServer({
   configFile: false,
   root,
   resolve: { alias: { "@": root } },
-  server: { middlewareMode: true },
+  server: { middlewareMode: true, ws: false },
 });
 
 after(async () => {
@@ -310,7 +310,6 @@ test("Intake Parser: maintains full backward compatibility for natural language 
   assert.equal(intake.suggestedLeadAgencyCode, "LPSC / Entergy");
   assert.ok(intake.statutoryNotice.includes("LPSC transmission docket"));
 });
-
 
 
 

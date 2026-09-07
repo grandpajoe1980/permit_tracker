@@ -9,7 +9,7 @@ const vite = await createServer({
   configFile: false,
   root,
   resolve: { alias: { "@": root } },
-  server: { middlewareMode: true },
+  server: { middlewareMode: true, ws: false },
 });
 
 after(async () => {
@@ -143,4 +143,3 @@ test("Simulation Engine: returns pre-built scenario presets for SpaceX Pecan Isl
   assert.ok(names.some((n) => n.includes("CPRA")));
   assert.ok(names.some((n) => n.includes("Tropical Storm")));
 });
-

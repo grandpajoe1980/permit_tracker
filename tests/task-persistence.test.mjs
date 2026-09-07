@@ -9,14 +9,20 @@ const vite = await createServer({
   configFile: false,
   root,
   resolve: { alias: { "@": root } },
-  server: { middlewareMode: true },
+  server: { middlewareMode: true, ws: false },
 });
 
 after(async () => {
   await vite.close();
 });
 
-test("Supabase Task and Workstream Persistence: updates and persists to database", async () => {
+const liveSupabaseConfigured = Boolean(
+  (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL) &&
+    (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.PATH_TEST_ANON_KEY),
+);
+const liveTest = liveSupabaseConfigured ? test : test.skip;
+
+liveTest("Supabase Task and Workstream Persistence: updates and persists to database", async () => {
   const { isSupabaseConfigured } = await vite.ssrLoadModule("/lib/supabase/client.ts");
   const { repository } = await vite.ssrLoadModule("/lib/repository.ts");
 

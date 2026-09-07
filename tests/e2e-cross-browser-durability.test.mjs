@@ -32,6 +32,7 @@ for (const [key, value] of Object.entries(env)) {
 process.env.APP_DATA_MODE ||= "test";
 const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL || "https://zomzacaxwqfwjstkxbpv.supabase.co";
 const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY || env.LEGACY_SERVICE_ROLE_KEY || env.legacy_service_role_key;
+const liveSupabaseConfigured = Boolean(supabaseKey);
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const vite = await createServer({
@@ -39,7 +40,7 @@ const vite = await createServer({
   configFile: false,
   root,
   resolve: { alias: { "@": root } },
-  server: { middlewareMode: true },
+  server: { middlewareMode: true, ws: false },
 });
 
 after(async () => {
@@ -50,9 +51,10 @@ const mutations = await vite.ssrLoadModule("/lib/supabase/mutations.ts");
 const queries = await vite.ssrLoadModule("/lib/supabase/queries.ts");
 const storage = await vite.ssrLoadModule("/lib/supabase/storage.ts");
 
-const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+const liveTest = liveSupabaseConfigured ? test : test.skip;
+const supabase = liveSupabaseConfigured ? createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } }) : null;
 
-test("E2E Durability Flow: Dual-User Customer Request Propagation & Audit Verification", async () => {
+liveTest("E2E Durability Flow: Dual-User Customer Request Propagation & Audit Verification", async () => {
   const reqId = `test-req-${Date.now()}`;
   const confirmationNumber = `PATH-2026-TEST-${Math.floor(Math.random() * 10000)}`;
 
@@ -105,7 +107,7 @@ test("E2E Durability Flow: Dual-User Customer Request Propagation & Audit Verifi
   await supabase.from("audit_events").delete().eq("entity_id", confirmationNumber);
 });
 
-test("E2E Durability Flow: RFI Lifecycle & Workstream State Machine in PostgreSQL", async () => {
+liveTest("E2E Durability Flow: RFI Lifecycle & Workstream State Machine in PostgreSQL", async () => {
   const rfiId = `test-rfi-${Date.now()}`;
   const rfiCode = `RFI-2026-TEST-${Math.floor(Math.random() * 10000)}`;
 
@@ -183,7 +185,7 @@ test("E2E Durability Flow: RFI Lifecycle & Workstream State Machine in PostgreSQ
   await supabase.from("audit_events").delete().eq("entity_id", rfiCode);
 });
 
-test("E2E Durability Flow: Multi-Agency Document Review Signoff in PostgreSQL", async () => {
+liveTest("E2E Durability Flow: Multi-Agency Document Review Signoff in PostgreSQL", async () => {
   const versionId = `test-doc-v-${Date.now()}`;
   const testVersionNumber = Number(String(Date.now()).slice(-8));
 

@@ -35,7 +35,7 @@ const vite = await createServer({
   configFile: false,
   root,
   resolve: { alias: { "@": root } },
-  server: { middlewareMode: true },
+  server: { middlewareMode: true, ws: false },
 });
 
 after(async () => {
@@ -46,6 +46,8 @@ const mappings = await vite.ssrLoadModule("/lib/supabase/mappings.ts");
 const queries = await vite.ssrLoadModule("/lib/supabase/queries.ts");
 const storage = await vite.ssrLoadModule("/lib/supabase/storage.ts");
 const { repository } = await vite.ssrLoadModule("/lib/repository.ts");
+const liveSupabaseConfigured = Boolean(supabaseUrl && supabaseKey);
+const liveTest = liveSupabaseConfigured ? test : test.skip;
 
 test("Supabase Mappings: workstreamRowToDomain and domainToWorkstreamRow bidirectional fidelity", () => {
   const row = {
@@ -164,12 +166,7 @@ test("Supabase Storage: calculateSHA256 generates valid 64-character hex hash", 
   assert.match(hash, /^[0-9a-f]{64}$/);
 });
 
-test("Supabase Live Database: verifies live tables on project zomzacaxwqfwjstkxbpv", async () => {
-  if (!supabaseUrl || !supabaseKey) {
-    console.warn("Skipping live Supabase assertion (credentials missing in environment)");
-    return;
-  }
-
+liveTest("Supabase Live Database: verifies live tables on project zomzacaxwqfwjstkxbpv", async () => {
   const client = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
 
   const [wsRes, permitRes, docRes, profRes] = await Promise.all([
@@ -192,7 +189,7 @@ test("Supabase Live Database: verifies live tables on project zomzacaxwqfwjstkxb
   assert.ok(profRes.data.length > 0, "Expected user_profiles in Supabase PostgreSQL");
 });
 
-test("Supabase Hydration: repository.hydrateFromSupabase populates domain records from PostgreSQL", async () => {
+liveTest("Supabase Hydration: repository.hydrateFromSupabase populates domain records from PostgreSQL", async () => {
   const success = await repository.hydrateFromSupabase();
   assert.equal(success, true);
   const workstreams = repository.getWorkstreams();

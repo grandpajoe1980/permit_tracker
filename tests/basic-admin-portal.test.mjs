@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const vite = await createServer({ appType: "custom", configFile: false, root, resolve: { alias: { "@": root } }, server: { middlewareMode: true } });
+const vite = await createServer({ appType: "custom", configFile: false, root, resolve: { alias: { "@": root } }, server: { middlewareMode: true, ws: false } });
 after(() => vite.close());
 const { buildShellPath, parseShellPath } = await vite.ssrLoadModule("/lib/navigation.ts");
 const { ADMIN_RESOURCES, isAdminResource } = await vite.ssrLoadModule("/lib/admin-resources.ts");

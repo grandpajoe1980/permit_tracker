@@ -11,7 +11,7 @@ const vite = await createServer({
   configFile: false,
   root,
   resolve: { alias: { "@": root } },
-  server: { middlewareMode: true },
+  server: { middlewareMode: true, ws: false },
 });
 
 after(async () => {
@@ -477,6 +477,7 @@ test("SQL Migration: schema migration file exists and defines all tables, column
 
 const mutations = await vite.ssrLoadModule("/lib/supabase/mutations.ts");
 const { getSupabaseBrowser } = await vite.ssrLoadModule("/lib/supabase/client.ts");
+const rpcTest = getSupabaseBrowser() ? test : test.skip;
 
 /**
  * Helper to intercept client.rpc calls and record invocations.
@@ -510,7 +511,7 @@ function setupRpcSpy() {
   };
 }
 
-test("Supabase RPC Payloads: mutateAssignTicket constructs valid PostgreSQL parameter payload", async () => {
+rpcTest("Supabase RPC Payloads: mutateAssignTicket constructs valid PostgreSQL parameter payload", async () => {
   const spy = setupRpcSpy();
 
   try {
@@ -574,7 +575,7 @@ test("Supabase RPC Payloads: mutateAssignTicket constructs valid PostgreSQL para
   }
 });
 
-test("Supabase RPC Payloads: mutateUpdateTicketITSMState constructs valid PostgreSQL parameter payload", async () => {
+rpcTest("Supabase RPC Payloads: mutateUpdateTicketITSMState constructs valid PostgreSQL parameter payload", async () => {
   const spy = setupRpcSpy();
 
   try {
@@ -637,7 +638,7 @@ test("Supabase RPC Payloads: mutateUpdateTicketITSMState constructs valid Postgr
   }
 });
 
-test("Supabase RPC Payloads: mutateSetTicketPriority constructs valid PostgreSQL parameter payload", async () => {
+rpcTest("Supabase RPC Payloads: mutateSetTicketPriority constructs valid PostgreSQL parameter payload", async () => {
   const spy = setupRpcSpy();
 
   try {
@@ -681,7 +682,7 @@ test("Supabase RPC Payloads: mutateSetTicketPriority constructs valid PostgreSQL
   }
 });
 
-test("Supabase RPC Payloads: mutateManageAssignmentGroup constructs valid PostgreSQL parameter payload", async () => {
+rpcTest("Supabase RPC Payloads: mutateManageAssignmentGroup constructs valid PostgreSQL parameter payload", async () => {
   const spy = setupRpcSpy();
 
   try {
@@ -742,7 +743,7 @@ test("Supabase RPC Payloads: mutateManageAssignmentGroup constructs valid Postgr
   }
 });
 
-test("Supabase RPC Payloads: mutateManageAssignmentGroupMembership constructs valid PostgreSQL parameter payload", async () => {
+rpcTest("Supabase RPC Payloads: mutateManageAssignmentGroupMembership constructs valid PostgreSQL parameter payload", async () => {
   const spy = setupRpcSpy();
 
   try {
@@ -800,7 +801,7 @@ test("Supabase RPC Payloads: mutateManageAssignmentGroupMembership constructs va
   }
 });
 
-test("Supabase RPC Error Handling: propagates database exceptions with clear messages", async () => {
+rpcTest("Supabase RPC Error Handling: propagates database exceptions with clear messages", async () => {
   const spy = setupRpcSpy();
 
   try {

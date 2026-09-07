@@ -30,6 +30,7 @@ const env = { ...readEnvFile(), ...process.env };
 const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
 const supabaseAnonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
 const supabaseServiceKey = env.SUPABASE_SERVICE_ROLE_KEY || env.legacy_service_role_key;
+const liveSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey && supabaseServiceKey);
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const vite = await createServer({
@@ -37,7 +38,7 @@ const vite = await createServer({
   configFile: false,
   root,
   resolve: { alias: { "@": root } },
-  server: { middlewareMode: true },
+  server: { middlewareMode: true, ws: false },
 });
 
 after(async () => {
@@ -54,18 +55,24 @@ const { downloadDocumentFile, getSignedDocumentUrl } = await vite.ssrLoadModule(
 const { downloadDocumentVersion } = await vite.ssrLoadModule("/lib/document-download-utils.ts");
 const { repository } = await vite.ssrLoadModule("/lib/repository.ts");
 
-const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
-const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+const liveTest = liveSupabaseConfigured ? test : test.skip;
+
+const adminClient = liveSupabaseConfigured
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  : null;
+const anonClient = liveSupabaseConfigured
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  : null;
 
 // =========================================================================
 // 1. LIVE DATABASE INTEGRITY & FOREIGN KEY INVARIANTS
 // =========================================================================
 
-test("DB Integrity: Row counts across core tables reflect authoritative seed", async () => {
+liveTest("DB Integrity: Row counts across core tables reflect authoritative seed", async () => {
   const [
     projectsRes,
     workstreamsRes,
@@ -119,7 +126,7 @@ test("DB Integrity: Row counts across core tables reflect authoritative seed", a
   assert.ok((permitTypesRes.count ?? 0) >= 15, `Expected >= 15 permit types, found ${permitTypesRes.count}`);
 });
 
-test("FK Invariants: Every task has a valid workstream reference", async () => {
+liveTest("FK Invariants: Every task has a valid workstream reference", async () => {
   const { data: tasks, error: tasksError } = await adminClient
     .from("tasks")
     .select("id, task_code, title, workstream_id");
@@ -143,7 +150,7 @@ test("FK Invariants: Every task has a valid workstream reference", async () => {
   }
 });
 
-test("FK Invariants: Every workstream has a valid project reference", async () => {
+liveTest("FK Invariants: Every workstream has a valid project reference", async () => {
   const { data: workstreams, error: wsError } = await adminClient
     .from("workstreams")
     .select("id, code, title, project_id");
@@ -167,7 +174,7 @@ test("FK Invariants: Every workstream has a valid project reference", async () =
   }
 });
 
-test("FK Invariants: Every document_version references a valid document", async () => {
+liveTest("FK Invariants: Every document_version references a valid document", async () => {
   const { data: versions, error: vError } = await adminClient
     .from("document_versions")
     .select("id, document_id, document_ref_id, file_name");
@@ -191,7 +198,7 @@ test("FK Invariants: Every document_version references a valid document", async 
   }
 });
 
-test("FK Invariants: Every document_agency_review references a valid document_version", async () => {
+liveTest("FK Invariants: Every document_agency_review references a valid document_version", async () => {
   const { data: reviews, error: rError } = await adminClient
     .from("document_agency_reviews")
     .select("id, document_version_id, reviewing_org_code");
@@ -213,7 +220,7 @@ test("FK Invariants: Every document_agency_review references a valid document_ve
   }
 });
 
-test("FK Invariants: Every commitment references a valid workstream", async () => {
+liveTest("FK Invariants: Every commitment references a valid workstream", async () => {
   const { data: commitments, error: cError } = await adminClient
     .from("commitments")
     .select("id, workstream_id, committed_action");
@@ -240,7 +247,7 @@ test("FK Invariants: Every commitment references a valid workstream", async () =
 // 2. SUPABASE STORAGE BINARY DOWNLOADS & CRYPTOGRAPHIC SHA-256 PARITY
 // =========================================================================
 
-test("Storage Downloads: Live binary download and SHA-256 hash match for all seeded documents", async () => {
+liveTest("Storage Downloads: Live binary download and SHA-256 hash match for all seeded documents", async () => {
   const { data: versions, error: vError } = await adminClient
     .from("document_versions")
     .select("id, document_id, document_ref_id, storage_path, file_name, file_size_bytes, sha256_hash");
@@ -271,7 +278,7 @@ test("Storage Downloads: Live binary download and SHA-256 hash match for all see
   }
 });
 
-test("Storage Signed URLs: Generates valid signed URLs that fetch exact binary stream with HTTP 200", async () => {
+liveTest("Storage Signed URLs: Generates valid signed URLs that fetch exact binary stream with HTTP 200", async () => {
   const { data: versions, error: vError } = await adminClient
     .from("document_versions")
     .select("id, storage_path, file_name, file_size_bytes, sha256_hash")
@@ -301,7 +308,7 @@ test("Storage Signed URLs: Generates valid signed URLs that fetch exact binary s
 // 3. ADVERSARIAL EDGE CASES & SECURITY CHALLENGES
 // =========================================================================
 
-test("Adversarial: Tampered SHA-256 hash detection fails verification gracefully", async () => {
+liveTest("Adversarial: Tampered SHA-256 hash detection fails verification gracefully", async () => {
   const fakeBytes = Buffer.from("TAMPERED_MALICIOUS_CONTENT_INJECTION");
   const tamperedHash = "deadbeef".repeat(8);
 
@@ -344,7 +351,7 @@ test("Adversarial: Tampered SHA-256 hash detection fails verification gracefully
   assert.match(downloadResult.error.message, /SHA-256/i, "Error message must specifically cite SHA-256 hash mismatch");
 });
 
-test("Adversarial: Querying non-existent storage path returns clean error without crashing", async () => {
+liveTest("Adversarial: Querying non-existent storage path returns clean error without crashing", async () => {
   const nonExistentPath = `non-existent-uuid-${Date.now()}/v1/ghost-file.pdf`;
   const result = await downloadDocumentFile(nonExistentPath);
 
@@ -353,7 +360,7 @@ test("Adversarial: Querying non-existent storage path returns clean error withou
   assert.match(result.error.message, /Storage download failed/i);
 });
 
-test("Adversarial: Anonymous client rejected when attempting unauthorized writes to tables and storage", async () => {
+liveTest("Adversarial: Anonymous client rejected when attempting unauthorized writes to tables and storage", async () => {
   // 1. Storage write attempt with anonymous client
   const unauthUpload = await anonClient.storage
     .from("path-documents")
@@ -381,7 +388,7 @@ test("Adversarial: Anonymous client rejected when attempting unauthorized writes
 // 4. TASK PERSISTENCE MUTATIONS & CONSTRAINT CHECKS
 // =========================================================================
 
-test("Task Mutations: mutateUpdateTask persists status and duration changes cleanly", async () => {
+liveTest("Task Mutations: mutateUpdateTask persists status and duration changes cleanly", async () => {
   const { data: tasks, error: fetchErr } = await adminClient
     .from("tasks")
     .select("id, title, status, itsm_state, duration_days, float_days")
@@ -425,7 +432,7 @@ test("Task Mutations: mutateUpdateTask persists status and duration changes clea
   }
 });
 
-test("Task Mutations: mutateCompleteTask marks task completed and resolves ITSM state cleanly", async () => {
+liveTest("Task Mutations: mutateCompleteTask marks task completed and resolves ITSM state cleanly", async () => {
   const { data: tasks } = await adminClient.from("tasks").select("id, status, title").limit(1);
   assert.ok(tasks && tasks.length > 0);
   const task = tasks[0];
@@ -457,7 +464,7 @@ test("Task Mutations: mutateCompleteTask marks task completed and resolves ITSM 
   }
 });
 
-test("Security & Auth: Unauthenticated callers are rejected from ITSM state RPCs", async () => {
+liveTest("Security & Auth: Unauthenticated callers are rejected from ITSM state RPCs", async () => {
   const { data: tasks } = await adminClient.from("tasks").select("id").limit(1);
   assert.ok(tasks && tasks.length > 0);
 
