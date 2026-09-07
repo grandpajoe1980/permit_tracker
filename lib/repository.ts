@@ -91,6 +91,7 @@ import {
   mutateCreateCommitment,
   mutateUpdateCommitmentStatus,
   mutateCreateCoordinationRequest,
+  mutateUpdateCoordinationRequest,
   mutateCreateCustomerRequest,
   mutateCreateCustomerRequestWithDocument,
   mutateCreateExternalFiling,
@@ -1589,6 +1590,20 @@ class ProjectDeliveryRepository {
     });
     if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Coordination request was not persisted.") };
     this.coordinationRequests = [result.data, ...this.coordinationRequests.filter((entry) => entry.id !== result.data?.id)];
+    return result;
+  }
+
+  async updateCoordinationRequestPersisted(params: { requestId: string; status: CoordinationRequestRecord["status"]; responseSummary: string; actorName: string; actorOrgName: string }): Promise<{ data: CoordinationRequestRecord | null; error: Error | null }> {
+    if (!params.responseSummary.trim()) return { data: null, error: new Error("Explain the coordination response before saving.") };
+    const request = this.coordinationRequests.find((entry) => entry.id === params.requestId || entry.code === params.requestId);
+    if (!request) return { data: null, error: new Error("Coordination request not found.") };
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      return { data: this.updateCoordinationRequest(params.requestId, params), error: null };
+    }
+    const result = await mutateUpdateCoordinationRequest({ requestId: request.id, requestCode: request.code, status: params.status as "in_review" | "concurred" | "objection_raised" | "closed", responseSummary: params.responseSummary, actorName: params.actorName, actorOrgName: params.actorOrgName });
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Coordination response was not confirmed by the database.") };
+    this.coordinationRequests = this.coordinationRequests.map((entry) => entry.id === result.data?.id ? result.data : entry);
     return result;
   }
 
