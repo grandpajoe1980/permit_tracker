@@ -55,6 +55,7 @@ export type WorkActionId =
   | "accept_rfi_response"
   | "request_clarification"
   | "respond"
+  | "coordination_response"
   | "upload_documents";
 
 export type QueueSectionId = "needs_action" | "due_soon" | "waiting" | "recently_completed";
@@ -654,7 +655,7 @@ export function getAvailableActions(item: OperationalWorkItem, persona: Operatio
     actions.push("request_information", "add_note");
   } else if (item.kind === "coordination") {
     if (item.statusTone !== "green") {
-      actions.push("mark_blocked");
+      actions.push("coordination_response", "mark_blocked");
     }
     actions.push("request_information", "add_note");
   } else if (item.kind === "workflow" || item.kind === "task") {
