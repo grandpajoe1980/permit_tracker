@@ -31,6 +31,12 @@ import { asOfDateTime } from "@/lib/time";
 
 import { InteractiveScheduleSimulator } from "./InteractiveScheduleSimulator";
 
+function displayDate(value?: string) {
+  if (!value) return "Not scheduled";
+  const date = new Date(`${value.length === 10 ? `${value}T12:00:00` : value}`);
+  return Number.isNaN(date.valueOf()) ? "Not scheduled" : date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 // ====================================================================
 // OPERATIONAL STATE COLOR CONFIGURATION & METADATA
 // ====================================================================
@@ -650,7 +656,7 @@ export function WorkstreamGraphGantt({
                             }}
                             title={`Baseline Schedule: ${ws.baselineStartDate} → ${ws.baselineTargetDate}`}
                           >
-                            <span className="truncate opacity-80">Past / Baseline: {ws.baselineStartDate}</span>
+                            <span className="truncate opacity-80">Past / Baseline: {displayDate(ws.baselineStartDate)}</span>
                           </div>
                         </div>
 
@@ -662,7 +668,7 @@ export function WorkstreamGraphGantt({
                               left: `${currentStart}%`,
                               width: `${currentWidth}%`,
                             }}
-                            title={`${ws.title} (${ws.code})\nState: ${stateConfig.label}\nForecast: ${ws.forecastStartDate} → ${ws.forecastTargetDate} (${hasSlip ? `+${ws.scheduleVarianceDays}d variance` : "On Track"})\nReviewer: ${ws.regulatoryLead.assignedReviewerName} (${ws.regulatoryLead.orgCode})`}
+                            title={`${ws.title} (${ws.code})\nState: ${stateConfig.label}\nForecast: ${displayDate(ws.forecastStartDate)} → ${displayDate(ws.forecastTargetDate)} (${hasSlip ? `+${ws.scheduleVarianceDays}d variance` : "On Track"})\nReviewer: ${ws.regulatoryLead.assignedReviewerName || "Unassigned"} (${ws.regulatoryLead.orgCode})`}
                           >
                             <span className="truncate text-[10px] font-black drop-shadow-sm">Current: {stateConfig.shortLabel}</span>
 
