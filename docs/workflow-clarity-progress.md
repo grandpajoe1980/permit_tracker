@@ -96,9 +96,9 @@ For each task: reproduce, patch minimally, run focused tests/build/lint as appro
 
 ## Final verification checkpoint — 2026-09-07
 
-- GitHub `main`, the local checkout, and the published Site source are aligned at `37d5c3ef9113d08978720316e113442fef3eca5c`; the older Site source head was preserved on `codex-backup-31a-mobile-sync` before synchronization.
-- Updated stale regression contracts to match the current product behavior: readable Gantt dates, non-clipping mobile overflow, and neutral workspace-status footer language. The focused shell, UI, and cockpit suites now pass 21/21 tests.
-- The earlier focused operational, navigation, and source-contract suites remain green at 43/43 tests. Lint, production build, and build-artifact secret scan pass.
+- The deployed runtime/Site source remains at `37d5c3ef9113d08978720316e113442fef3eca5c`; GitHub `main` and the local checkout now include the verification-only follow-up at `118fa63594c63ac68b348ebfc4bece3514c750ab`. The older Site source head was preserved on `codex-backup-31a-mobile-sync` before synchronization.
+- Updated stale regression contracts to match the current product behavior: readable Gantt dates, non-clipping mobile overflow, and neutral workspace-status footer language. The combined focused shell, UI, cockpit, operational, navigation, and source-contract suites now pass 64/64 tests.
+- Lint, production build, and build-artifact secret scan pass.
 - Full `npm test` is not a clean environment result: live-Supabase tests fail without local URL/key variables, the shared test harness repeatedly reports port `24678` in use, and the run can hang behind those server collisions. These are verification-environment blockers, not a browser/mobile source failure.
 - Supabase read-back confirms `RFI-E2E-A9F4` and `RFI-GLOBAL-8C21` are `accepted`, `CR-E2E-A9F4` is `concurred`, and `RFI-2026-60A808BA` remains `issued` with no response after the blocked file-byte transfer attempt.
 - Browser boundary: the older Vercel shell loads, while the current supervised Site preview is blocked by the cloud browser before rendering. Browser-authenticated file upload with non-empty bytes and a rendered 390px screenshot remain the final external checks.
