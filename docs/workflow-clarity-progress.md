@@ -53,7 +53,7 @@ For each task: reproduce, patch minimally, run focused tests/build/lint as appro
 - Persisted demo journey `PATH-2026-E2E-A9F4` (`customer-request-e2e-20260907-a9f4`) and triaged it into `E2E-A9F4-USACE`, `E2E-A9F4-LDEQ`, and `E2E-A9F4-STATEPO`. Read-back confirmed `status=in_progress`, `itsm_state=triaged`, three canonical workstream IDs, pinned request workflow stages, and `customer_request_id` links.
 - Assigned those workstreams through `rpc_assign_ticket` to the exact persisted groups `USACE - Federal Water and Wetlands Review`, `LDEQ - Air Quality & Environmental Review`, and `Governor's Project Office - Executive Triage & Delivery`; read-back confirmed group IDs, agency codes, three assignment audit events, the request audit trail, and the intake notification.
 - Transactional triage and trigger probes passed without leaving additional records. Security advisor no longer reports the trigger helper; pre-existing SECURITY DEFINER and performance policy advisories remain unchanged and require a separate security/performance sprint.
-- Remaining unverified scope: browser-authenticated cross-user journeys, file upload/RFI/coordination mutations, and mobile visual checks. No production business records were changed; the only persisted records are the explicitly tagged demo validation records above.
+- Remaining unverified scope: browser-authenticated cross-user journeys, file upload/RFI/coordination mutations, and mobile visual checks. No unrelated production business records were changed; the only persisted business rows created for validation are the explicitly tagged demo records above.
 
 ## Live RFI and coordination verification — 2026-09-07
 
@@ -67,6 +67,12 @@ For each task: reproduce, patch minimally, run focused tests/build/lint as appro
 - Read-back confirmed `rfis.status=accepted`, `rfi_responses.review_status=accepted`, `submitted_by_user_id=Alex Martin`, and the linked workstream returned to `operational_state=running` with no waiting reason.
 - Read-back confirmed three recipient-team notifications for the configured SPACEPORT members, two requesting-team notifications for configured LDEQ members, and one acceptance notification addressed to Alex Martin. Every notification has the canonical `/work/rfi/rfi-global-8c21` link and a unique dedupe key.
 - Audit read-back confirmed actor identities for issue (Jordan), response (Alex), and acceptance (Joe). The live probe completed without errors; the remaining boundary is browser-authenticated file-upload and mobile verification.
+
+## Live authorization-boundary verification — 2026-09-07
+
+- With the Alex Martin demo identity in the request JWT context, `has_project_access` returned `true` for the tagged project while `can_mutate_ticket` returned an explicit `false` for an unassigned task. The task remained `in_progress`; no write was attempted.
+- The original helper could return SQL `NULL` for nullable assignee/group fields. Forward migration `20260907123737_harden_mutation_authorization_nulls` now coalesces nullable authorization branches and access checks to `false`.
+- With the Joe Skaggs system-admin identity, the same project and task returned `true` for both access and mutation authority. Routine privileges leave the helper callable by `authenticated`; trigger-only RFI helpers remain non-executable by API roles.
 
 ## Live completion-semantics verification — 2026-09-07
 
