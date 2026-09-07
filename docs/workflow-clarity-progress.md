@@ -79,3 +79,10 @@ For each task: reproduce, patch minimally, run focused tests/build/lint as appro
 - Task `task-3b01f616f8984d9799716dc070331f4f` completed through `rpc_complete_task`; read-back confirmed `status=completed`, `itsm_state=resolved`, completion date, one task audit event, and one deduplicated completion notification. Its parent remained on Request intake until stage completion was separately invoked.
 - Commitment `commitment-e2e-a9f4` moved from `on_track` to `fulfilled` through `rpc_update_commitment_status`; read-back confirmed the fulfilled date, one audit event, and the parent workstream remained unchanged.
 - `rpc_complete_workstream_stage` first rejected an incomplete checklist with the exact missing requirement. After supplying `Confirm request intake evidence`, it created stage run `677d0c86-72e8-4b1a-bc0c-403bd4e6eff8`, recorded the completed checklist and actor, advanced the workstream to Technical team review, and created the next-stage task. This proves task/commitment/stage completion remain distinct events.
+
+## Browser acceptance checkpoint — 2026-09-07
+
+- The deployed customer workspace loaded at commit `f110fdb`; Alex Martin's Home, My Requests, request search, canonical work-item links, and project/Gantt views rendered in an authenticated browser session.
+- Jordan Lee's reviewer workspace showed issued RFIs in `Waiting on others`; the detail projection incorrectly described response-acceptance actions before an applicant response existed. The projection now says to wait for the applicant response and labels the next handoff accurately.
+- The customer RFI response dialog exposes text plus an optional immutable-version attachment. A synthetic response and non-sensitive attachment were staged for the live demo RFI; final submission and cross-user read-back remain the next acceptance action.
+- Lint, production build/security scan, source-contract tests, project-navigation tests, and operational UX tests pass after the clarity fix.

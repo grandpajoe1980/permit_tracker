@@ -56,13 +56,46 @@ test("available actions are permission-aware and customer-safe", () => {
   assert.deepEqual(ux.getAvailableActions(stage, ux.getOperationalPersona(customerPersona)), []);
 });
 
+test("issued RFI details do not promise reviewer actions before a response exists", () => {
+  const reviewer = ux.getOperationalWorkItems({
+    persona: reviewerPersona,
+    rfis: [{
+      id: "rfi-issued-without-response",
+      code: "RFI-TEST-ISSUED",
+      workstreamId: "WS-LA82-HEAVYHAUL",
+      workstreamTitle: "LA-82 Heavy-Haul Access & Bridge Reinforcement",
+      requestingOrgId: "org-ldeq",
+      requestingOrgCode: "LDEQ",
+      recipientOrgId: "org-spacex",
+      recipientOrgCode: "SPACEX",
+      title: "Issued RFI without applicant response",
+      questionText: "Provide the missing technical response.",
+      technicalReason: "The review cannot continue without the response.",
+      requiredDocumentTypes: ["Technical response"],
+      issuedDate: "2026-09-07",
+      responseDeadline: "2026-09-14",
+      clockImpact: "clock_paused",
+      scheduleImpactDays: 3,
+      status: "issued",
+      isConsolidatedCycle: false,
+    }],
+  });
+  const issuedRfi = reviewer.items.find((item) => item.sourceId === "rfi-issued-without-response");
+  assert.ok(issuedRfi, "Reviewer fixture must include an issued RFI without a response");
+  assert.equal(issuedRfi.whatToDo, "No action required from you right now; monitor the applicant response.");
+  assert.equal(issuedRfi.removesFromQueue, "Wait for the applicant response; review it when submitted.");
+  assert.equal(issuedRfi.nextHandoff, "Applicant response");
+  assert.equal(issuedRfi.requiresCurrentUserAction, false);
+});
+
 test("completion requirements and handoff preview are readable without internal workflow terms", () => {
   const { items } = ux.getOperationalWorkItems({ persona: reviewerPersona });
   const stage = items.find((item) => item.sourceId === "TASK-T003");
   const requirements = ux.getCompletionRequirements(stage);
   const preview = ux.getCompletionPreview(stage);
-  assert.equal(requirements.length, 4);
-  assert.ok(requirements.some((requirement) => /determination/i.test(requirement.label)));
+  assert.equal(requirements.length, 2);
+  assert.ok(requirements.some((requirement) => /assigned work/i.test(requirement.label)));
+  assert.ok(requirements.some((requirement) => /determination|result/i.test(requirement.label)));
   assert.ok(preview.effects.some((effect) => /assign the next action/i.test(effect)));
   assert.ok(preview.nextOwner);
 });
