@@ -17,7 +17,7 @@ Starting revision: `928926a089599181c6bd08ffc72069e314c01c92`
 | T08 | in_progress | Added a persisted coordination response path with audit, explicit “respond to agency” action, and no automatic dependency resolution. |
 | T09 | in_progress | Work detail states current owner/team; transfer uses the first persisted assignment-group label when no explicit target is configured; fixture fallbacks no longer notify guessed recipients. Full recipient selection/authorization proof remains. |
 | T10 | in_progress | Core routes exist and deep-link handling improved; full navigation convergence remains. |
-| T12 | in_progress | Intake queue is searchable, excludes drafts/terminal records, previews suggested fan-out, and blocks obvious duplicate retries. Editable routing rows remain. |
+| T12 | verified | Intake queue is searchable, excludes drafts/terminal records, and opens an editable routing review with agency/title/workflow-version rows, add/remove workstreams, confirmation, and duplicate guards before the atomic fan-out RPC. Live Supabase read-back remains environment-blocked. |
 | T13 | in_progress | Gantt avoids invented impact figures, shows current owner, and formats baseline/forecast dates in the summary and tooltips. Stage/history reconciliation remains. |
 | T13 | in_progress | Removed invented customer-request due dates and document-review due dates; missing dates now display as unscheduled. |
 | T14 | in_progress | Removed the unverified persistence-health badge, improved narrow-screen overflow behavior, added accessible schedule-row labels, and clarified customer search controls. Full viewport/keyboard verification remains. |
