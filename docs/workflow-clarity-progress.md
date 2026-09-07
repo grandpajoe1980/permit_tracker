@@ -20,7 +20,7 @@ Starting revision: `928926a089599181c6bd08ffc72069e314c01c92`
 | T12 | in_progress | Intake queue is searchable, excludes drafts/terminal records, previews suggested fan-out, and blocks obvious duplicate retries. Editable routing rows remain. |
 | T13 | in_progress | Gantt avoids invented impact figures, shows current owner, and formats baseline/forecast dates in the summary and tooltips. Stage/history reconciliation remains. |
 | T13 | in_progress | Removed invented customer-request due dates and document-review due dates; missing dates now display as unscheduled. |
-| T14 | verified | Removed the unverified “Health: Connected” footer claim and unused branch icon. |
+| T14 | in_progress | Removed the unverified persistence-health badge, improved narrow-screen overflow behavior, added accessible schedule-row labels, and clarified customer search controls. Full viewport/keyboard verification remains. |
 | T11 | in_progress | Customer Home has direct View My Requests and a post-submit receipt card with confirmation number, assignment status, and Open request. Full cross-reload/workstream proof remains. |
 | T15 | pending | Final behavioral journeys and live persistence proof require configured isolated Supabase credentials. |
 
