@@ -31,7 +31,7 @@ export const NAVIGATION_DEFINITIONS: NavigationDefinition[] = [
   { id: "customer-home", label: "Home", scope: "project", audiences: ["customer"] },
   { id: "catalog", label: "Services & Permits", scope: "support", audiences: ["customer", "staff", "supervisor", "admin"] },
   { id: "admin", label: "Administration", scope: "system", audiences: ["admin"] },
-  { id: "secondary", label: "Project resources", scope: "support", audiences: ["staff", "supervisor", "admin"] },
+  { id: "secondary", label: "Project resources", scope: "project", audiences: ["staff", "supervisor", "admin"] },
   { id: "my-work", label: "My Work", scope: "queue", audiences: ["staff", "supervisor", "admin"] },
   { id: "agency-queue", label: "My Agency Queue", scope: "queue", audiences: ["staff", "supervisor", "admin"] },
   { id: "rfis", label: "Requests for Information", scope: "queue", audiences: ["staff", "supervisor", "admin"] },
