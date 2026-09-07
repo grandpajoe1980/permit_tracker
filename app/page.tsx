@@ -764,6 +764,8 @@ export default function Home() {
           ["USACE", "US Army Corps of Engineers (New Orleans District)", "USACE Wetlands Coordination"],
         ]
       : [[request.knownAgencyCode ?? "STATEPO", request.knownAgencyCode ?? "Louisiana Governor's Office of Major Projects & Delivery", request.title]];
+    const routingPreview = workstreamPlan.map(([orgCode, orgName, title]) => `${orgCode}: ${title} (${orgName})`).join("\n");
+    if (typeof window !== "undefined" && !window.confirm(`Review and route ${request.confirmationNumber}?\n\nPATH proposes these workstreams:\n${routingPreview}\n\nConfirm to create these linked workstreams.`)) return;
     const baseCode = request.confirmationNumber.replace(/[^A-Z0-9]+/gi, "-").slice(-14);
     const result = await repository.triageCustomerRequestPersisted({
       requestId: request.id,
