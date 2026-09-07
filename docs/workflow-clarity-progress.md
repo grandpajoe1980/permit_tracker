@@ -15,7 +15,7 @@ Starting revision: `928926a089599181c6bd08ffc72069e314c01c92`
 | T06 | verified | Operational workflow editor no longer invents fallback stages or advertises local stage edits as persisted; process design is admin-only. |
 | T07 | in_progress | RFI response dialog now accepts an optional file and attempts to persist it as an immutable version linked to the response. Cross-user live proof remains required. |
 | T08 | in_progress | Added a persisted coordination response path with audit, explicit “respond to agency” action, and no automatic dependency resolution. |
-| T09 | in_progress | Work detail now states current owner/team; transfer dialog distinguishes help (assignment unchanged) from transfer. Persisted recipient/authorization proof remains. |
+| T09 | in_progress | Work detail states current owner/team; transfer dialog distinguishes help from transfer; fixture fallbacks no longer notify a guessed Maya Chen recipient. Persisted recipient/authorization proof remains. |
 | T10 | in_progress | Core routes exist and deep-link handling improved; full navigation convergence remains. |
 | T12 | in_progress | Intake queue is searchable, excludes drafts/terminal records, previews suggested fan-out, and blocks obvious duplicate retries. Editable routing rows remain. |
 | T13 | in_progress | Gantt avoids invented impact figures, shows current owner, and formats baseline/forecast dates for readable tooltips. Stage/history reconciliation remains. |
