@@ -576,6 +576,7 @@ export function WorkstreamGraphGantt({
                       onMouseEnter={() => setHoveredWorkstreamId(ws.id)}
                       onMouseLeave={() => setHoveredWorkstreamId(null)}
                       role="button"
+                      aria-label={`${ws.code}: ${ws.title}. Current stage ${ws.currentStageName || "Not configured"}. Owner ${ws.regulatoryLead.assignedReviewerName || "Unassigned"}.`}
                       tabIndex={0}
                       onClick={() => onSelectWorkstream?.(ws.id)}
                       onKeyDown={(event) => {
@@ -654,7 +655,7 @@ export function WorkstreamGraphGantt({
                               left: `${baselineLeft}%`,
                               width: `${pastWidth}%`,
                             }}
-                            title={`Baseline Schedule: ${ws.baselineStartDate} → ${ws.baselineTargetDate}`}
+                            title={`Baseline schedule: ${displayDate(ws.baselineStartDate)} → ${displayDate(ws.baselineTargetDate)}`}
                           >
                             <span className="truncate opacity-80">Past / Baseline: {displayDate(ws.baselineStartDate)}</span>
                           </div>
