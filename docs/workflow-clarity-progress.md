@@ -16,7 +16,9 @@ Starting revision: `928926a089599181c6bd08ffc72069e314c01c92`
 | T07 | in_progress | RFI response dialog now accepts an optional file and attempts to persist it as an immutable version linked to the response. Cross-user live proof remains required. |
 | T08 | in_progress | Added a persisted coordination response path with audit, explicit “respond to agency” action, and no automatic dependency resolution. |
 | T09 | in_progress | Work detail now states current owner/team; transfer dialog distinguishes help (assignment unchanged) from transfer. Persisted recipient/authorization proof remains. |
-| T10–T13 | pending | Remaining work requires navigation, customer tracking, routing, and schedule reconciliation. |
+| T10 | in_progress | Core routes exist and deep-link handling improved; full navigation convergence remains. |
+| T12 | in_progress | Intake queue is searchable, excludes drafts/terminal records, previews suggested fan-out, and blocks obvious duplicate retries. Editable routing rows remain. |
+| T13 | in_progress | Gantt avoids invented impact figures and shows current owner; stage/history reconciliation remains. |
 | T13 | in_progress | Removed invented customer-request due dates and document-review due dates; missing dates now display as unscheduled. |
 | T14 | verified | Removed the unverified “Health: Connected” footer claim and unused branch icon. |
 | T11 | in_progress | Customer Home and Project overview now have distinct route states and navigation entries. |
