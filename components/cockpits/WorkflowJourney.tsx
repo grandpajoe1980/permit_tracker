@@ -59,19 +59,20 @@ export function WorkflowMiniStepper({
 }) {
   const journey = buildWorkflowJourney(source, templates);
   const current = journey.currentStages[0];
+  const currentStageSummary = journey.currentStages.map((stage) => stageLabel(stage, customerSafe)).join(" · ");
 
   return (
     <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5" aria-label="Workflow progress">
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
         <span className="font-black uppercase tracking-wider text-slate-500">Workflow progress</span>
-        <span className="font-bold text-teal-800">{journey.stages.length > 0 ? `Step ${current?.sequence ?? journey.completedCount} of ${journey.stages.length}` : "Steps unavailable"}</span>
+        <span className="font-bold text-teal-800">{journey.stages.length > 0 ? journey.currentStages.length > 1 ? `${journey.currentStages.length} active steps of ${journey.stages.length}` : `Step ${current?.sequence ?? journey.completedCount} of ${journey.stages.length}` : "Steps unavailable"}</span>
       </div>
       {journey.stages.length > 0 && (
         <div className="mt-2 flex items-center gap-1" aria-hidden="true">
           {journey.stages.map((stage) => <span key={stage.id} className={`h-1.5 min-w-0 flex-1 rounded-full ${stage.state === "completed" || stage.state === "waived" ? "bg-emerald-500" : stage.state === "current" ? "bg-teal-600" : stage.state === "blocked" || stage.state === "waiting" ? "bg-amber-500" : "bg-slate-200"}`} />)}
         </div>
       )}
-      <p className="mt-2 text-xs font-semibold text-slate-700">{current ? `${stateLabel[current.state]}: ${stageLabel(current, customerSafe)}` : journey.summary}</p>
+      <p className="mt-2 text-xs font-semibold text-slate-700">{current ? `${journey.currentStages.length > 1 ? "Active steps" : stateLabel[current.state]}: ${currentStageSummary}` : journey.summary}</p>
     </div>
   );
 }
