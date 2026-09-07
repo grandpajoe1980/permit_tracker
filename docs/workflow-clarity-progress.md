@@ -42,5 +42,5 @@ For each task: reproduce, patch minimally, run focused tests/build/lint as appro
 
 - `npm run lint` completed with warning-only findings; no lint errors.
 - `npm run build` completed, including the build secret scan.
-- Focused queue/RFI/navigation/commitment tests pass. Two legacy assertions conflict with the new behavior: one expects fabricated fallback stages, and one expects standalone links instead of authenticated in-app routing.
-- Supabase mutation tests require configured test credentials and were not run against shared data. Local commits are ready; direct push was blocked by repository safety policy.
+- Focused queue/RFI/navigation/commitment tests pass. The project-navigation assertion was updated to cover the focused in-app workspace rather than a stale standalone-link contract.
+- Supabase mutation tests require configured test credentials and were not run against shared data. Navigation checkpoint is pushed to `main` at `6c5aa855b30552111988b158427e8bd01832ce96` (GitHub contents commits); local implementation checkpoint is `f38af62c0b648b105388f95fedf298ec19a661ae`.
