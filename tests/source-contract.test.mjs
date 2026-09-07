@@ -145,6 +145,15 @@ test("refreshes the canonical work item after persisted actions", () => {
   assert.match(page, /setSaveStatus\("saving"\)/);
 });
 
+test("makes reassignment targets explicit and keeps help requests separate", () => {
+  assert.match(page, /setTransferTargetGroup/);
+  assert.match(page, /Select an active team/);
+  assert.match(page, /repository\.assignTicketPersisted/);
+  assert.match(page, /The former owner no longer owns this action/);
+  assert.match(page, /The selected recipient receives a help request; the current owner and team stay responsible/);
+  assert.match(operationalUx, /The transfer dialog resolves a persisted team\/member/);
+});
+
 test("normalizes encoded project and workstream route identities", () => {
   assert.match(routeResolvers, /export function normalizeRouteSegment/);
   assert.match(routeResolvers, /normalize\("NFKC"\)/);
