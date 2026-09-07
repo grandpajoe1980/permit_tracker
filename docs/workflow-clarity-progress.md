@@ -14,7 +14,8 @@ Starting revision: `928926a089599181c6bd08ffc72069e314c01c92`
 | T05 | verified | Removed duplicate outer action/facts/activity wrapper; detail page remains the single work-summary surface. |
 | T06 | verified | Operational workflow editor no longer invents fallback stages or advertises local stage edits as persisted; process design is admin-only. |
 | T07 | in_progress | RFI response dialog now accepts an optional file and attempts to persist it as an immutable version linked to the response. Cross-user live proof remains required. |
-| T08–T13 | pending | Remaining work requires coordination response persistence, routing, and schedule reconciliation. |
+| T08 | in_progress | Added a persisted coordination response path with audit, explicit “respond to agency” action, and no automatic dependency resolution. |
+| T09–T13 | pending | Remaining work requires assignment, routing, and schedule reconciliation. |
 | T13 | in_progress | Removed invented customer-request due dates and document-review due dates; missing dates now display as unscheduled. |
 | T14 | verified | Removed the unverified “Health: Connected” footer claim and unused branch icon. |
 | T11 | in_progress | Customer Home and Project overview now have distinct route states and navigation entries. |
