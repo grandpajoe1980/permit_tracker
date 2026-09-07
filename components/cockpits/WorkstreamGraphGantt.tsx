@@ -318,16 +318,16 @@ export function WorkstreamGraphGantt({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-center">
+          <div className="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:gap-3">
+            <div className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-left sm:w-auto sm:text-center">
               <div className="text-xs font-semibold text-slate-500">Immutable Baseline</div>
               <div className="text-sm font-bold text-slate-900">{displayDate(project.baselineLaunchDate)}</div>
             </div>
-            <div className="rounded-xl border border-purple-200 bg-purple-50 px-4 py-2.5 text-center">
+            <div className="w-full rounded-xl border border-purple-200 bg-purple-50 px-4 py-2.5 text-left sm:w-auto sm:text-center">
               <div className="text-xs font-semibold text-purple-700">Current Forecast</div>
               <div className="text-sm font-black text-purple-900">{displayDate(project.currentForecastLaunchDate)}</div>
             </div>
-            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-center">
+            <div className="w-full rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-left sm:w-auto sm:text-center">
               <div className="text-xs font-semibold text-rose-700">Net Project Variance</div>
               <div className="text-base font-black text-rose-900">+{project.scheduleVarianceDays} Days</div>
             </div>
@@ -335,13 +335,13 @@ export function WorkstreamGraphGantt({
         </div>
 
         {/* View Switcher Tabs */}
-        <div className="mt-6 flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
+        <div className="mt-6 grid gap-2 border-b border-slate-200 pb-2 sm:flex sm:flex-wrap sm:items-center">
           {!customerSafe && (
             <Button
               variant={activeTab === "simulator" ? "default" : "ghost"}
               size="sm"
               onClick={() => setActiveTab("simulator")}
-              className="text-xs gap-1.5 font-bold bg-indigo-600 hover:bg-indigo-700 text-white"
+              className="w-full justify-start whitespace-normal text-left text-xs font-bold sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white"
             >
               <Zap className="size-3.5" /> Interactive &quot;What-If&quot; Simulator
             </Button>
@@ -350,7 +350,7 @@ export function WorkstreamGraphGantt({
             variant={activeTab === "graph" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab("graph")}
-            className="text-xs gap-1.5"
+            className="w-full justify-start whitespace-normal text-left text-xs sm:w-auto"
           >
             <GitBranch className="size-3.5" /> Workstream DAG & Baseline Comparison
           </Button>
@@ -359,7 +359,7 @@ export function WorkstreamGraphGantt({
               variant={activeTab === "delays" ? "default" : "ghost"}
               size="sm"
               onClick={() => setActiveTab("delays")}
-              className="text-xs gap-1.5"
+              className="w-full justify-start whitespace-normal text-left text-xs sm:w-auto"
             >
               <Clock3 className="size-3.5" /> Delay Taxonomy Attribution
             </Button>
@@ -369,7 +369,7 @@ export function WorkstreamGraphGantt({
               variant={activeTab === "acceleration" ? "default" : "ghost"}
               size="sm"
               onClick={() => setActiveTab("acceleration")}
-              className="text-xs gap-1.5 text-emerald-700"
+              className="w-full justify-start whitespace-normal text-left text-xs text-emerald-700 sm:w-auto"
             >
               <Sparkles className="size-3.5" /> Parallel Acceleration Opportunities ({schedule.accelerationOpportunities.length})
             </Button>
@@ -383,8 +383,8 @@ export function WorkstreamGraphGantt({
       {activeTab === "graph" && (
         <div className="space-y-6">
           {/* Schedule Controls & Mode Toggle */}
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+            <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
               <span className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1 mr-1">
                 <Filter className="size-3.5" /> Filter:
               </span>
@@ -411,19 +411,19 @@ export function WorkstreamGraphGantt({
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1">
+            <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
+              <div className="flex w-full items-center rounded-lg border border-slate-200 bg-slate-50 p-1 sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setScheduleViewMode("bars")}
-                  className={`rounded px-2.5 py-1 text-xs font-bold transition flex items-center gap-1.5 ${scheduleViewMode === "bars" ? "bg-[#00284d] text-white shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2.5 py-1 text-center text-xs font-bold transition whitespace-normal sm:flex-none ${scheduleViewMode === "bars" ? "bg-[#00284d] text-white shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
                 >
                   <Calendar className="size-3.5" /> Gantt Schedule Bars
                 </button>
                 <button
                   type="button"
                   onClick={() => setScheduleViewMode("table")}
-                  className={`rounded px-2.5 py-1 text-xs font-bold transition flex items-center gap-1.5 ${scheduleViewMode === "table" ? "bg-[#00284d] text-white shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2.5 py-1 text-center text-xs font-bold transition whitespace-normal sm:flex-none ${scheduleViewMode === "table" ? "bg-[#00284d] text-white shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
                 >
                   <GitBranch className="size-3.5" /> DAG Metrics Table
                 </button>
@@ -434,9 +434,9 @@ export function WorkstreamGraphGantt({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search permit or agency..."
-                className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:border-teal-600 focus:bg-white focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:border-teal-600 focus:bg-white focus:outline-none sm:w-auto sm:py-1.5"
               />
-              <div className="flex items-center gap-1" aria-label="Schedule controls"><Button type="button" variant="outline" size="sm" onClick={() => setZoom("day")} aria-pressed={zoom === "day"}>Day</Button><Button type="button" variant="outline" size="sm" onClick={() => setZoom("week")} aria-pressed={zoom === "week"}>Week</Button><Button type="button" variant="outline" size="sm" onClick={() => setZoom("month")} aria-pressed={zoom === "month"}>Month</Button><Button type="button" variant="outline" size="sm" onClick={() => setFilterState("all")}>Fit project</Button><Button type="button" variant="outline" size="sm" onClick={() => window.scrollTo({ top: document.querySelector("[aria-label='Timeline horizons']")?.getBoundingClientRect().top ?? 0, behavior: "smooth" })}>Today</Button></div>
+              <div className="grid w-full grid-cols-2 gap-1 sm:flex sm:w-auto" aria-label="Schedule controls"><Button type="button" variant="outline" size="sm" onClick={() => setZoom("day")} aria-pressed={zoom === "day"}>Day</Button><Button type="button" variant="outline" size="sm" onClick={() => setZoom("week")} aria-pressed={zoom === "week"}>Week</Button><Button type="button" variant="outline" size="sm" onClick={() => setZoom("month")} aria-pressed={zoom === "month"}>Month</Button><Button type="button" variant="outline" size="sm" onClick={() => setFilterState("all")}>Fit project</Button><Button type="button" variant="outline" size="sm" onClick={() => window.scrollTo({ top: document.querySelector("[aria-label='Timeline horizons']")?.getBoundingClientRect().top ?? 0, behavior: "smooth" })}>Today</Button></div>
             </div>
           </div>
 
@@ -444,7 +444,7 @@ export function WorkstreamGraphGantt({
           {/* OPERATIONAL STATE COLOR CODE LEGEND                              */}
           {/* ================================================================ */}
           <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-2.5 mb-3">
+              <div className="flex flex-col items-start gap-2 border-b border-slate-200 pb-2.5 mb-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <span className="flex size-5 items-center justify-center rounded-full bg-[#00284d] text-white text-[10px] font-black">i</span>
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
@@ -591,7 +591,7 @@ export function WorkstreamGraphGantt({
                       title={`Click to open ${ws.title} (${ws.code}) details page`}
                     >
                       {/* Left Meta Column */}
-                      <div className="col-span-12 md:col-span-4 p-3.5 border-r border-slate-200">
+                      <div className="col-span-12 border-b border-slate-200 p-3.5 md:col-span-4 md:border-b-0 md:border-r">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-mono text-xs font-black text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
@@ -633,7 +633,7 @@ export function WorkstreamGraphGantt({
                       </div>
 
                       {/* Right Timeline Column with Traditional Bars */}
-                      <div className="col-span-12 md:col-span-8 p-3 relative h-[112px] flex flex-col justify-center overflow-hidden">
+                      <div className="col-span-12 relative flex h-[112px] flex-col justify-center overflow-hidden border-t border-slate-100 p-3 md:col-span-8 md:border-t-0">
                         {/* Background monthly grid lines */}
                         <div className="absolute inset-0 grid pointer-events-none opacity-20" style={{ gridTemplateColumns: monthGridTemplate }}>
                           {months.map((m) => (
@@ -728,7 +728,7 @@ export function WorkstreamGraphGantt({
           {/* ================================================================ */}
           <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
             <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-              <div className="grid grid-cols-12 text-xs font-bold uppercase tracking-wider text-slate-600">
+              <div className="hidden grid-cols-12 text-xs font-bold uppercase tracking-wider text-slate-600 md:grid">
                 <div className="col-span-4">Workstream / DAG Node</div>
                 <div className="col-span-2 text-center">Lead Agency</div>
                 <div className="col-span-2 text-center">Baseline Target</div>
@@ -751,9 +751,9 @@ export function WorkstreamGraphGantt({
                       onSelectWorkstream?.(ws.id);
                     }
                   }}
-                  className="grid grid-cols-12 items-center px-4 py-3.5 hover:bg-slate-50/80 transition-colors text-sm cursor-pointer"
+                  className="grid cursor-pointer gap-3 px-4 py-3.5 text-sm transition-colors hover:bg-slate-50/80 md:grid-cols-12 md:items-center"
                 >
-                  <div className="col-span-4 pr-4">
+                  <div className="md:col-span-4 md:pr-4">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs text-slate-400 font-bold">{ws.code}</span>
                       {ws.isCriticalPath && (
@@ -769,21 +769,25 @@ export function WorkstreamGraphGantt({
                     <div className="text-xs text-slate-500">{ws.currentStageName}</div>
                   </div>
 
-                  <div className="col-span-2 text-center">
+                  <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-2 md:col-span-2 md:block md:border-t-0 md:pt-0 md:text-center">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 md:hidden">Lead agency</span>
                     <Badge variant="outline" className="font-semibold">
                       {ws.regulatoryLead.orgCode}
                     </Badge>
                   </div>
 
-                  <div className="col-span-2 text-center text-xs font-mono text-slate-600">
+                  <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-2 md:col-span-2 md:block md:border-t-0 md:pt-0 md:text-center">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 md:hidden">Baseline target</span>
                     {ws.baselineTargetDate}
                   </div>
 
-                  <div className="col-span-2 text-center text-xs font-mono font-bold text-slate-900">
+                  <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-2 md:col-span-2 md:block md:border-t-0 md:pt-0 md:text-center">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 md:hidden">Current forecast</span>
                     {ws.forecastTargetDate}
                   </div>
 
-                  <div className="col-span-2 text-right">
+                  <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-2 md:col-span-2 md:block md:border-t-0 md:pt-0 md:text-right">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 md:hidden">Variance</span>
                     {ws.scheduleVarianceDays > 0 ? (
                       <span className="inline-block font-mono font-bold text-xs text-rose-600 bg-rose-50 px-2 py-0.5 rounded">
                         +{ws.scheduleVarianceDays}d slip

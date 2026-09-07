@@ -42,7 +42,7 @@ export function SystemVersionFooter() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex w-full flex-wrap items-center justify-start gap-3 sm:w-auto sm:justify-end">
           <span className="text-slate-500 text-[11px]">Operational data status is shown in the workspace.</span>
           <span className="text-slate-400 hidden md:inline">|</span>
           <span className="text-slate-500 text-[11px]">{PROGRAM_SUBTITLE}</span>

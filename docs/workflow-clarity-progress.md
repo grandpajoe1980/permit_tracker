@@ -20,7 +20,7 @@ Starting revision: `928926a089599181c6bd08ffc72069e314c01c92`
 | T12 | verified | Intake queue is searchable, excludes drafts/terminal records, and opens an editable routing review with agency/title/workflow-version rows, add/remove workstreams, confirmation, and duplicate guards before the atomic fan-out RPC. Live Supabase read-back remains environment-blocked. |
 | T13 | in_progress | Gantt avoids invented impact figures and shows current owner; mini-stepper now preserves multiple active parallel stages and Project Overview handles unscheduled forecasts safely. Full stage/history reconciliation remains. |
 | T13 | in_progress | Removed invented customer-request due dates and document-review due dates; missing dates now display as unscheduled. |
-| T14 | in_progress | Removed the unverified persistence-health badge, improved narrow-screen overflow behavior, added accessible schedule-row labels, and clarified customer search controls. Full viewport/keyboard verification remains. |
+| T14 | in_progress | Removed the unverified persistence-health badge, improved narrow-screen overflow behavior, added accessible schedule-row labels, clarified customer search controls, and completed a focused mobile layout pass across the shell, customer flows, work details, Gantt metrics, administration, and footer. Full viewport/keyboard verification remains. |
 | T11 | in_progress | Customer Home has direct View My Requests and a post-submit receipt card with confirmation number, assignment status, and Open request. Full cross-reload/workstream proof remains. |
 | T15 | pending | Final behavioral journeys and live persistence proof require configured isolated Supabase credentials. |
 
@@ -86,3 +86,10 @@ For each task: reproduce, patch minimally, run focused tests/build/lint as appro
 - Jordan Lee's reviewer workspace showed issued RFIs in `Waiting on others`; the detail projection incorrectly described response-acceptance actions before an applicant response existed. The projection now says to wait for the applicant response and labels the next handoff accurately.
 - The customer RFI response dialog exposes text plus an optional immutable-version attachment. A synthetic response was staged, but the connected browser file chooser transferred only the filename and no file bytes from both workspace and `/tmp` paths; the app correctly rejected the empty attachment. Supabase read-back confirms `RFI-2026-60A808BA` remains `issued` with zero responses, so the live record is unchanged.
 - Lint, production build/security scan, source-contract tests, project-navigation tests, and operational UX tests pass after the clarity fix.
+
+## Mobile layout checkpoint — 2026-09-07
+
+- Narrow screens now use full-width action controls for customer requests, work-item actions, dialogs, and administration forms; long headers and responsibility summaries wrap without crowding.
+- Gantt schedule controls and tabs stack cleanly on mobile, while the dense DAG metrics grid becomes labeled mobile rows instead of a compressed desktop table.
+- Customer request status, the shared shell header, and the version footer use mobile-safe spacing and wrapping without reintroducing page-level clipping.
+- Verification: lint, production build/security scan, and 43 focused source/UX/navigation tests pass. Supervised local preview startup succeeded, but the cloud browser blocked the preview URL before a rendered 390px screenshot could be captured.
