@@ -1521,16 +1521,6 @@ class ProjectDeliveryRepository {
     });
     this.auditEvents.unshift(event);
 
-    this.dispatchNotification({
-      userId: "user-maya-chen",
-      title: `Transfer request for ${ws.code}`,
-      message: `${params.actorName} requested ${params.transferType}.`,
-      type: "action_required",
-      linkUrl: `/workstreams/${ws.code}`,
-      urgency: "high",
-      metadata: { workstreamCode: ws.code, targetName: params.targetName },
-    });
-
     return event;
   }
 
