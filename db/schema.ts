@@ -723,7 +723,8 @@ export const projectParticipants = sqliteTable("project_participants", {
 export const externalFilings = sqliteTable("external_filings", {
   id: text("id").primaryKey(),
   projectId: text("project_id").notNull().references(() => projects.id),
-  workstreamId: text("workstream_id").notNull().references(() => workstreams.id),
+  workstreamId: text("workstream_id").references(() => workstreams.id),
+  customerRequestId: text("customer_request_id"),
   permitTypeId: text("permit_type_id").references(() => permitTypes.id),
   authorityOrganizationId: text("authority_organization_id").notNull().references(() => organizations.id),
   authorityOrganizationName: text("authority_organization_name").notNull(),
@@ -970,5 +971,4 @@ export const taskDependenciesRelations = relations(taskDependencies, ({ one }) =
     relationName: "successor",
   }),
 }));
-
 

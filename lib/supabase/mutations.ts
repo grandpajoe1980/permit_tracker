@@ -21,7 +21,7 @@ import type {
   WorkstreamRecord,
   TaskRecord,
 } from "../domain-models";
-import { taskRowToDomain } from "./mappings";
+import { externalFilingRowToDomain, taskRowToDomain } from "./mappings";
 import { allowsFixtureData, requiresSupabase } from "../data-mode";
 import { canonicalProjectReference } from "../project-identifiers";
 import { calculateSHA256, uploadDocumentFile } from "./storage-primitives";
@@ -571,7 +571,8 @@ export async function mutateTriageCustomerRequest(params: {
 export async function mutateCreateExternalFiling(params: {
   id: string;
   projectId: string;
-  workstreamId: string;
+  workstreamId?: string;
+  customerRequestId?: string;
   permitTypeId?: string;
   authorityOrganizationId: string;
   authorityOrganizationName: string;
@@ -583,71 +584,36 @@ export async function mutateCreateExternalFiling(params: {
   submittedAt?: string;
   submittedByUserId?: string;
   submittedByName?: string;
+  authoritativeSystemName?: string;
+  lastStatusVerifiedAt?: string;
+  lastStatusVerifiedBy?: string;
   notes?: string;
   receiptDocumentVersionIds?: string[];
 }): Promise<MutationResult<ExternalFilingRecord>> {
   const client = getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
-  const now = new Date().toISOString();
-  const payload = {
-    id: params.id,
-    project_id: params.projectId,
-    workstream_id: params.workstreamId,
-    permit_type_id: params.permitTypeId ?? null,
-    authority_organization_id: params.authorityOrganizationId,
-    authority_organization_name: params.authorityOrganizationName,
-    filing_method: params.filingMethod,
-    official_portal_url: params.officialPortalUrl ?? null,
-    external_reference_number: params.externalReferenceNumber ?? null,
-    external_record_url: params.externalRecordUrl ?? null,
-    external_status: params.externalStatus,
-    submitted_at: params.submittedAt ?? now,
-    submitted_by_user_id: params.submittedByUserId ?? null,
-    authoritative_system_name: params.authorityOrganizationName,
-    notes: params.notes ?? null,
-    receipt_document_version_ids: params.receiptDocumentVersionIds ?? [],
-    created_at: now,
-    updated_at: now,
-  };
-
-  const { data, error } = await client.from("external_filings").insert(payload).select().single();
-  if (error) return { data: null, error: new Error(error.message) };
-
-  await insertAuditEvent({
-    entityType: "external_filing",
-    entityId: params.id,
-    actorName: params.submittedByName ?? "PATH user",
-    actorOrgName: params.authorityOrganizationName,
-    actionType: "external_filing_recorded",
-    newValue: params.externalReferenceNumber ?? "Reference pending",
-    reason: params.notes ?? "Manual tracking record created.",
-    projectId: params.projectId,
+  const { data, error } = await client.rpc("rpc_create_external_filing", {
+    p_id: params.id,
+    p_project_id: params.projectId,
+    p_customer_request_id: params.customerRequestId ?? null,
+    p_workstream_id: params.workstreamId ?? null,
+    p_permit_type_id: params.permitTypeId ?? null,
+    p_authority_organization_id: params.authorityOrganizationId,
+    p_authority_organization_name: params.authorityOrganizationName,
+    p_filing_method: params.filingMethod,
+    p_official_portal_url: params.officialPortalUrl ?? null,
+    p_external_reference_number: params.externalReferenceNumber ?? null,
+    p_external_record_url: params.externalRecordUrl ?? null,
+    p_external_status: params.externalStatus,
+    p_submitted_at: params.submittedAt ?? null,
+    p_authoritative_system_name: params.authoritativeSystemName ?? params.authorityOrganizationName,
+    p_notes: params.notes ?? null,
+    p_receipt_document_version_ids: params.receiptDocumentVersionIds ?? [],
   });
+  if (error || !data) return { data: null, error: new Error(error?.message ?? "External filing was not confirmed by the database.") };
 
-  return {
-    data: {
-      id: String(data.id),
-      projectId: params.projectId,
-      workstreamId: params.workstreamId,
-      permitTypeId: params.permitTypeId,
-      authorityOrganizationId: params.authorityOrganizationId,
-      authorityOrganizationName: params.authorityOrganizationName,
-      filingMethod: params.filingMethod,
-      officialPortalUrl: params.officialPortalUrl,
-      externalReferenceNumber: params.externalReferenceNumber,
-      externalRecordUrl: params.externalRecordUrl,
-      externalStatus: params.externalStatus,
-      submittedAt: params.submittedAt ?? now,
-      submittedByUserId: params.submittedByUserId,
-      submittedByName: params.submittedByName,
-      notes: params.notes,
-      receiptDocumentVersionIds: params.receiptDocumentVersionIds ?? [],
-      createdAt: now,
-      updatedAt: now,
-    },
-    error: null,
-  };
+  return { data: externalFilingRowToDomain(data as Record<string, unknown>), error: null };
 }
 
 export async function mutateUpdateExternalFiling(
@@ -691,17 +657,26 @@ export async function mutateUpdateExternalFiling(
     data: {
       id: String(data.id),
       projectId: String(data.project_id),
-      workstreamId: String(data.workstream_id),
+      workstreamId: data.workstream_id ? String(data.workstream_id) : undefined,
+      customerRequestId: data.customer_request_id ? String(data.customer_request_id) : undefined,
+      permitTypeId: data.permit_type_id ? String(data.permit_type_id) : undefined,
       authorityOrganizationId: String(data.authority_organization_id),
       authorityOrganizationName: String(data.authority_organization_name),
       filingMethod: String(data.filing_method) as ExternalFilingRecord["filingMethod"],
+      officialPortalUrl: data.official_portal_url ? String(data.official_portal_url) : undefined,
       externalReferenceNumber: (data.external_reference_number as string) || undefined,
       externalRecordUrl: (data.external_record_url as string) || undefined,
       externalStatus: String(data.external_status) as ExternalFilingRecord["externalStatus"],
+      submittedAt: data.submitted_at ? String(data.submitted_at) : undefined,
+      submittedByUserId: data.submitted_by_user_id ? String(data.submitted_by_user_id) : undefined,
+      submittedByName: data.submitted_by_name ? String(data.submitted_by_name) : undefined,
+      lastStatusVerifiedAt: data.last_status_verified_at ? String(data.last_status_verified_at) : undefined,
+      lastStatusVerifiedBy: data.last_status_verified_by ? String(data.last_status_verified_by) : undefined,
+      authoritativeSystemName: data.authoritative_system_name ? String(data.authoritative_system_name) : undefined,
       notes: (data.notes as string) || undefined,
       receiptDocumentVersionIds: (data.receipt_document_version_ids as string[]) || [],
       createdAt: String(data.created_at),
-      updatedAt: now,
+      updatedAt: String(data.updated_at),
     },
     error: null,
   };

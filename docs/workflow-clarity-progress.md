@@ -21,8 +21,8 @@ Starting revision: `928926a089599181c6bd08ffc72069e314c01c92`
 | T13 | in_progress | Gantt avoids invented impact figures and shows current owner; mini-stepper now preserves multiple active parallel stages and Project Overview handles unscheduled forecasts safely. Full stage/history reconciliation remains. |
 | T13 | in_progress | Removed invented customer-request due dates and document-review due dates; missing dates now display as unscheduled. |
 | T14 | in_progress | Removed the unverified persistence-health badge, improved narrow-screen overflow behavior, added accessible schedule-row labels, clarified customer search controls, and completed a focused mobile layout pass across the shell, customer flows, work details, Gantt metrics, administration, and footer. Full viewport/keyboard verification remains. |
-| T11 | in_progress | Customer Home has direct View My Requests and a post-submit receipt card with confirmation number, assignment status, and Open request. Full cross-reload/workstream proof remains. |
-| T15 | in_progress | Final offline regression contracts and live tagged-record read-back are verified. Full suite completion remains blocked by missing local Supabase test credentials, repeated test-harness port collisions, and browser access to the current Site preview. |
+| T11 | in_progress | Customer Home has direct View My Requests and a post-submit receipt card with confirmation number, assignment status, and Open request. S1 now preserves one request identity across partial external-filing failure and reload; full attachment-byte/cross-user proof remains. |
+| T15 | in_progress | Final offline regression contracts, live tagged-record read-back, and the S1 filing RPC probe are verified. Full authenticated browser acceptance remains open; 26 integration tests are explicitly skipped when local Supabase URL/key credentials are unavailable. |
 
 ## Confirmed baseline findings
 
@@ -54,6 +54,14 @@ For each task: reproduce, patch minimally, run focused tests/build/lint as appro
 - Assigned those workstreams through `rpc_assign_ticket` to the exact persisted groups `USACE - Federal Water and Wetlands Review`, `LDEQ - Air Quality & Environmental Review`, and `Governor's Project Office - Executive Triage & Delivery`; read-back confirmed group IDs, agency codes, three assignment audit events, the request audit trail, and the intake notification.
 - Transactional triage and trigger probes passed without leaving additional records. Security advisor no longer reports the trigger helper; pre-existing SECURITY DEFINER and performance policy advisories remain unchanged and require a separate security/performance sprint.
 - Remaining unverified scope: browser-authenticated cross-user journeys, file upload/RFI/coordination mutations, and mobile visual checks. No unrelated production business records were changed; the only persisted business rows created for validation are the explicitly tagged demo records above.
+
+## Live external-filing recovery verification — 2026-09-07
+
+- Applied forward migration `20260907132000_customer_request_filing_recovery` to the connected demo project. Read-back confirms `external_filings.customer_request_id`, nullable `workstream_id`, request/permit uniqueness, and the migration ledger entry.
+- The new `rpc_create_external_filing` is `search_path`-hardened, callable by `authenticated`, denied to `anon`, and owns the filing audit insert because the direct table insert is intentionally denied by the RLS boundary.
+- With Joe Skaggs's system-admin identity placed in the transaction JWT context, a request-linked filing with no workstream returned the canonical row and actor identity; the transaction was rolled back, so no probe record remained.
+- A second rollback probe invoked the same deterministic filing ID twice and read exactly one row inside the transaction. This proves retry idempotency without changing demo data.
+- Local `npm test` now completes 394 tests with 368 passing, 0 failing, and 26 explicitly skipped for unavailable local Supabase credentials; lint, production build, and the build secret scan pass.
 
 ## Live RFI and coordination verification — 2026-09-07
 

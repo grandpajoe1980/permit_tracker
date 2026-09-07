@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 50037)
+Total output lines: 2089
+
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -52,7 +55,7 @@ import { Button } from "@/components/ui/button";
 import { AdminDirectory } from "@/components/admin/AdminDirectory";
 import { AdminExplorer } from "@/components/admin/AdminExplorer";
 import { DocumentViewerModal } from "@/components/documents/DocumentViewerModal";
-import type { CustomerRequestRecord, DocumentRecord, DocumentVersionRecord, ITSMState } from "@/lib/domain-models";
+import type { CustomerRequestRecord, DocumentRecord, DocumentVersionRecord, ExternalFilingRecord, ITSMState } from "@/lib/domain-models";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -131,6 +134,13 @@ import { SubmitRequestLauncher, type CustomerRequestIntent } from "@/components/
 import { WorkItemPage } from "@/components/path/work/WorkItemPage";
 import { TriageRoutingDialog, type TriageRoutingRow } from "@/components/path/intake/TriageRoutingDialog";
 import { buildShellPath, buildWorkItemPath, NAVIGATION_DEFINITIONS, parseShellPath, parseWorkItemPath, type AppRoute } from "@/lib/navigation";
+import {
+  clearCustomerSubmissionRecovery,
+  customerSubmissionFingerprint,
+  readCustomerSubmissionRecovery,
+  writeCustomerSubmissionRecovery,
+  type CustomerSubmissionRecovery,
+} from "@/lib/customer-submission-recovery";
 
 type Route = AppRoute;
 type SecondaryTool = "schedule" | "vault" | "catalog";
@@ -374,7 +384,7 @@ export default function Home() {
   const [dialog, setDialog] = useState<DialogState>(null);
   const [dialogError, setDialogError] = useState("");
   const [toast, setToast] = useState("");
-  const [, setMutationVersion] = useState(0);
+  const [mutationVersion, setMutationVersion] = useState(0);
   const [completionChecks, setCompletionChecks] = useState<Record<string, boolean>>({});
   const [determination, setDetermination] = useState("Complete / Approved");
   const [actionNote, setActionNote] = useState("");
@@ -405,6 +415,8 @@ export default function Home() {
   const [requestDescription, setRequestDescription] = useState("");
   const [requestFile, setRequestFile] = useState<File | null>(null);
   const [lastSubmittedRequest, setLastSubmittedRequest] = useState<CustomerRequestRecord | null>(null);
+  const [pendingFilingRecovery, setPendingFilingRecovery] = useState<CustomerSubmissionRecovery | null>(null);
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [triageRequest, setTriageRequest] = useState<CustomerRequestRecord | null>(null);
   const [rfiResponseFile, setRfiResponseFile] = useState<File | null>(null);
   const [requestFileInputKey, setRequestFileInputKey] = useState(0);
@@ -506,6 +518,32 @@ export default function Home() {
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  // A request may be committed before its external filing row is confirmed.
+  // Restore that receipt after a reload so the customer can retry the filing
+  // without creating a second request.
+  useEffect(() => {
+    if (!loggedIn || typeof window === "undefined") return;
+    const recovery = readCustomerSubmissionRecovery();
+    if (!recovery) return;
+    const restoreTimer = window.setTimeout(() => {
+      const request = repository.getCustomerRequests().find((entry) => entry.id === recovery.requestId || entry.confirmationNumber === recovery.confirmationNumber);
+      if (!request) return;
+      setLastSubmittedRequest(request);
+      if (!recovery.filingPending) {
+        clearCustomerSubmissionRecovery();
+        setPendingFilingRecovery(null);
+        return;
+      }
+      setPendingFilingRecovery(recovery);
+      if (recovery.permitTypeId) setSelectedCatalogPermitId(recovery.permitTypeId);
+      setExternalReference(recovery.externalReferenceNumber ?? "");
+      setExternalRecordUrl(recovery.externalRecordUrl ?? "");
+      setExternalStatus(recovery.externalStatus ?? "submitted");
+      setRequestDate(recovery.submittedAt ?? "");
+    }, 0);
+    return () => window.clearTimeout(restoreTimer);
+  }, [loggedIn, mutationVersion]);
 
   // Supabase Realtime multi-browser synchronization
   useEffect(() => {
@@ -876,75 +914,156 @@ export default function Home() {
     return userIdForPersona(activePersona.id);
   }
 
-  async function submitCustomerRequest(event: FormEvent<HTMLFormElement>, requestType: "permit_authorization" | "government_help" | "project_question" | "blocker_coordination" | "escalation") {
-    event.preventDefault();
-    if (!requestDescription.trim() && !requestTitle.trim()) return;
-    if (demoHydrationRef.current) await demoHydrationRef.current;
-    const inferredServiceType = requestTitle === "Project question" ? "project_question" : requestTitle === "Project blocker or coordination problem" ? "blocker_coordination" : requestTitle === "Concierge help" ? "concierge" : "government_help";
-    const effectiveRequestType = requestType === "government_help" && requestCenterMode === "service" ? inferredServiceType : requestType;
-    const selectedPermit = repository.getCatalog().find((permit) => permit.id === selectedCatalogPermitId);
-    const requestResult = await repository.createCustomerRequestPersisted({
-      projectId: projectRecord.id,
-      requestType: effectiveRequestType,
-      title: requestTitle.trim() || selectedPermit?.name || "Customer project request",
-      description: requestDescription.trim() || requestOutcome.trim() || "Customer request submitted through PATH.",
-      requestedOutcome: requestOutcome.trim() || undefined,
-      locationOrAffectedArea: requestArea.trim() || undefined,
-      desiredDate: requestDate || undefined,
-      scheduleImportance: requestBlocksWork ? "critical" : "normal",
-      knownAgencyCode: requestAgency || selectedPermit?.responsibleOrgCode,
-      knownPermitTypeId: effectiveRequestType === "permit_authorization" ? selectedCatalogPermitId : undefined,
+  async function persistExternalFilingForRequest(request: CustomerRequestRecord, recovery: CustomerSubmissionRecovery) {
+    const permit = repository.getCatalog().find((entry) => entry.id === recovery.permitTypeId);
+    if (!permit || permit.filingMode !== "EXTERNAL_PORTAL") {
+      return { data: null, error: new Error("The selected external filing authorization is no longer available.") };
+    }
+    return repository.createExternalFilingPersisted({
+      id: `external-filing-${request.id}`,
+      projectId: request.projectId,
+      customerRequestId: request.id,
+      workstreamId: request.relatedWorkstreamId,
+      permitTypeId: permit.id,
+      authorityOrganizationId: permit.responsibleOrgId,
+      authorityOrganizationName: permit.agencyContactName ? `${permit.responsibleOrgCode} · ${permit.agencyContactName}` : permit.responsibleOrgCode,
+      filingMethod: permit.filingMode,
+      officialPortalUrl: permit.officialFilingUrl,
+      externalReferenceNumber: recovery.externalReferenceNumber,
+      externalRecordUrl: recovery.externalRecordUrl,
+      externalStatus: recovery.externalStatus ?? "submitted",
+      submittedAt: recovery.submittedAt || undefined,
       submittedByUserId: actorUserId(),
       submittedByName: activePersona.name,
-      relatedWorkstreamId: selectedPermit?.responsibleOrgCode === "CPRA" ? "WS-WETLANDS-PAD-A" : undefined,
-      blocksActiveWork: requestBlocksWork,
-      attachmentDocumentVersionIds: [],
-      attachmentFile: requestFile ?? undefined,
+      authoritativeSystemName: permit.responsibleOrgCode,
+      notes: request.relatedWorkstreamId
+        ? "Manually tracked in PATH; the agency system remains authoritative."
+        : "Manually tracked in PATH; the agency system remains authoritative. Workstream routing is pending intake review.",
+      receiptDocumentVersionIds: [],
     });
-    if (requestResult.error || !requestResult.data) {
-      setToast(`Request could not be saved: ${requestResult.error?.message ?? "the database did not confirm the submission"}`);
-      return;
-    }
-    const request = requestResult.data;
-    setLastSubmittedRequest(request);
-    if (effectiveRequestType === "permit_authorization" && selectedPermit?.filingMode === "EXTERNAL_PORTAL") {
-      const filingResult = await repository.createExternalFilingPersisted({
+  }
+
+  async function submitCustomerRequest(event: FormEvent<HTMLFormElement>, requestType: "permit_authorization" | "government_help" | "project_question" | "blocker_coordination" | "escalation") {
+    event.preventDefault();
+    if (isSubmittingRequest || (!requestDescription.trim() && !requestTitle.trim())) return;
+    setIsSubmittingRequest(true);
+    try {
+      if (demoHydrationRef.current) await demoHydrationRef.current;
+      const inferredServiceType = requestTitle === "Project question" ? "project_question" : requestTitle === "Project blocker or coordination problem" ? "blocker_coordination" : requestTitle === "Concierge help" ? "concierge" : "government_help";
+      const effectiveRequestType = requestType === "government_help" && requestCenterMode === "service" ? inferredServiceType : requestType;
+      const selectedPermit = repository.getCatalog().find((permit) => permit.id === selectedCatalogPermitId);
+      const title = requestTitle.trim() || selectedPermit?.name || "Customer project request";
+      const description = requestDescription.trim() || requestOutcome.trim() || "Customer request submitted through PATH.";
+      const permitTypeId = effectiveRequestType === "permit_authorization" ? selectedCatalogPermitId : undefined;
+      const fingerprint = customerSubmissionFingerprint({
         projectId: projectRecord.id,
-        workstreamId: request.relatedWorkstreamId ?? "WS-WETLANDS-PAD-A",
-        permitTypeId: selectedPermit.id,
-        authorityOrganizationId: selectedPermit.responsibleOrgId,
-        authorityOrganizationName: selectedPermit.agencyContactName ? `${selectedPermit.responsibleOrgCode} · ${selectedPermit.agencyContactName}` : selectedPermit.responsibleOrgCode,
-        filingMethod: selectedPermit.filingMode,
-        officialPortalUrl: selectedPermit.officialFilingUrl,
+        requestType: effectiveRequestType,
+        title,
+        description,
+        requestedOutcome: requestOutcome.trim() || undefined,
+        locationOrAffectedArea: requestArea.trim() || undefined,
+        desiredDate: requestDate || undefined,
+        knownAgencyCode: requestAgency || selectedPermit?.responsibleOrgCode,
+        permitTypeId,
+        blocksActiveWork: requestBlocksWork,
+      });
+      const previousRecovery = readCustomerSubmissionRecovery();
+      const sameSubmission = previousRecovery
+        && previousRecovery.projectId === projectRecord.id
+        && previousRecovery.requestType === effectiveRequestType
+        && previousRecovery.requestFingerprint === fingerprint;
+      const recovery: CustomerSubmissionRecovery = sameSubmission ? previousRecovery : {
+        version: 1,
+        requestId: `customer-request-${crypto.randomUUID()}`,
+        confirmationNumber: `PATH-${new Date().getUTCFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+        projectId: projectRecord.id,
+        requestType: effectiveRequestType,
+        permitTypeId,
+        requestFingerprint: fingerprint,
+        filingPending: Boolean(selectedPermit?.filingMode === "EXTERNAL_PORTAL" && effectiveRequestType === "permit_authorization"),
         externalReferenceNumber: externalReference.trim() || undefined,
         externalRecordUrl: externalRecordUrl.trim() || undefined,
-        externalStatus: externalStatus as "submitted" | "under_review" | "additional_information" | "approved" | "denied" | "closed" | "not_started" | "draft",
-        submittedAt: requestDate || new Date().toISOString().slice(0, 10),
+        externalStatus: externalStatus as ExternalFilingRecord["externalStatus"],
+        submittedAt: requestDate || undefined,
+      };
+      const requestRecovery = { ...recovery, permitTypeId, externalReferenceNumber: externalReference.trim() || recovery.externalReferenceNumber, externalRecordUrl: externalRecordUrl.trim() || recovery.externalRecordUrl, externalStatus: externalStatus as ExternalFilingRecord["externalStatus"], submittedAt: requestDate || recovery.submittedAt };
+      writeCustomerSubmissionRecovery(requestRecovery);
+      const requestResult = await repository.createCustomerRequestPersisted({
+        submissionIdentity: { id: recovery.requestId, confirmationNumber: recovery.confirmationNumber },
+        projectId: projectRecord.id,
+        requestType: effectiveRequestType,
+        title,
+        description,
+        requestedOutcome: requestOutcome.trim() || undefined,
+        locationOrAffectedArea: requestArea.trim() || undefined,
+        desiredDate: requestDate || undefined,
+        scheduleImportance: requestBlocksWork ? "critical" : "normal",
+        knownAgencyCode: requestAgency || selectedPermit?.responsibleOrgCode,
+        knownPermitTypeId: permitTypeId,
         submittedByUserId: actorUserId(),
         submittedByName: activePersona.name,
-        lastStatusVerifiedAt: new Date().toISOString().slice(0, 10),
-        lastStatusVerifiedBy: activePersona.name,
-        authoritativeSystemName: selectedPermit.responsibleOrgCode,
-        notes: "Manually tracked in PATH; the agency system remains authoritative.",
-        receiptDocumentVersionIds: [],
+        blocksActiveWork: requestBlocksWork,
+        attachmentDocumentVersionIds: [],
+        attachmentFile: requestFile ?? undefined,
       });
-      if (filingResult.error) {
-        setToast(`${request.confirmationNumber} was saved, but the external filing tracker could not be saved: ${filingResult.error.message}`);
+      if (requestResult.error || !requestResult.data) {
+        setToast(`Request could not be saved: ${requestResult.error?.message ?? "the database did not confirm the submission"}`);
         return;
       }
+      const request = requestResult.data;
+      setLastSubmittedRequest(request);
+      if (requestRecovery.filingPending) {
+        setPendingFilingRecovery(requestRecovery);
+        const filingResult = await persistExternalFilingForRequest(request, requestRecovery);
+        if (filingResult.error) {
+          setToast(`${request.confirmationNumber} was saved, but its external filing tracker still needs to be recorded. Retry the filing from the receipt.`);
+          navigate("customer-home");
+          setMutationVersion((value) => value + 1);
+          return;
+        }
+      }
+      clearCustomerSubmissionRecovery();
+      setPendingFilingRecovery(null);
+      setRequestTitle("");
+      setRequestOutcome("");
+      setRequestDescription("");
+      setRequestFile(null);
+      setIntakeFile(null);
+      setRequestFileInputKey((value) => value + 1);
+      setExternalReference("");
+      setExternalRecordUrl("");
+      setRequestCenterMode("menu");
+      navigate("customer-home");
+      setToast(`${request.confirmationNumber} submitted. The State Project Office triage queue was notified.`);
+      setMutationVersion((value) => value + 1);
+    } finally {
+      setIsSubmittingRequest(false);
     }
-    setRequestTitle("");
-    setRequestOutcome("");
-    setRequestDescription("");
-    setRequestFile(null);
-    setIntakeFile(null);
-    setRequestFileInputKey((value) => value + 1);
-    setExternalReference("");
-    setExternalRecordUrl("");
-    setRequestCenterMode("menu");
-    navigate("customer-home");
-    setToast(`${request.confirmationNumber} submitted. The State Project Office triage queue was notified.`);
-    setMutationVersion((value) => value + 1);
+  }
+
+  async function retryPendingExternalFiling() {
+    if (isSubmittingRequest) return;
+    const recovery = pendingFilingRecovery ?? readCustomerSubmissionRecovery();
+    if (!recovery) return;
+    const request = repository.getCustomerRequests().find((entry) => entry.id === recovery.requestId || entry.confirmationNumber === recovery.confirmationNumber);
+    if (!request) {
+      setToast("The saved request could not be loaded. Refresh the workspace and try again.");
+      return;
+    }
+    setIsSubmittingRequest(true);
+    try {
+      const filingResult = await persistExternalFilingForRequest(request, recovery);
+      if (filingResult.error) {
+        setToast(`The filing tracker still could not be saved: ${filingResult.error.message}`);
+        return;
+      }
+      clearCustomerSubmissionRecovery();
+      setPendingFilingRecovery(null);
+      setToast(`${request.confirmationNumber} external filing tracking is now saved.`);
+      setMutationVersion((value) => value + 1);
+    } finally {
+      setIsSubmittingRequest(false);
+    }
   }
 
   async function saveCustomerDraft() {
@@ -964,7 +1083,6 @@ export default function Home() {
       knownPermitTypeId: undefined,
       submittedByUserId: actorUserId(),
       submittedByName: activePersona.name,
-      relatedWorkstreamId: selectedPermit?.responsibleOrgCode === "CPRA" ? "WS-WETLANDS-PAD-A" : undefined,
       blocksActiveWork: requestBlocksWork,
       attachmentDocumentVersionIds: [],
       attachmentFile: requestFile ?? undefined,
@@ -1668,7 +1786,7 @@ export default function Home() {
         {queueGroups.map((group) => <button key={group.id} type="button" onClick={() => document.getElementById(`queue-${group.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })} className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-teal-400 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{queueLabel(group)}</p><p className="mt-1 text-2xl font-black text-[#00284d]">{group.items.length}</p></button>)}
       </div>
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-start gap-3"><Info className="mt-0.5 size-5 shrink-0 text-teal-700" aria-hidden="true" /><div><p className="font-black text-[#00284d]">Start here</p><p className="mt-1 text-sm text-slate-600">The queue is prioritized by critical-path impact, due date, blockers, and handoff readiness. Waiting items stay visible without looking like failed work.</p></div></div></section>
-      <div className="space-y-7">{queueGroups.map((group) => <section id={`queue-${group.id}`} key={group.id} className="scroll-mt-28"><div className="mb-3 flex flex-wrap items-baseline justify-between gap-2"><div><h2 className="text-lg font-black text-[#00284d]">{queueLabel(group)} <span className="ml-1 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{group.items.length}</span></h2><p className="mt-1 text-sm text-slate-500">{group.description}</p></div>{group.id === "needs_action" && <span className="text-xs font-bold uppercase tracking-wider text-teal-800">Priority order</span>}</div>{group.items.length > 0 ? <div className="space-y-3">{group.items.map(renderWorkCard)}</div> : <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">Nothing in this section right now.</div>}</section>)}</div>
+      <div className="space-y-7">{queueGroups.map((group) => <section id={`queue-${group.id}`} key={group.id} className="scroll-mt-28"><div className="mb-3 flex flex-wrap items-baseline justify-between gap-2"><div><h2 className="text-lg font-black text-[#00284d]">{queueLabel(group)} <span className="ml-1 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{group.items.length}</span></h2><p className="mt-1 text-sm text-slate-500">{group.description}</p></div>{group.id === "needs_action" && <span className="text-xs font-bold uppercase tracking-wider text-teal-800">Priority order</span>}</div>{group.items.length > 0 ? <div className="space-y-3">{group.items.map(renderWorkCard)}</d…37 tokens truncated…/div>}</section>)}</div>
       {activePersona.isCustomer && <form onSubmit={handleIntakeSubmit} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start gap-3"><Sparkles className="mt-0.5 size-5 text-teal-700" aria-hidden="true" /><div className="flex-1"><h2 className="font-black text-[#00284d]">Ask the project office for something</h2><p className="mt-1 text-sm text-slate-600">Describe the need in plain language. PATH will suggest the lead agency and send it to the triage queue.</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><Input value={intakeText} onChange={(event) => setIntakeText(event.target.value)} placeholder="We need a heavy-haul route review for oversized trailers…" aria-label="Describe a project need" /><Button id="intake-submit-btn" type="submit" className="bg-[#00284d] font-bold">Submit request <Send className="size-4" aria-hidden="true" /></Button></div>{intakePreview && <p role="status" aria-live="polite" className="mt-3 rounded-lg bg-teal-50 p-3 text-sm font-bold text-teal-950">Suggested route: {intakePreview.categoryLabel} → {intakePreview.suggestedLeadAgency} · {intakePreview.priority.toUpperCase()}</p>}{intakeStatus && <p role="status" aria-live="polite" className="mt-2 text-sm font-bold text-teal-800">{intakeStatus}</p>}</div></div></form>}
     </div>;
   }
@@ -1683,7 +1801,7 @@ export default function Home() {
     const filings = repository.getExternalFilings();
     const catalog = repository.getCatalog();
     return <CustomerHome projectName={PROJECT_DISPLAY_NAME} onSubmitRequest={() => openRequestCenter()} onViewRequests={() => navigate("requests")}>
-      {lastSubmittedRequest && <Card className="border-emerald-200 bg-emerald-50"><CardHeader><CardTitle className="text-lg font-black text-emerald-950">Request submitted</CardTitle><p className="text-sm text-emerald-900">Receipt: {lastSubmittedRequest.confirmationNumber}</p></CardHeader><CardContent className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-bold text-emerald-950">{lastSubmittedRequest.title}</p><p className="mt-1 text-sm text-emerald-900">The State Project Office will review and route this request. Current assignment: {lastSubmittedRequest.assignmentGroupName ?? "Pending assignment"}.</p></div><Button type="button" onClick={() => openCustomerRequest(lastSubmittedRequest)} className="bg-[#00284d] font-bold">Open request</Button></CardContent></Card>}
+      {lastSubmittedRequest && <Card className={`${pendingFilingRecovery ? "border-amber-300 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}><CardHeader><CardTitle className={`text-lg font-black ${pendingFilingRecovery ? "text-amber-950" : "text-emerald-950"}`}>{pendingFilingRecovery ? "Request saved — filing tracking pending" : "Request submitted"}</CardTitle><p className={`text-sm ${pendingFilingRecovery ? "text-amber-900" : "text-emerald-900"}`}>Receipt: {lastSubmittedRequest.confirmationNumber}</p></CardHeader><CardContent className="flex flex-wrap items-center justify-between gap-3"><div><p className={`font-bold ${pendingFilingRecovery ? "text-amber-950" : "text-emerald-950"}`}>{lastSubmittedRequest.title}</p><p className={`mt-1 text-sm ${pendingFilingRecovery ? "text-amber-900" : "text-emerald-900"}`}>{pendingFilingRecovery ? "The PATH request and any attachment are saved. Only the external filing tracker still needs to be recorded." : `The State Project Office will review and route this request. Current assignment: ${lastSubmittedRequest.assignmentGroupName ?? "Pending assignment"}.`}</p></div><div className="flex flex-wrap gap-2">{pendingFilingRecovery && <Button type="button" onClick={() => void retryPendingExternalFiling()} disabled={isSubmittingRequest} className="bg-amber-700 font-bold hover:bg-amber-800">{isSubmittingRequest ? "Retrying…" : "Retry filing tracking"}</Button>}<Button type="button" onClick={() => openCustomerRequest(lastSubmittedRequest)} className="bg-[#00284d] font-bold">Open request</Button></div></CardContent></Card>}
       <section className="rounded-2xl border border-teal-300 bg-white p-6 shadow-md sm:p-8"><div className="flex flex-wrap items-start justify-between gap-5"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-teal-800">Customer project command center</p><button type="button" onClick={() => openProject()} className="mt-2 text-left group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 rounded-lg" title="Open project page"><h1 className="max-w-4xl text-3xl font-black tracking-tight text-[#00284d] group-hover:text-teal-900 group-hover:underline sm:text-4xl">{PROJECT_DISPLAY_NAME}</h1></button><p className="mt-2 text-sm font-semibold text-slate-600">{projectRecord.code} · {projectRecord.locationDescription}</p></div><div className="flex items-center gap-2"><span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-black uppercase text-amber-900">Overall health · {projectOverview.healthLabel}</span><Button type="button" size="sm" onClick={() => openProject()} className="bg-[#00284d] hover:bg-[#003c70] text-xs font-bold gap-1.5"><Building2 className="size-3.5" /> Project Page</Button></div></div><div className="mt-7 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2 lg:grid-cols-5"><div><p className="text-[11px] font-black uppercase text-slate-500">Project stage</p><p className="mt-1 text-sm font-black text-[#00284d]">{projectOverview.stage}</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Baseline launch</p><p className="mt-1 text-sm font-black text-[#00284d]">{formatDate(projectOverview.baseline)}</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Current forecast</p><p className="mt-1 text-sm font-black text-[#00284d]">{formatDate(projectOverview.forecast)}</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Variance</p><p className="mt-1 text-sm font-black text-rose-700">+{projectOverview.varianceDays} days</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Location</p><p className="mt-1 text-sm font-black text-[#00284d]">{projectRecord.parish}, Louisiana</p></div></div></section>
       <SubmitRequestLauncher open={requestLauncherOpen} onToggle={() => setRequestLauncherOpen((value) => !value)} onSelect={openRequestCenter} />
       <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-base font-black text-[#00284d]"><Gauge className="size-4 text-teal-700" /> Schedule summary</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">{projectOverview.criticalPathCount} critical-path workstreams · {projectOverview.blockedWorkstreamCount} waiting or blocked</p><p className="mt-3 text-sm font-black text-[#00284d]">Next milestone: {projectOverview.nextMilestone.title}</p><p className="mt-1 text-xs text-slate-500">{formatDate(projectOverview.nextMilestone.date)} · {projectOverview.nextMilestone.owner}</p><Button type="button" onClick={() => navigate("schedule")} className="mt-4 w-full bg-[#00284d] text-xs font-bold">Open Schedule <ArrowRight className="size-3.5" /></Button></CardContent></Card>{projectOverview.customerActions.map((action) => <Card key={action.label}><CardHeader><CardTitle className="text-base font-black text-[#00284d]">{action.label}</CardTitle></CardHeader><CardContent><p className="text-3xl font-black text-teal-800">{action.count}</p><p className="mt-1 text-xs text-slate-500">{action.detail}</p><Button type="button" variant="outline" onClick={() => navigate(action.label.includes("Documents") ? "documents" : "requests")} className="mt-4 w-full text-xs font-bold">View details</Button></CardContent></Card>)}</section>
@@ -1701,7 +1819,7 @@ export default function Home() {
     // auth ids are UUIDs while demo personas use stable fixture ids.
     const recent = repository.getCustomerRequests();
     const choice = (label: string, detail: string, icon: ReactNode, onClick: () => void) => <button type="button" onClick={onClick} className="rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-teal-400 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><span className="flex size-10 items-center justify-center rounded-lg bg-teal-50 text-teal-800">{icon}</span><span className="mt-4 block text-base font-black text-[#00284d]">{label}</span><span className="mt-1 block text-sm leading-6 text-slate-600">{detail}</span></button>;
-    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer intake</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Requests & permits</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Start with the outcome you need. PATH creates a trackable request, routes it to the State Project Office, and keeps authoritative agency filings clearly identified.</p></div>{requestCenterMode === "menu" && <><div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{choice("Submit / track a permit or authorization", "Select an authorization, review prerequisites and official resources, then create a PATH tracking record.", <FilePlus2 className="size-5" />, () => setRequestCenterMode("permit"))}{choice("Request government help / service", "Tell the project office the service or outcome you need, including date and schedule impact.", <HelpCircle className="size-5" />, () => { setRequestTitle("Government service request"); setRequestCenterMode("service"); })}{choice("Ask a project question", "Send a structured question to the project office with the context needed for a useful answer.", <MessageSquare className="size-5" />, () => { setRequestTitle("Project question"); setRequestCenterMode("service"); })}{choice("Report a blocker / coordination problem", "Identify what is blocked, who may need to act, and the date that matters.", <AlertOctagon className="size-5" />, () => { setRequestTitle("Project blocker or coordination problem"); setRequestBlocksWork(true); setRequestCenterMode("service"); })}{choice("Request escalation", "Ask for assistance when a critical-path risk or delayed dependency needs project-office attention.", <ShieldAlert className="size-5" />, () => setRequestCenterMode("escalation"))}{choice("I'm not sure what I need", "Use the PATH concierge to describe the situation in plain English and receive a suggested route.", <Sparkles className="size-5" />, () => { setRequestCenterMode("service"); setRequestTitle("Concierge help"); })}</div><Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Track my PATH requests</CardTitle></CardHeader><CardContent className="space-y-3">{recent.length > 0 ? recent.map((request) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-slate-500">{request.status.replaceAll("_", " ")} · {request.description}</p></div><span className="text-xs font-bold text-teal-800">{formatDate(request.updatedAt)}</span></div>) : <p className="text-sm text-slate-600">No requests submitted from this profile yet.</p>}</CardContent></Card></>}{requestCenterMode === "permit" && permit && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">Permit / authorization submission wizard</CardTitle><p className="mt-1 text-sm text-slate-600">Step 2 of 6 · Choose the authorization from the verified catalog.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent className="space-y-5"><div><Label htmlFor="permit-catalog">Authorization or permit</Label><select id="permit-catalog" value={permit.id} onChange={(event) => setSelectedCatalogPermitId(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm">{catalog.map((entry) => <option key={entry.id} value={entry.id}>{entry.name} · {entry.responsibleOrgCode}</option>)}</select></div><div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2"><div><p className="text-xs font-black uppercase text-slate-500">What triggers it</p><p className="mt-1 text-slate-700">{permit.triggerExplanation}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Expected duration</p><p className="mt-1 text-slate-700">{permit.expectedLeadTimeDays} days · statutory minimum {permit.minimumStatutoryDays} days</p></div><div><p className="text-xs font-black uppercase text-slate-500">Prerequisites</p><p className="mt-1 text-slate-700">{permit.prerequisites.join(" · ")}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Agency contact</p><p className="mt-1 text-slate-700">{permit.agencyContactName ?? permit.responsibleOrgCode} · {permit.agencyContactEmail ?? "Contact through official portal"}</p></div></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-black text-amber-950">Filing method: {filingModeLabel(permit.filingMode)}</p><p className="mt-1 text-sm leading-6 text-amber-900">{permit.filingMode === "EXTERNAL_PORTAL" ? `This application is submitted in the authoritative ${permit.responsibleOrgCode} system. PATH will track it as part of the SpaceX project.` : "PATH will show the next supported submission step before filing."}</p>{permit.officialFilingUrl && <a href={permit.officialFilingUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#00284d] px-3 py-2 text-xs font-bold text-white">Open official filing site <ExternalLink className="size-3.5" /></a>}</div><form onSubmit={(event) => submitCustomerRequest(event, "permit_authorization")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="permit-request-title">PATH tracking title</Label><Input id="permit-request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder={permit.name} required /></div><div><Label htmlFor="permit-submission-date">Submission date</Label><Input id="permit-submission-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="permit-request-description">Supporting context and requested outcome</Label><textarea id="permit-request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe the project scope, filing intent, and any known prerequisites." /></div>{permit.filingMode === "EXTERNAL_PORTAL" && <div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="external-reference">External case / application number</Label><Input id="external-reference" value={externalReference} onChange={(event) => setExternalReference(event.target.value)} placeholder="Enter after filing" /></div><div><Label htmlFor="external-record-url">External record URL</Label><Input id="external-record-url" type="url" value={externalRecordUrl} onChange={(event) => setExternalRecordUrl(event.target.value)} placeholder="https://..." /></div><div><Label htmlFor="external-status">Authoritative external status</Label><select id="external-status" value={externalStatus} onChange={(event) => setExternalStatus(event.target.value)} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="submitted">Submitted</option><option value="under_review">Under review</option><option value="additional_information">Additional information requested</option></select></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">PATH does not scrape or synchronize this system. Status is manually verified by a project participant.</div></div>}<Button type="submit" className="bg-[#00284d] font-bold">Create PATH tracking record <Send className="size-4" /></Button></form></CardContent></Card>}{(requestCenterMode === "service" || requestCenterMode === "escalation") && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">{requestCenterMode === "escalation" ? "Request escalation / assistance" : "Project help request"}</CardTitle><p className="mt-1 text-sm text-slate-600">Complete the structured intake so the right team can respond without a follow-up round trip.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent><form onSubmit={(event) => submitCustomerRequest(event, requestCenterMode === "escalation" ? "escalation" : "government_help")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="request-title">Request title</Label><Input id="request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder="What do you need?" required /></div><div><Label htmlFor="request-agency">Known agency (optional)</Label><Input id="request-agency" value={requestAgency} onChange={(event) => setRequestAgency(event.target.value)} placeholder="DOTD, CPRA, LDEQ..." /></div><div><Label htmlFor="request-outcome">Requested outcome</Label><Input id="request-outcome" value={requestOutcome} onChange={(event) => setRequestOutcome(event.target.value)} placeholder="A decision, meeting, review, or referral" /></div><div><Label htmlFor="request-date">Desired date</Label><Input id="request-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="request-area">Location / affected area</Label><Input id="request-area" value={requestArea} onChange={(event) => setRequestArea(event.target.value)} /></div><div><Label htmlFor="request-description">Describe the situation</Label><textarea id="request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={5} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder={requestCenterMode === "escalation" ? "Describe the critical-path risk, delayed dependency, or assistance needed." : "Include the context the project office needs to respond."} /></div><label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3"><input type="checkbox" checked={requestBlocksWork} onChange={(event) => setRequestBlocksWork(event.target.checked)} className="mt-1 size-4 accent-teal-700" /><span><span className="block text-sm font-bold text-[#00284d]">This blocks active project work</span><span className="block text-xs text-slate-500">Use this to help triage urgency; PATH will not infer a legal determination.</span></span></label><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={saveCustomerDraft}>Save draft</Button><Button type="submit" className="bg-[#00284d] font-bold">Submit request <Send className="size-4" /></Button></div></form></CardContent></Card>}</div>;
+    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer intake</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Requests & permits</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Start with the outcome you need. PATH creates a trackable request, routes it to the State Project Office, and keeps authoritative agency filings clearly identified.</p></div>{requestCenterMode === "menu" && <><div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{choice("Submit / track a permit or authorization", "Select an authorization, review prerequisites and official resources, then create a PATH tracking record.", <FilePlus2 className="size-5" />, () => setRequestCenterMode("permit"))}{choice("Request government help / service", "Tell the project office the service or outcome you need, including date and schedule impact.", <HelpCircle className="size-5" />, () => { setRequestTitle("Government service request"); setRequestCenterMode("service"); })}{choice("Ask a project question", "Send a structured question to the project office with the context needed for a useful answer.", <MessageSquare className="size-5" />, () => { setRequestTitle("Project question"); setRequestCenterMode("service"); })}{choice("Report a blocker / coordination problem", "Identify what is blocked, who may need to act, and the date that matters.", <AlertOctagon className="size-5" />, () => { setRequestTitle("Project blocker or coordination problem"); setRequestBlocksWork(true); setRequestCenterMode("service"); })}{choice("Request escalation", "Ask for assistance when a critical-path risk or delayed dependency needs project-office attention.", <ShieldAlert className="size-5" />, () => setRequestCenterMode("escalation"))}{choice("I'm not sure what I need", "Use the PATH concierge to describe the situation in plain English and receive a suggested route.", <Sparkles className="size-5" />, () => { setRequestCenterMode("service"); setRequestTitle("Concierge help"); })}</div><Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Track my PATH requests</CardTitle></CardHeader><CardContent className="space-y-3">{recent.length > 0 ? recent.map((request) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-slate-500">{request.status.replaceAll("_", " ")} · {request.description}</p></div><span className="text-xs font-bold text-teal-800">{formatDate(request.updatedAt)}</span></div>) : <p className="text-sm text-slate-600">No requests submitted from this profile yet.</p>}</CardContent></Card></>}{requestCenterMode === "permit" && permit && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">Permit / authorization submission wizard</CardTitle><p className="mt-1 text-sm text-slate-600">Step 2 of 6 · Choose the authorization from the verified catalog.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent className="space-y-5"><div><Label htmlFor="permit-catalog">Authorization or permit</Label><select id="permit-catalog" value={permit.id} onChange={(event) => setSelectedCatalogPermitId(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm">{catalog.map((entry) => <option key={entry.id} value={entry.id}>{entry.name} · {entry.responsibleOrgCode}</option>)}</select></div><div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2"><div><p className="text-xs font-black uppercase text-slate-500">What triggers it</p><p className="mt-1 text-slate-700">{permit.triggerExplanation}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Expected duration</p><p className="mt-1 text-slate-700">{permit.expectedLeadTimeDays} days · statutory minimum {permit.minimumStatutoryDays} days</p></div><div><p className="text-xs font-black uppercase text-slate-500">Prerequisites</p><p className="mt-1 text-slate-700">{permit.prerequisites.join(" · ")}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Agency contact</p><p className="mt-1 text-slate-700">{permit.agencyContactName ?? permit.responsibleOrgCode} · {permit.agencyContactEmail ?? "Contact through official portal"}</p></div></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-black text-amber-950">Filing method: {filingModeLabel(permit.filingMode)}</p><p className="mt-1 text-sm leading-6 text-amber-900">{permit.filingMode === "EXTERNAL_PORTAL" ? `This application is submitted in the authoritative ${permit.responsibleOrgCode} system. PATH will track it as part of the SpaceX project.` : "PATH will show the next supported submission step before filing."}</p>{permit.officialFilingUrl && <a href={permit.officialFilingUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#00284d] px-3 py-2 text-xs font-bold text-white">Open official filing site <ExternalLink className="size-3.5" /></a>}</div><form onSubmit={(event) => submitCustomerRequest(event, "permit_authorization")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="permit-request-title">PATH tracking title</Label><Input id="permit-request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder={permit.name} required /></div><div><Label htmlFor="permit-submission-date">Submission date</Label><Input id="permit-submission-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="permit-request-description">Supporting context and requested outcome</Label><textarea id="permit-request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe the project scope, filing intent, and any known prerequisites." /></div>{permit.filingMode === "EXTERNAL_PORTAL" && <div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="external-reference">External case / application number</Label><Input id="external-reference" value={externalReference} onChange={(event) => setExternalReference(event.target.value)} placeholder="Enter after filing" /></div><div><Label htmlFor="external-record-url">External record URL</Label><Input id="external-record-url" type="url" value={externalRecordUrl} onChange={(event) => setExternalRecordUrl(event.target.value)} placeholder="https://..." /></div><div><Label htmlFor="external-status">Authoritative external status</Label><select id="external-status" value={externalStatus} onChange={(event) => setExternalStatus(event.target.value)} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="submitted">Submitted</option><option value="under_review">Under review</option><option value="additional_information">Additional information requested</option></select></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">PATH does not scrape or synchronize this system. Status is manually verified by a project participant.</div></div>}<Button type="submit" disabled={isSubmittingRequest} className="bg-[#00284d] font-bold">{isSubmittingRequest ? "Saving request…" : "Create PATH tracking record"} <Send className="size-4" /></Button></form></CardContent></Card>}{(requestCenterMode === "service" || requestCenterMode === "escalation") && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">{requestCenterMode === "escalation" ? "Request escalation / assistance" : "Project help request"}</CardTitle><p className="mt-1 text-sm text-slate-600">Complete the structured intake so the right team can respond without a follow-up round trip.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent><form onSubmit={(event) => submitCustomerRequest(event, requestCenterMode === "escalation" ? "escalation" : "government_help")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="request-title">Request title</Label><Input id="request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder="What do you need?" required /></div><div><Label htmlFor="request-agency">Known agency (optional)</Label><Input id="request-agency" value={requestAgency} onChange={(event) => setRequestAgency(event.target.value)} placeholder="DOTD, CPRA, LDEQ..." /></div><div><Label htmlFor="request-outcome">Requested outcome</Label><Input id="request-outcome" value={requestOutcome} onChange={(event) => setRequestOutcome(event.target.value)} placeholder="A decision, meeting, review, or referral" /></div><div><Label htmlFor="request-date">Desired date</Label><Input id="request-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="request-area">Location / affected area</Label><Input id="request-area" value={requestArea} onChange={(event) => setRequestArea(event.target.value)} /></div><div><Label htmlFor="request-description">Describe the situation</Label><textarea id="request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={5} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder={requestCenterMode === "escalation" ? "Describe the critical-path risk, delayed dependency, or assistance needed." : "Include the context the project office needs to respond."} /></div><label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3"><input type="checkbox" checked={requestBlocksWork} onChange={(event) => setRequestBlocksWork(event.target.checked)} className="mt-1 size-4 accent-teal-700" /><span><span className="block text-sm font-bold text-[#00284d]">This blocks active project work</span><span className="block text-xs text-slate-500">Use this to help triage urgency; PATH will not infer a legal determination.</span></span></label><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={saveCustomerDraft}>Save draft</Button><Button type="submit" disabled={isSubmittingRequest} className="bg-[#00284d] font-bold">{isSubmittingRequest ? "Saving request…" : "Submit request"} <Send className="size-4" /></Button></div></form></CardContent></Card>}</div>;
   }
 
   function renderCustomerDocuments() {

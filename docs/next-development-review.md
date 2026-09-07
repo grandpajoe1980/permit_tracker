@@ -46,18 +46,25 @@ The connected Supabase demo project now has a repeatable scenario set from `supa
 
 The seed references an existing document version only when it has non-zero bytes and a hash. No qualifying version was present during this run, so attachment arrays remain empty and the scenarios are explicitly attachment-ready rather than pretending that a Storage object exists. Local lint, build/security scan, and the focused source-contract suite pass.
 
-### S1 — Request identity and recoverable submission (highest priority; T11/T12)
+### S1 — Request identity and recoverable submission (completed implementation; T11/T12)
 
-Evidence: `app/page.tsx`, `submitCustomerRequest`, links CPRA requests to the literal `WS-WETLANDS-PAD-A`; external filings also fall back to that workstream regardless of permit. Request creation precedes external-filing creation; on filing failure the handler returns with a saved request and the form still available. Re-submission can attempt a new request. `submittedAt` uses the desired request date or today, and verification metadata defaults to today without an explicit verification step.
+Implemented and live-verified on 2026-09-07:
 
-Tasks:
-- Remove agency-derived/hardcoded business-record links; resolve exact persisted IDs or leave work unlinked until deliberately routed.
-- Separate desired completion date, actual filing submission date, and last verified date.
-- Persist and reuse the created request ID after partial success; retry only the failed filing/upload operation.
-- Add duplicate-submit protection and authoritative idempotency; inspect existing RPC guarantees before proposing schema changes.
-- Show a durable partial-success receipt with a precise recovery action.
+- Removed the CPRA/ wetlands workstream fallback from customer submission and draft paths. External filings remain unlinked until intake routing supplies a real workstream.
+- Added `external_filings.customer_request_id`, made `workstream_id` nullable for pre-routing filings, and added a request/permit uniqueness index.
+- Replaced the direct external-filings insert with authenticated `rpc_create_external_filing`, which validates project/request/workstream scope, records the authenticated actor, writes its audit event, and returns the canonical row.
+- Reused a stable request ID and confirmation number from browser recovery metadata. The existing customer-request RPC remains the authoritative request idempotency boundary.
+- Added deterministic filing IDs, a duplicate-submit guard, a reload-safe partial-success receipt, and a retry action that only repeats filing tracking.
+- Stopped inventing today as a filing submission date; blank dates remain blank, while the database records a separate verification timestamp only when a status is explicitly recorded.
 
-Acceptance: submit two different permits; neither silently links to the wetlands workstream. Force filing failure after request save, reload, retry, and prove one request, one correct filing, preserved attachment and truthful dates.
+Evidence:
+
+- Forward migration `20260907132000_customer_request_filing_recovery` is applied to project `zomzacaxwqfwjstkxbpv`; read-back confirms both new indexes, nullable workstream identity, migration ledger entry, and `anon_execute=false` / `authenticated_execute=true` for the RPC.
+- Auth-context rollback probe succeeded with Joe Skaggs's system-admin identity: a request-linked filing was returned with `workstream_id = null`, actor linkage, audit insertion, and no committed probe row.
+- A second rollback probe called the same filing twice and read back exactly one row inside the transaction, proving the idempotency boundary without leaving demo data.
+- `npm test`: 394 total, 368 passed, 0 failed, 26 explicitly skipped because local Supabase URL/key credentials are unavailable. Lint, production build, and secret scan pass.
+
+Remaining S1 acceptance boundary: a browser file chooser in this environment still cannot transfer non-empty bytes, so the attachment-byte portion remains part of S5. The request/filing persistence boundary itself is complete.
 
 ### S2 — Finish deliberate intake routing (T12)
 
@@ -140,8 +147,10 @@ Acceptance: no unclassified skipped release checks, current deployment SHA match
 
 ## Working order and guardrails
 
-Recommended next implementation sprint: S1, then S2 and S3. Run S5 acceptance incrementally with each affected workflow, not only at the end. S4 follows core correctness; S6 is targeted completeness, and S7 runs throughout.
+Recommended next implementation sprint: S2 — finish deliberate intake routing. Run S5 acceptance incrementally with each affected workflow, not only at the end. S3 follows the routing slice for accessible/error-state verification; S4 follows core correctness; S6 is targeted completeness, and S7 runs throughout.
+
+The next logical end-to-end journey is: Alex submits two different permit requests (one with an optional attachment), refreshes after the receipt, and confirms each request keeps its own permit identity and no workstream is guessed; Sarah opens the intake queue, edits agency/team/member/workflow routing, previews the fan-out, confirms exactly the intended workstreams, and Jordan/Sam read back their respective queues after a fresh sign-in. A failed routing confirmation must be retryable without duplicate workstreams.
 
 Keep Supabase authoritative, preserve immutable documents and identifiers, do not weaken RLS/auth or rewrite historical migrations, use forward repairs only after reproduced failures and approval. Commit coherent changes with relevant tests. At each sprint end report evidence, unresolved items and the next logical end-to-end sprint; await Joe's go before starting it.
 
-The scenario seed is source-complete and designed for live read-back, but its connected Supabase execution and cross-user browser acceptance must still be recorded separately. No new database/security claim is made by the seed itself: the previous advisor results and live probes remain historical until rerun. Signed-in/mobile browser review remains a clearly open acceptance item rather than an assumed pass.
+The scenario seed is source-complete and designed for live read-back; its connected execution is recorded above and its cross-user browser acceptance remains open. S1 now adds a live request-linked filing/RPC read-back, while the browser attachment-byte boundary remains open. Supabase advisors still report pre-existing authenticated SECURITY DEFINER and permissive-policy warnings; the new RPC follows the same reviewed application transaction boundary with a fixed `search_path` and no anonymous execution. Signed-in/mobile browser review remains a clearly open acceptance item rather than an assumed pass.

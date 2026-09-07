@@ -807,15 +807,18 @@ class ProjectDeliveryRepository {
 
   /** Production mutation: commit first, then expose the authoritative row. */
   async createCustomerRequestPersisted(
-    params: Omit<CustomerRequestRecord, "id" | "confirmationNumber" | "status" | "createdAt" | "updatedAt"> & { status?: CustomerRequestRecord["status"]; attachmentFile?: File }
+    params: Omit<CustomerRequestRecord, "id" | "confirmationNumber" | "status" | "createdAt" | "updatedAt"> & { status?: CustomerRequestRecord["status"]; attachmentFile?: File; submissionIdentity?: { id: string; confirmationNumber: string } }
   ): Promise<{ data: CustomerRequestRecord | null; error: Error | null }> {
     if (!isSupabaseConfigured()) {
       if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
-      return { data: this.createCustomerRequest(params), error: null };
+      const fixtureParams = { ...params };
+      Reflect.deleteProperty(fixtureParams, "attachmentFile");
+      Reflect.deleteProperty(fixtureParams, "submissionIdentity");
+      return { data: this.createCustomerRequest(fixtureParams), error: null };
     }
     const now = new Date().toISOString();
-    const requestId = `customer-request-${crypto.randomUUID()}`;
-    const confirmationNumber = `PATH-${new Date().getUTCFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    const requestId = params.submissionIdentity?.id ?? `customer-request-${crypto.randomUUID()}`;
+    const confirmationNumber = params.submissionIdentity?.confirmationNumber ?? `PATH-${new Date().getUTCFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     const requestParams = {
       id: requestId,
       confirmationNumber,
@@ -910,12 +913,12 @@ class ProjectDeliveryRepository {
     return filing;
   }
 
-  async createExternalFilingPersisted(params: Omit<ExternalFilingRecord, "id" | "createdAt" | "updatedAt">): Promise<{ data: ExternalFilingRecord | null; error: Error | null }> {
+  async createExternalFilingPersisted(params: Omit<ExternalFilingRecord, "id" | "createdAt" | "updatedAt"> & { id?: string }): Promise<{ data: ExternalFilingRecord | null; error: Error | null }> {
     if (!isSupabaseConfigured()) {
       if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
       return { data: this.createExternalFiling(params), error: null };
     }
-    const filing = { ...params, id: `external-filing-${crypto.randomUUID()}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const filing = { ...params, id: params.id ?? `external-filing-${crypto.randomUUID()}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     const result = await mutateCreateExternalFiling(filing);
     if (result.error || !result.data) return { data: null, error: result.error ?? new Error("External filing was not persisted.") };
     this.externalFilings = [result.data, ...this.externalFilings.filter((entry) => entry.id !== result.data?.id)];

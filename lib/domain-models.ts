@@ -351,7 +351,9 @@ export interface PermitTypeRecord {
 export interface ExternalFilingRecord {
   id: string;
   projectId: string;
-  workstreamId: string;
+  /** Optional until the State Project Office routes the customer request. */
+  workstreamId?: string;
+  customerRequestId?: string;
   permitTypeId?: string;
   authorityOrganizationId: string;
   authorityOrganizationName: string;
@@ -1025,4 +1027,3 @@ export function mapCustomerRequestStatusToITSMState(status: string): ITSMState {
       return "submitted";
   }
 }
-

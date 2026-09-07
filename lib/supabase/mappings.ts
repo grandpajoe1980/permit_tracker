@@ -653,7 +653,8 @@ export function externalFilingRowToDomain(row: Row): ExternalFilingRecord {
   return {
     id: str(row.id),
     projectId: str(row.project_id),
-    workstreamId: str(row.workstream_id),
+    workstreamId: str(row.workstream_id) || undefined,
+    customerRequestId: str(row.customer_request_id) || undefined,
     permitTypeId: str(row.permit_type_id) || undefined,
     authorityOrganizationId: str(row.authority_organization_id),
     authorityOrganizationName: str(row.authority_organization_name),
