@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 50969)
-Total output lines: 2156
-
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -1828,7 +1825,23 @@ export default function Home() {
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Prioritized actions for {activePersona.name}. Open an item to inspect the assignment, modify workflow stages, see required inputs, and preview handoffs.</p>
         </div>
         <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-right">
-          <p className="text-xs font-black upperca…969 tokens truncated…(item) => item.kind === "coordination") : routeKind === "documents" ? activeQueueItems.filter((item) => item.kind === "document") : activeQueueItems;
+          <p className="text-xs font-black uppercase text-teal-800">Workspace & Agency</p>
+          <p className="mt-1 text-sm font-black text-teal-950">{workspaceTitle(activePersona.workspace)}</p>
+          <p className="text-xs font-bold text-teal-800">{activePersona.agencyCode}</p>
+         </div>
+      </div>
+      {renderQueueFilters()}
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6" aria-label="My Work summary">
+        {queueGroups.map((group) => <button key={group.id} type="button" onClick={() => document.getElementById(`queue-${group.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })} className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-teal-400 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{queueLabel(group)}</p><p className="mt-1 text-2xl font-black text-[#00284d]">{group.items.length}</p></button>)}
+      </div>
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-start gap-3"><Info className="mt-0.5 size-5 shrink-0 text-teal-700" aria-hidden="true" /><div><p className="font-black text-[#00284d]">Start here</p><p className="mt-1 text-sm text-slate-600">The queue is prioritized by critical-path impact, due date, blockers, and handoff readiness. Waiting items stay visible without looking like failed work.</p></div></div></section>
+      <div className="space-y-7">{queueGroups.map((group) => <section id={`queue-${group.id}`} key={group.id} className="scroll-mt-28"><div className="mb-3 flex flex-wrap items-baseline justify-between gap-2"><div><h2 className="text-lg font-black text-[#00284d]">{queueLabel(group)} <span className="ml-1 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{group.items.length}</span></h2><p className="mt-1 text-sm text-slate-500">{group.description}</p></div>{group.id === "needs_action" && <span className="text-xs font-bold uppercase tracking-wider text-teal-800">Priority order</span>}</div>{group.items.length > 0 ? <div className="space-y-3">{group.items.map(renderWorkCard)}</div> : <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">Nothing in this section right now.</div>}</section>)}</div>
+      {activePersona.isCustomer && <form onSubmit={handleIntakeSubmit} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start gap-3"><Sparkles className="mt-0.5 size-5 text-teal-700" aria-hidden="true" /><div className="flex-1"><h2 className="font-black text-[#00284d]">Ask the project office for something</h2><p className="mt-1 text-sm text-slate-600">Describe the need in plain language. PATH will suggest the lead agency and send it to the triage queue.</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><Input value={intakeText} onChange={(event) => setIntakeText(event.target.value)} placeholder="We need a heavy-haul route review for oversized trailers…" aria-label="Describe a project need" /><Button id="intake-submit-btn" type="submit" className="bg-[#00284d] font-bold">Submit request <Send className="size-4" aria-hidden="true" /></Button></div>{intakePreview && <p role="status" aria-live="polite" className="mt-3 rounded-lg bg-teal-50 p-3 text-sm font-bold text-teal-950">Suggested route: {intakePreview.categoryLabel} → {intakePreview.suggestedLeadAgency} · {intakePreview.priority.toUpperCase()}</p>}{intakeStatus && <p role="status" aria-live="polite" className="mt-2 text-sm font-bold text-teal-800">{intakeStatus}</p>}</div></div></form>}
+    </div>;
+  }
+
+  function renderQueue(routeKind: Route) {
+    const filtered = routeKind === "rfis" ? activeQueueItems.filter((item) => item.kind === "rfi") : routeKind === "coordination" ? activeQueueItems.filter((item) => item.kind === "coordination") : routeKind === "documents" ? activeQueueItems.filter((item) => item.kind === "document") : activeQueueItems;
     const title = routeKind === "rfis" ? "RFIs" : routeKind === "coordination" ? "Coordination Requests" : routeKind === "documents" ? "Documents to Review" : activePersona.workspace === "supervisor" ? "Supervisor Queue" : "My Agency Queue";
     return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Operational queue</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">{title}</h1><p className="mt-2 text-sm text-slate-600">Every item below explains its owner, due date, and the next action available to you.</p></div>{renderQueueFilters()}{filtered.length > 0 ? <div className="space-y-3">{filtered.map(renderWorkCard)}</div> : <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">No items are currently routed to this queue.</div>}</div>;
   }
