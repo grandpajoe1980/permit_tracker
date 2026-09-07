@@ -3,7 +3,7 @@
 import React from "react";
 import { BUILD_INFO } from "@/lib/version";
 import { PRODUCT_NAME, PROGRAM_SUBTITLE } from "@/lib/product-copy";
-import { GitCommit, Clock3, Database, ShieldCheck, ExternalLink } from "lucide-react";
+import { GitCommit, Clock3, ShieldCheck, ExternalLink } from "lucide-react";
 
 export function SystemVersionFooter() {
   return (
@@ -43,11 +43,7 @@ export function SystemVersionFooter() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-900 shadow-2xs">
-            <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-            <Database className="size-3 text-emerald-700" />
-            <span>Supabase Authoritative Persistence</span>
-          </div>
+          <span className="text-slate-500 text-[11px]">Operational data status is shown in the workspace.</span>
           <span className="text-slate-400 hidden md:inline">|</span>
           <span className="text-slate-500 text-[11px]">{PROGRAM_SUBTITLE}</span>
           <span className="text-slate-500 text-[11px]">Environment: {BUILD_INFO.environment ?? "production"}</span>
