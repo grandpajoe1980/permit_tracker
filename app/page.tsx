@@ -299,7 +299,7 @@ function CustomerRequestTriageQueue({
   onTriage: (request: CustomerRequestRecord) => void;
 }) {
   const [query, setQuery] = useState("");
-  const pending = requests.filter((request) => request.status !== "in_progress" && request.status !== "resolved");
+  const pending = requests.filter((request) => !["draft", "in_progress", "resolved", "closed"].includes(request.status));
   if (pending.length === 0) return null;
   const normalizedQuery = query.trim().toLowerCase();
   const visible = pending.filter((request) => !normalizedQuery || `${request.confirmationNumber} ${request.title} ${request.submittedByName} ${request.knownAgencyCode ?? ""}`.toLowerCase().includes(normalizedQuery));
