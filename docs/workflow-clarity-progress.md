@@ -59,7 +59,14 @@ For each task: reproduce, patch minimally, run focused tests/build/lint as appro
 
 - RFI demo `RFI-E2E-A9F4` was issued by the project office to `SPACEPORT`, responded to by the Alex Martin demo identity, and accepted by the authorized project-office identity. Read-back confirmed `issued → submitted_by_applicant → accepted`, response `under_review → accepted`, the linked workstream hold cleared, and three corresponding audit events.
 - Coordination demo `CR-E2E-A9F4` was created from `E2E-A9F4-LDEQ` targeting CPRA. The workstream was placed in `waiting_government`; recording a `concurred` response left that wait intact; only the explicit blocker-clear operation resumed the workstream. Read-back confirmed the coordination response plus `coordination_request_created`, `workstream_blocked`, `coordination_response_recorded`, and `workstream_resumed` audit events.
-- A proposed global RFI trigger migration (submitter actor linkage and recipient-team notifications for every future RFI/response) was intentionally not applied after the production safety gate flagged its broad side effects. It requires explicit scope approval before implementation; current RFI proof is limited to the existing persisted functions and tagged demo records.
+- The approved global RFI trigger migration is now applied as `20260907123535_rfi_team_notifications_and_actor`. It captures the authenticated response submitter, notifies configured active members of the recipient/requesting agency teams, notifies the actual responder when a response is accepted, and revokes API execution from all trigger helpers.
+
+## Global RFI trigger verification — 2026-09-07
+
+- Persisted tagged journey `RFI-GLOBAL-8C21`: Jordan Lee issued the RFI from LDEQ to SPACEPORT, Alex Martin responded, and Joe Skaggs accepted it.
+- Read-back confirmed `rfis.status=accepted`, `rfi_responses.review_status=accepted`, `submitted_by_user_id=Alex Martin`, and the linked workstream returned to `operational_state=running` with no waiting reason.
+- Read-back confirmed three recipient-team notifications for the configured SPACEPORT members, two requesting-team notifications for configured LDEQ members, and one acceptance notification addressed to Alex Martin. Every notification has the canonical `/work/rfi/rfi-global-8c21` link and a unique dedupe key.
+- Audit read-back confirmed actor identities for issue (Jordan), response (Alex), and acceptance (Joe). The live probe completed without errors; the remaining boundary is browser-authenticated file-upload and mobile verification.
 
 ## Live completion-semantics verification — 2026-09-07
 
