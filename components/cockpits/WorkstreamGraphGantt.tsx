@@ -821,23 +821,23 @@ export function WorkstreamGraphGantt({
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                 <div className="flex justify-between items-center text-xs font-bold">
                   <span className="text-slate-700">Interagency Coordination Dependencies</span>
-                  <span className="font-mono text-rose-600">13 days (46%)</span>
+                  <span className="font-mono text-slate-600">Impact not calculated</span>
                 </div>
                 <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                  <div className="bg-rose-500 h-full w-[46%]" />
+                  <div className="bg-slate-300 h-full w-full" />
                 </div>
                 <p className="text-[11px] text-slate-500">
-                  Driven by DOTD waiting on CPRA drainage concurrence (CR-00451) for LA-82 culverts.
+                  No recorded dependency impact is available for this project view.
                 </p>
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                 <div className="flex justify-between items-center text-xs font-bold">
                   <span className="text-slate-700">Statutory Minimum Notice Periods</span>
-                  <span className="font-mono text-indigo-600">7 days (25%)</span>
+                  <span className="font-mono text-slate-600">Impact not calculated</span>
                 </div>
                 <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                  <div className="bg-indigo-500 h-full w-[25%]" />
+                  <div className="bg-slate-300 h-full w-full" />
                 </div>
                 <p className="text-[11px] text-slate-500">
                   Statutory 30-day federal Section 404 public comment publication alignment.
@@ -847,10 +847,10 @@ export function WorkstreamGraphGantt({
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                 <div className="flex justify-between items-center text-xs font-bold">
                   <span className="text-slate-700">Public Hearing Comment Response</span>
-                  <span className="font-mono text-amber-600">8 days (29%)</span>
+                  <span className="font-mono text-slate-600">Impact not calculated</span>
                 </div>
                 <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                  <div className="bg-amber-500 h-full w-[29%]" />
+                  <div className="bg-slate-300 h-full w-full" />
                 </div>
                 <p className="text-[11px] text-slate-500">
                   LDEQ deluge retention basin 15-day post-hearing public comment resolution window.
@@ -860,10 +860,10 @@ export function WorkstreamGraphGantt({
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                 <div className="flex justify-between items-center text-xs font-bold">
                   <span className="text-slate-700">Engineering Revisions & Drawing Packages</span>
-                  <span className="font-mono text-emerald-600">0 days (absorbed)</span>
+                  <span className="font-mono text-slate-600">No recorded impact</span>
                 </div>
                 <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                  <div className="bg-emerald-500 h-full w-[5%]" />
+                  <div className="bg-slate-300 h-full w-full" />
                 </div>
                 <p className="text-[11px] text-slate-500">
                   SpaceX engineering turnaround completed within float buffer without critical-path slip.
