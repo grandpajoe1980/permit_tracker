@@ -66,6 +66,12 @@ export function buildWorkItemPath(kind: string, id: string) {
   return `/work/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`;
 }
 
+/** Shell URL used after a direct /work/:kind/:id entry has been authenticated. */
+export function buildDetailShellPath(kind: WorkRouteKind | string, id: string) {
+  const params = new URLSearchParams({ view: "detail", kind, id });
+  return `/?${params.toString()}`;
+}
+
 export function parseWorkItemPath(pathname: string): ParsedWorkItemPath | null {
   const match = pathname.match(/^\/work\/([^/]+)\/([^/]+)\/?$/);
   if (!match) return null;
@@ -74,18 +80,29 @@ export function parseWorkItemPath(pathname: string): ParsedWorkItemPath | null {
   return workKinds.has(kind) && id ? { kind, id } : null;
 }
 
-export function buildShellPath(route: AppRoute, workstreamId?: string) {
+export function buildShellPath(route: AppRoute, workstreamId?: string, tool?: string) {
   const params = new URLSearchParams();
   if (route !== "my-work") params.set("view", route);
   if (workstreamId) params.set("workstream", workstreamId);
+  if (route === "secondary" && tool) params.set("tool", tool);
   const query = params.toString();
   return query ? `/?${query}` : "/";
 }
 
-export function parseShellPath(url: URL): { route: AppRoute; workstreamId?: string } {
+export function parseShellPath(url: URL): { route: AppRoute; workstreamId?: string; tool?: string; workKind?: WorkRouteKind; workItemId?: string; requestId?: string; returnTo?: string } {
   const view = url.searchParams.get("view") as AppRoute | null;
   const knownRoute = view && NAVIGATION_DEFINITIONS.some((entry) => entry.id === view)
     ? view
     : view === "detail" ? "detail" : "my-work";
-  return { route: knownRoute, workstreamId: url.searchParams.get("workstream") ?? undefined };
+  const workKind = url.searchParams.get("kind") as WorkRouteKind | null;
+  const workItemId = url.searchParams.get("id")?.trim() || undefined;
+  return {
+    route: knownRoute,
+    workstreamId: url.searchParams.get("workstream") ?? undefined,
+    tool: url.searchParams.get("tool") ?? undefined,
+    workKind: workKind && workKinds.has(workKind) ? workKind : undefined,
+    workItemId,
+    requestId: url.searchParams.get("request")?.trim() || undefined,
+    returnTo: url.searchParams.get("returnTo") ?? undefined,
+  };
 }
