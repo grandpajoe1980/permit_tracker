@@ -355,8 +355,9 @@ export default function Home() {
   const [blockDueDate, setBlockDueDate] = useState("");
   const [questionText, setQuestionText] = useState("");
   const [questionDueDate, setQuestionDueDate] = useState("");
-  const [transferType, setTransferType] = useState("Ask another reviewer");
-  const [transferTargetGroup] = useState(() => repository.getAssignmentGroups()[0]?.name ?? "");
+  const [transferType, setTransferType] = useState("Ask for Help");
+  const [transferTargetGroup, setTransferTargetGroup] = useState("");
+  const [transferTargetUser, setTransferTargetUser] = useState("");
   const [escalationType, setEscalationType] = useState("Supervisor decision");
   const [escalationTarget, setEscalationTarget] = useState("");
   const [statusUpdate, setStatusUpdate] = useState("in_progress");
@@ -627,6 +628,11 @@ export default function Home() {
     setSelectedItemId(item.id);
     setDialogError("");
     setActionNote("");
+    if (action === "transfer") {
+      setTransferType("Ask for Help");
+      setTransferTargetGroup("");
+      setTransferTargetUser("");
+    }
     if (action === "advance_stage") action = "complete_step";
     if (action === "complete_step") {
       const requirements = getCompletionRequirements(item, repository.getWorkflowTemplates());
@@ -1228,14 +1234,44 @@ export default function Home() {
     }
 
     if (dialog.action === "transfer") {
-      if (!workstreamId) {
-        setDialogError("This work item is not connected to a configured workstream.");
+      const isAssignmentTransfer = transferType === "Transfer assignment";
+      const targetGroup = repository.getAssignmentGroups().find((group) => group.id === transferTargetGroup && group.active);
+      const targetMember = targetGroup && transferTargetUser
+        ? repository.getAssignmentGroupMembers(targetGroup.id).find((member) => member.userId === transferTargetUser)
+        : undefined;
+      if (!targetGroup) {
+        setDialogError(`Select an active ${isAssignmentTransfer ? "assignment" : "help recipient"} team before continuing.`);
         return;
       }
-      const isAssignmentTransfer = transferType === "Transfer assignment";
-      const targetName = isAssignmentTransfer
-        ? (transferTargetGroup || item.ownerOrganization || "Configured assignment team")
-        : (item.ownerName || item.ownerOrganization || "Current work owner");
+      if (isAssignmentTransfer) {
+        const ticketType = item.kind === "customer_request" ? "customer_request" : item.kind === "task" ? "task" : item.kind === "workflow" ? "workstream" : null;
+        const ticketId = item.kind === "workflow" ? workstreamId : item.sourceId;
+        if (!ticketType || !ticketId) {
+          setDialogError("This record type cannot be reassigned from this workspace.");
+          return;
+        }
+        const assignmentResult = await repository.assignTicketPersisted({
+          ticketType,
+          ticketId,
+          assignmentGroupId: targetGroup.id,
+          assignedToUserId: targetMember?.userId,
+          actorUserId: actorUserId(),
+          actorName,
+          reason: actionNote.trim() || "Assignment transferred from the work item.",
+        });
+        if (assignmentResult.error) {
+          setDialogError(assignmentResult.error.message);
+          return;
+        }
+        const recipient = targetMember?.userName ?? targetMember?.userEmail;
+        notify(`Assignment transferred to ${targetGroup.name}${recipient ? ` · ${recipient}` : " team queue"}. The former owner no longer owns this action.`);
+        return;
+      }
+      if (!workstreamId) {
+        setDialogError("This help request needs a configured workstream before it can be sent.");
+        return;
+      }
+      const targetName = targetMember?.userName ?? targetMember?.userEmail ?? targetGroup.name;
       const transferResult = await repository.transferWorkstreamPersisted({ workstreamId, transferType, targetName, actorName, actorOrgName, note: actionNote.trim() });
       if (!transferResult.success) {
         setDialogError(transferResult.error?.message ?? "The transfer request was not confirmed by the database.");
@@ -1802,7 +1838,7 @@ export default function Home() {
       {dialog.action === "advance_stage" && <><div><p className="text-xs font-black uppercase tracking-wider text-teal-800">Advance to Next Stage</p><p className="mt-1 text-lg font-black text-[#00284d]">{selectedItem.title}</p><p className="mt-1 text-sm text-slate-600">This will close the current workflow stage and advance the workstream to the next configured stage. The next owner will be notified.</p></div><div className="rounded-xl border border-teal-200 bg-teal-50 p-4"><p className="text-xs font-black uppercase tracking-wider text-teal-900">What happens next</p><ul className="mt-2 space-y-1 text-sm text-teal-950">{completionPreview.effects.map((effect) => <li key={effect} className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{effect}</li>)}</ul></div><div><Label htmlFor="advance-note">Notes (optional)</Label><textarea id="advance-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Add context for the handoff to the next stage owner." /></div></>}
       {dialog.action === "mark_blocked" && <><div><Label htmlFor="block-reason">What is preventing you from proceeding?</Label><select id="block-reason" value={blockReason} onChange={(event) => setBlockReason(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="customer">Waiting on SpaceX</option><option value="another_agency">Waiting on another agency</option><option value="internal">Missing internal decision</option><option value="statutory">Scheduled / statutory hold</option><option value="technical">Technical problem</option><option value="legal">Legal / policy question</option><option value="external">External third party</option><option value="other">Other</option></select></div>{blockReason === "another_agency" && <div><Label htmlFor="block-agency">Who needs to act?</Label><select id="block-agency" value={blockAgency} onChange={(event) => setBlockAgency(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>CPRA</option><option>USACE</option><option>DOTD</option><option>Vermilion Parish</option><option>LDEQ</option></select></div>}<div><Label htmlFor="block-need">What do you need from them?</Label><textarea id="block-need" value={blockNeed} onChange={(event) => setBlockNeed(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe the concurrence, document, or decision needed." /></div><div><Label htmlFor="block-due">When is it needed?</Label><Input id="block-due" type="date" value={blockDueDate} onChange={(event) => setBlockDueDate(event.target.value)} className="mt-1" /></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"><strong className="text-[#00284d]">Clock behavior:</strong> PATH derives the wait policy from the selected reason. You are not asked to make a legal/policy determination.</div></>}
       {(dialog.action === "request_information" || dialog.action === "request_clarification") && <><div><Label htmlFor="question-text">What do you need?</Label><textarea id="question-text" value={questionText} onChange={(event) => setQuestionText(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" /></div><div><Label htmlFor="question-due">When is it needed?</Label><Input id="question-due" type="date" value={questionDueDate} onChange={(event) => setQuestionDueDate(event.target.value)} className="mt-1" /></div></>}
-      {dialog.action === "transfer" && <><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"><strong className="text-[#00284d]">Current owner:</strong> {selectedItem.ownerName || "Unassigned"} · {selectedItem.ownerOrganization || "Team not configured"}<br /><span className="text-xs">Ask for help keeps this assignment. Transfer assignment requests a new owner/team.</span></div><div><Label htmlFor="transfer-type">What should happen?</Label><select id="transfer-type" value={transferType} onChange={(event) => setTransferType(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>Ask for Help</option><option>Transfer assignment</option><option>Request specialist consultation</option><option>Send to supervisor</option></select></div><div><Label htmlFor="transfer-note">What should the recipient know?</Label><textarea id="transfer-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe the decision or assistance needed." /></div></>}
+      {dialog.action === "transfer" && <><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"><strong className="text-[#00284d]">Current owner:</strong> {selectedItem.ownerName || "Unassigned"} · {selectedItem.ownerOrganization || "Team not configured"}<br /><span className="text-xs">Ask for help keeps this assignment. Transfer assignment changes the persisted team and optional fulfiller.</span></div><div><Label htmlFor="transfer-type">What should happen?</Label><select id="transfer-type" value={transferType} onChange={(event) => setTransferType(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>Ask for Help</option><option>Transfer assignment</option><option>Request specialist consultation</option><option>Send to supervisor</option></select></div><div className="space-y-3 rounded-lg border border-teal-200 bg-teal-50 p-3"><div><Label htmlFor="transfer-target-group" className="text-xs font-bold text-teal-950">{transferType === "Transfer assignment" ? "New responsible team" : "Help recipient team"}</Label><select id="transfer-target-group" required value={transferTargetGroup} onChange={(event) => { setTransferTargetGroup(event.target.value); setTransferTargetUser(""); }} className="mt-1 w-full rounded-md border border-teal-300 bg-white px-3 py-2 text-sm"><option value="">Select an active team</option>{repository.getAssignmentGroups().filter((group) => group.active).map((group) => <option key={group.id} value={group.id}>{group.name} · {group.orgCode}</option>)}</select><p className="mt-1 text-xs text-teal-900">Teams and members come from the current assignment directory. The server checks that you can route this record.</p></div>{transferTargetGroup && <div><Label htmlFor="transfer-target-user" className="text-xs font-bold text-teal-950">{transferType === "Transfer assignment" ? "New fulfiller (optional)" : "Specific help recipient (optional)"}</Label><select id="transfer-target-user" value={transferTargetUser} onChange={(event) => setTransferTargetUser(event.target.value)} className="mt-1 w-full rounded-md border border-teal-300 bg-white px-3 py-2 text-sm"><option value="">{transferType === "Transfer assignment" ? "Leave in team queue" : "Send to team queue"}</option>{repository.getAssignmentGroupMembers(transferTargetGroup).map((member) => <option key={member.userId} value={member.userId}>{member.userName ?? member.userEmail ?? member.userId}</option>)}</select></div>}<div className="rounded-md border border-teal-200 bg-white/70 p-2 text-xs text-teal-950">{transferType === "Transfer assignment" ? <>After confirmation, the selected team owns the queue item{transferTargetUser ? " and the selected fulfiller receives an in-app assignment notification" : "."}</> : <>The selected recipient receives a help request; the current owner and team stay responsible for the work.</>}</div></div><div><Label htmlFor="transfer-note">What should the recipient know?</Label><textarea id="transfer-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder={transferType === "Transfer assignment" ? "Explain why this team or fulfiller should own the work." : "Describe the decision or assistance needed."} /></div></>}
       {dialog.action === "escalate" && <><div><Label htmlFor="escalation-type">What kind of help do you need?</Label><select id="escalation-type" value={escalationType} onChange={(event) => setEscalationType(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>Supervisor decision</option><option>Cross-agency assistance</option><option>Deadline relief</option><option>Policy / legal determination</option><option>Project office assistance</option><option>Executive intervention</option><option>Other</option></select></div>{activePersona.isCustomer && <div><Label htmlFor="escalation-note">Describe the risk or assistance needed</Label><textarea id="escalation-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Tell the project office what is delayed, why it matters, and what outcome would help." /></div>}<div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-black uppercase tracking-wider text-amber-900">Next escalation</p><p className="mt-1 text-sm font-black text-amber-950">{recipientPreview.recipients[0]?.name}</p><p className="text-sm text-amber-900">{recipientPreview.recipients[0]?.organization}</p><p className="mt-2 text-xs text-amber-800">The configured escalation recipient will be notified. No deadline is assumed unless one is recorded on this request.</p></div></>}
       {(dialog.action === "add_note" || dialog.action === "approve_document" || dialog.action === "approve_with_comments" || dialog.action === "request_revision" || dialog.action === "accept_rfi_response" || dialog.action === "respond") && <div><Label htmlFor="action-note">{dialog.action === "respond" ? "Your response" : "Notes"}</Label><textarea id="action-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={4} required={dialog.action === "add_note" || dialog.action === "respond"} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder={dialog.action === "respond" ? "Describe the response and attached information." : "Add context for the audit history."} /></div>}
       {dialog.action === "upload_documents" && <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="font-black text-[#00284d]">Secure upload handoff</p><p className="mt-1 text-sm text-slate-600">Attach the requested document revision from the customer document workspace. The receiving agency will review the exact version submitted.</p></div>}
