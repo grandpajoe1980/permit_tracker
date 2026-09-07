@@ -130,7 +130,7 @@ import { CustomerRequestList } from "@/components/path/customer/CustomerRequestL
 import { SubmitRequestLauncher, type CustomerRequestIntent } from "@/components/path/customer/SubmitRequestLauncher";
 import { WorkItemPage } from "@/components/path/work/WorkItemPage";
 import { TriageRoutingDialog, type TriageRoutingRow } from "@/components/path/intake/TriageRoutingDialog";
-import { buildShellPath, buildWorkItemPath, parseShellPath, parseWorkItemPath, type AppRoute } from "@/lib/navigation";
+import { buildShellPath, buildWorkItemPath, NAVIGATION_DEFINITIONS, parseShellPath, parseWorkItemPath, type AppRoute } from "@/lib/navigation";
 
 type Route = AppRoute;
 type SecondaryTool = "schedule" | "vault" | "catalog";
@@ -139,6 +139,7 @@ type ShellHistoryState = {
   route: Route;
   selectedItemId: string | null;
   selectedProjectWorkstreamId: string | null;
+  secondaryTool: SecondaryTool;
   queueSearch: string;
   queueKind: string;
   queueState: string;
@@ -198,6 +199,34 @@ function formatDate(value?: string) {
   const date = new Date(`${value.length === 10 ? `${value}T12:00:00` : value}`);
   if (Number.isNaN(date.valueOf())) return value;
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function canonicalWorkItemForPath(pathname: string, items: OperationalWorkItem[]) {
+  const workPath = parseWorkItemPath(pathname);
+  if (workPath) {
+    return items.find((item) => item.kind === workPath.kind && (item.sourceId === workPath.id || item.id === workPath.id)) ?? null;
+  }
+  const decodeSegment = (value?: string) => {
+    if (!value) return "";
+    try { return decodeURIComponent(value).trim(); } catch { return value.trim(); }
+  };
+  const workstreamMatch = pathname.match(/\/workstreams\/([^/]+)/i) ?? pathname.match(/\/projects\/[^/]+\/workstreams\/([^/]+)/i);
+  if (workstreamMatch) {
+    const key = decodeSegment(workstreamMatch[1]);
+    return items.find((item) => item.kind === "workflow" && (item.workstreamId === key || item.sourceWorkstream?.code === key || item.sourceWorkstream?.id === key))
+      ?? items.find((item) => item.workstreamId === key || item.sourceWorkstream?.code === key || item.sourceWorkstream?.id === key)
+      ?? null;
+  }
+  const requestMatch = pathname.match(/\/requests\/([^/]+)/i);
+  if (requestMatch) {
+    const key = decodeSegment(requestMatch[1]);
+    return items.find((item) => item.kind === "customer_request" && (item.sourceId === key || item.id === key || item.sourceRequest?.confirmationNumber === key)) ?? null;
+  }
+  return null;
+}
+
+function navigationLabel(route: AppRoute, fallback: string) {
+  return NAVIGATION_DEFINITIONS.find((entry) => entry.id === route)?.label ?? fallback;
 }
 
 function toneClasses(tone: OperationalWorkItem["statusTone"]) {
@@ -515,6 +544,7 @@ export default function Home() {
         setRoute(state.route);
         setSelectedItemId(state.selectedItemId);
         setSelectedProjectWorkstreamId(state.selectedProjectWorkstreamId);
+        if (["schedule", "vault", "catalog"].includes(state.secondaryTool)) setSecondaryTool(state.secondaryTool);
         setQueueSearch(state.queueSearch);
         setQueueKind(state.queueKind);
         setQueueState(state.queueState);
@@ -535,10 +565,37 @@ export default function Home() {
       }
 
       const shell = parseShellPath(new URL(window.location.href));
+      const returnWorkPath = shell.returnTo ? parseWorkItemPath(shell.returnTo) : null;
+      if (shell.route === "detail" && shell.workKind && shell.workItemId) {
+        const item = workItems.find((candidate) => candidate.kind === shell.workKind && (candidate.sourceId === shell.workItemId || candidate.id === shell.workItemId));
+        setRoute("detail");
+        setSelectedItemId(item?.id ?? null);
+        setSelectedProjectWorkstreamId(null);
+        setRequestedWorkItemPath(item ? null : buildWorkItemPath(shell.workKind, shell.workItemId));
+        return;
+      }
+      if (returnWorkPath) {
+        const item = workItems.find((candidate) => candidate.kind === returnWorkPath.kind && (candidate.sourceId === returnWorkPath.id || candidate.id === returnWorkPath.id));
+        setRoute("detail");
+        setSelectedItemId(item?.id ?? null);
+        setSelectedProjectWorkstreamId(null);
+        setRequestedWorkItemPath(item ? null : shell.returnTo ?? null);
+        return;
+      }
+      if (shell.route === "requests" && shell.requestId) {
+        const request = repository.getCustomerRequests().find((candidate) => candidate.id === shell.requestId || candidate.confirmationNumber === shell.requestId);
+        const item = request ? workItems.find((candidate) => candidate.kind === "customer_request" && (candidate.sourceId === request.id || candidate.id === request.id)) : undefined;
+        setRoute(item ? "detail" : "requests");
+        setSelectedItemId(item?.id ?? null);
+        setSelectedProjectWorkstreamId(null);
+        setRequestedWorkItemPath(null);
+        return;
+      }
       const defaultRoute = activePersona.isCustomer && shell.route === "my-work" && !new URL(window.location.href).searchParams.has("view") ? "project" : shell.route;
       setRoute(defaultRoute);
       setSelectedItemId(null);
       setSelectedProjectWorkstreamId(shell.workstreamId ?? null);
+      if (["schedule", "vault", "catalog"].includes(shell.tool ?? "")) setSecondaryTool(shell.tool as SecondaryTool);
       setRequestedWorkItemPath(null);
     };
 
@@ -560,6 +617,17 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
   }, [route, selectedItemId, loggedIn]);
 
+  // Keep the selected secondary tool addressable even when a legacy button
+  // changes the tool and route in the same React event.
+  useEffect(() => {
+    if (!loggedIn || route !== "secondary" || typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("view") !== "secondary") return;
+    if (url.searchParams.get("tool") === secondaryTool) return;
+    url.searchParams.set("tool", secondaryTool);
+    window.history.replaceState({ ...currentHistoryState(), route: "secondary", secondaryTool }, "", url);
+  }, [secondaryTool, route, loggedIn]);
+
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(""), 5000);
@@ -567,7 +635,7 @@ export default function Home() {
   }, [toast]);
 
   function currentHistoryState(): ShellHistoryState {
-    return { route, selectedItemId, selectedProjectWorkstreamId, queueSearch, queueKind, queueState, queueGroup, scrollY: typeof window === "undefined" ? 0 : window.scrollY };
+    return { route, selectedItemId, selectedProjectWorkstreamId, secondaryTool, queueSearch, queueKind, queueState, queueGroup, scrollY: typeof window === "undefined" ? 0 : window.scrollY };
   }
 
   function pushNavigation(path: string, state: ShellHistoryState) {
@@ -577,10 +645,20 @@ export default function Home() {
   }
 
   function navigate(nextRoute: Route) {
-    pushNavigation(buildShellPath(nextRoute), { ...currentHistoryState(), route: nextRoute, selectedItemId: null, selectedProjectWorkstreamId: nextRoute === "project" ? selectedProjectWorkstreamId : null, scrollY: 0 });
+    pushNavigation(buildShellPath(nextRoute, undefined, nextRoute === "secondary" ? secondaryTool : undefined), { ...currentHistoryState(), route: nextRoute, selectedItemId: null, selectedProjectWorkstreamId: nextRoute === "project" ? selectedProjectWorkstreamId : null, secondaryTool, scrollY: 0 });
     setRoute(nextRoute);
     setSelectedItemId(null);
     if (nextRoute !== "project") setSelectedProjectWorkstreamId(null);
+    setRequestedWorkItemPath(null);
+    setMobileNavOpen(false);
+  }
+
+  function navigateSecondary(tool: SecondaryTool) {
+    setSecondaryTool(tool);
+    pushNavigation(buildShellPath("secondary", undefined, tool), { ...currentHistoryState(), route: "secondary", secondaryTool: tool, selectedItemId: null, selectedProjectWorkstreamId: null, scrollY: 0 });
+    setRoute("secondary");
+    setSelectedItemId(null);
+    setSelectedProjectWorkstreamId(null);
     setRequestedWorkItemPath(null);
     setMobileNavOpen(false);
   }
@@ -1470,14 +1548,10 @@ export default function Home() {
 
   const canAdmin = isAdministrator(activePersona);
   const canTriage = activePersona.workspace === "state_office";
+  const unreadNotificationCount = repository.getNotifications().filter((notification) => !notification.isRead).length;
   const primaryNav: Array<{ id: Route; label: string; icon: ReactNode; count?: number }> = activePersona.isCustomer
-    ? [{ id: "catalog", label: "Services & Permits", icon: <Landmark className="size-4" /> }, { id: "project", label: "Home / Project overview", icon: <Building2 className="size-4" /> }, { id: "my-work", label: "My actions", icon: <LayoutList className="size-4" />, count: actionableCount }, { id: "requests", label: "Requests & permits", icon: <FilePlus2 className="size-4" /> }, { id: "schedule", label: "Schedule", icon: <CalendarClock className="size-4" /> }, { id: "documents", label: "Documents", icon: <FileCheck2 className="size-4" /> }, { id: "contacts", label: "Contacts", icon: <Users className="size-4" /> }, { id: "help", label: "Help & escalation", icon: <ShieldAlert className="size-4" /> }, { id: "notifications", label: "Notifications", icon: <Bell className="size-4" /> }]
-    : [{ id: "my-work", label: "My Work", icon: <LayoutList className="size-4" />, count: actionableCount }, { id: "agency-queue", label: activePersona.workspace === "supervisor" ? "Supervisor queue" : "My agency queue", icon: <Building2 className="size-4" /> }, { id: "rfis", label: "RFIs", icon: <HelpCircle className="size-4" /> }, { id: "coordination", label: "Coordination requests", icon: <Users className="size-4" /> }, { id: "documents", label: "Documents to review", icon: <FileCheck2 className="size-4" /> }, { id: "project", label: "Project", icon: <Route className="size-4" /> }, ...(canTriage ? [{ id: "intake" as Route, label: "Customer intake queue", icon: <ClipboardCheck className="size-4" /> }] : []), { id: "notifications", label: "Notifications", icon: <Bell className="size-4" /> }];
-
-  if (activePersona.isCustomer) {
-    primaryNav.splice(1, 1, { id: "customer-home", label: "Home", icon: <LayoutList className="size-4" /> });
-    primaryNav.splice(2, 0, { id: "project", label: "Project overview", icon: <Building2 className="size-4" /> });
-  }
+    ? [{ id: "customer-home", label: navigationLabel("customer-home", "Home"), icon: <LayoutList className="size-4" /> }, { id: "my-work", label: "My actions", icon: <LayoutList className="size-4" />, count: actionableCount }, { id: "requests", label: navigationLabel("requests", "My requests"), icon: <FilePlus2 className="size-4" /> }, { id: "project", label: navigationLabel("project", "Project Overview"), icon: <Building2 className="size-4" /> }, { id: "catalog", label: navigationLabel("catalog", "Services & Permits"), icon: <Landmark className="size-4" /> }, { id: "documents", label: navigationLabel("documents", "Documents"), icon: <FileCheck2 className="size-4" /> }, { id: "schedule", label: navigationLabel("schedule", "Schedule"), icon: <CalendarClock className="size-4" /> }, { id: "help", label: navigationLabel("help", "Help & escalation"), icon: <ShieldAlert className="size-4" /> }, { id: "notifications", label: navigationLabel("notifications", "Notifications"), icon: <Bell className="size-4" />, count: unreadNotificationCount }]
+    : [{ id: "my-work", label: navigationLabel("my-work", "My Work"), icon: <LayoutList className="size-4" />, count: actionableCount }, { id: "agency-queue", label: activePersona.workspace === "supervisor" ? "Supervisor queue" : "My Team Work", icon: <Building2 className="size-4" /> }, { id: "rfis", label: navigationLabel("rfis", "Requests for Information"), icon: <HelpCircle className="size-4" /> }, { id: "coordination", label: navigationLabel("coordination", "Coordination Requests"), icon: <Users className="size-4" /> }, { id: "documents", label: navigationLabel("documents", "Documents to Review"), icon: <FileCheck2 className="size-4" /> }, { id: "project", label: navigationLabel("project", "Project Overview"), icon: <Route className="size-4" /> }, { id: "catalog", label: navigationLabel("catalog", "Services & Permits"), icon: <Landmark className="size-4" /> }, ...(canTriage ? [{ id: "intake" as Route, label: navigationLabel("intake", "Customer Intake Queue"), icon: <ClipboardCheck className="size-4" /> }] : []), { id: "notifications", label: navigationLabel("notifications", "Notifications"), icon: <Bell className="size-4" />, count: unreadNotificationCount }];
 
   function renderWorkCard(item: OperationalWorkItem) {
     const tone = toneClasses(item.statusTone);
@@ -1756,10 +1830,37 @@ export default function Home() {
     const notifications = repository.getNotifications();
     const events = repository.getAuditEvents().slice(0, 8);
     const openNotification = (linkUrl?: string) => {
-      const code = linkUrl?.match(/\/workstreams\/([^/?#]+)/)?.[1];
-      const item = code ? workItems.find((candidate) => candidate.sourceWorkstream?.code === decodeURIComponent(code) || candidate.workstreamId === decodeURIComponent(code)) : undefined;
-      if (item) openItem(item);
-      else navigate("project", code);
+      if (!linkUrl || typeof window === "undefined") {
+        navigate("notifications");
+        return;
+      }
+      let url: URL;
+      try {
+        url = new URL(linkUrl, window.location.origin);
+      } catch {
+        setToast("This notification has an invalid link.");
+        navigate("notifications");
+        return;
+      }
+      const item = canonicalWorkItemForPath(url.pathname, workItems);
+      if (item) {
+        openItem(item);
+        return;
+      }
+      const shell = parseShellPath(url);
+      if (shell.route === "project") {
+        openProject(shell.workstreamId);
+        return;
+      }
+      if (shell.route === "requests" && shell.requestId) {
+        const request = repository.getCustomerRequests().find((candidate) => candidate.id === shell.requestId || candidate.confirmationNumber === shell.requestId);
+        if (request) {
+          openCustomerRequest(request);
+          return;
+        }
+      }
+      setToast("This notification points to a record that is no longer available in your workspace.");
+      navigate("notifications");
     };
     return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Action center</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Notifications</h1><p className="mt-2 text-sm text-slate-600">Only material events that change what someone needs to do appear here; routine audit history stays on the work item.</p></div><div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Bell className="size-5 text-teal-700" /> Action required</CardTitle></CardHeader><CardContent className="space-y-3">{notifications.length > 0 ? notifications.slice(0, 8).map((notification) => <button type="button" key={notification.id} onClick={() => openNotification(notification.linkUrl)} className="w-full rounded-lg border border-amber-200 bg-amber-50 p-3 text-left hover:border-amber-400 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><p className="text-sm font-black text-amber-950">{notification.title}</p><p className="mt-1 text-sm text-amber-900">{notification.message}</p><p className="mt-2 text-[11px] font-bold uppercase text-amber-800">{notification.type.replaceAll("_", " ")} · Open related work</p></button>) : <p className="text-sm text-slate-500">No new action notifications.</p>}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Clock3 className="size-5 text-teal-700" /> Status updates</CardTitle></CardHeader><CardContent className="space-y-3">{events.map((event) => <div key={event.id} className="border-b border-slate-100 pb-3 last:border-0"><p className="text-sm font-bold text-[#00284d]">{event.actionType.replaceAll("_", " ")}</p><p className="mt-1 text-xs text-slate-600">{event.reason ?? event.newValue ?? "Recorded activity"}</p><p className="mt-1 text-[11px] text-slate-400">{event.actorName} · {formatDate(event.occurredAt)}</p></div>)}</CardContent></Card></div></div>;
   }
@@ -1767,11 +1868,11 @@ export default function Home() {
   function renderLegacyProject() {
     if (activePersona.isCustomer) return renderCustomerOverview();
     const workload = getAgencyWorkload(userPermits);
-    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">{PROJECT_DISPLAY_NAME}</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Project context</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Vermilion Parish, Louisiana · shared operational context for the project team.</p></div><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-red-200 bg-red-50 p-4"><p className="text-xs font-black uppercase text-red-800">Blocked / at risk</p><p className="mt-2 text-3xl font-black text-red-950">{ragSummary.red}</p></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-black uppercase text-amber-800">Attention</p><p className="mt-2 text-3xl font-black text-amber-950">{ragSummary.yellow}</p></div><div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-black uppercase text-emerald-800">On track</p><p className="mt-2 text-3xl font-black text-emerald-950">{ragSummary.green}</p></div></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Building2 className="size-5 text-teal-700" /> Agency Workload</CardTitle></CardHeader><CardContent className="space-y-3">{workload.slice(0, 8).map((agency) => <div key={agency.agencyCode} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{agency.agencyCode}</p><p className="text-xs text-slate-500">{agency.agencyLevel} · {agency.agencyName}</p></div><div className="text-right text-xs font-bold text-slate-700">{agency.count} workstreams · {agency.blockedCount} blocked</div></div>)}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Route className="size-5 text-teal-700" /> Gantt and dependencies</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">Open the schedule to review the critical path, baseline, forecast, and agency dependencies.</p><Button type="button" onClick={() => { setSecondaryTool("schedule"); navigate("secondary"); }} className="mt-4 bg-[#00284d] font-bold">Open Gantt <ArrowRight className="size-4" aria-hidden="true" /></Button></CardContent></Card></div>;
+    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">{PROJECT_DISPLAY_NAME}</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Project context</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Vermilion Parish, Louisiana · shared operational context for the project team.</p></div><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-red-200 bg-red-50 p-4"><p className="text-xs font-black uppercase text-red-800">Blocked / at risk</p><p className="mt-2 text-3xl font-black text-red-950">{ragSummary.red}</p></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-black uppercase text-amber-800">Attention</p><p className="mt-2 text-3xl font-black text-amber-950">{ragSummary.yellow}</p></div><div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-black uppercase text-emerald-800">On track</p><p className="mt-2 text-3xl font-black text-emerald-950">{ragSummary.green}</p></div></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Building2 className="size-5 text-teal-700" /> Agency Workload</CardTitle></CardHeader><CardContent className="space-y-3">{workload.slice(0, 8).map((agency) => <div key={agency.agencyCode} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{agency.agencyCode}</p><p className="text-xs text-slate-500">{agency.agencyLevel} · {agency.agencyName}</p></div><div className="text-right text-xs font-bold text-slate-700">{agency.count} workstreams · {agency.blockedCount} blocked</div></div>)}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Route className="size-5 text-teal-700" /> Gantt and dependencies</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">Open the schedule to review the critical path, baseline, forecast, and agency dependencies.</p><Button type="button" onClick={() => navigateSecondary("schedule")} className="mt-4 bg-[#00284d] font-bold">Open Gantt <ArrowRight className="size-4" aria-hidden="true" /></Button></CardContent></Card></div>;
   }
 
   function renderProject() {
-    return <ProjectOverviewPage project={projectRecord} customerSafe={activePersona.isCustomer} workflowTemplates={repository.getWorkflowTemplates()} focusedWorkstreamId={selectedProjectWorkstreamId} onFocusWorkstream={(workstreamId) => openProject(workstreamId ?? undefined)} onOpenSchedule={() => { setSecondaryTool("schedule"); navigate("secondary"); }} />;
+    return <ProjectOverviewPage project={projectRecord} customerSafe={activePersona.isCustomer} workflowTemplates={repository.getWorkflowTemplates()} focusedWorkstreamId={selectedProjectWorkstreamId} onFocusWorkstream={(workstreamId) => openProject(workstreamId ?? undefined)} onOpenSchedule={() => navigateSecondary("schedule")} />;
   }
 
   function renderSecondary() {
