@@ -10,9 +10,9 @@ test("PATH shell keeps persistence health in the footer and removes sidebar nois
   assert.doesNotMatch(page, /Supabase DB/);
   assert.doesNotMatch(page, /Official filing notice/);
   assert.match(page, /!activePersona\.isCustomer && <p[^>]*>Secondary tools/);
-  assert.match(footer, /Supabase Authoritative Persistence/);
+  assert.doesNotMatch(footer, /Supabase Authoritative Persistence/);
   assert.match(footer, /Environment:/);
-  assert.match(footer, /Health: Connected/);
+  assert.match(footer, /Operational data status is shown in the workspace/);
 });
 
 test("PATH shell uses plain work language for ordinary navigation", () => {
@@ -23,8 +23,10 @@ test("PATH shell uses plain work language for ordinary navigation", () => {
 
 test("PATH shell constrains its layout to the mobile viewport", () => {
   assert.match(styles, /box-sizing: border-box/);
-  assert.match(styles, /html \{\s+max-width: 100%;\s+overflow-x: hidden/s);
-  assert.match(styles, /body \{\s+min-width: 320px;\s+max-width: 100%;\s+overflow-x: hidden/s);
+  assert.match(styles, /html \{\s+max-width: 100%;\s+overflow-x: auto/s);
+  assert.match(styles, /body \{\s+min-width: 320px;\s+max-width: 100%;\s+overflow-x: auto/s);
+  assert.doesNotMatch(styles, /html \{[^}]*overflow-x: hidden/s);
+  assert.doesNotMatch(styles, /body \{[^}]*overflow-x: hidden/s);
   assert.match(styles, /\.site-header > div,\s+\.road-stripe \+ \.site-header \+ div \{\s+width: 100%;\s+min-width: 0;/s);
   assert.match(styles, /#main-content \{\s+width: 100%;/s);
 });

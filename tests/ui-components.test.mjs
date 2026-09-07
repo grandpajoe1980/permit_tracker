@@ -122,8 +122,8 @@ test("renders all 8 specialized delivery cockpits via SSR static markup assertin
   assert.match(htmlGantt, /Project Delivery Schedule &amp; Variance Engine|Project Delivery Schedule & Variance Engine/);
   assert.match(htmlGantt, /Critical Path Execution Graph/);
   assert.match(htmlGantt, /\+13 Days/);
-  assert.match(htmlGantt, /2026-12-15/);
-  assert.match(htmlGantt, /2026-12-28/);
+  assert.match(htmlGantt, /Dec 15, 2026/);
+  assert.match(htmlGantt, /Dec 28, 2026/);
   assert.match(htmlGantt, /WS-LA82-HEAVYHAUL/);
 
   // 4. InteragencyCoordinationPanel
@@ -186,4 +186,3 @@ test("renders all 8 specialized delivery cockpits via SSR static markup assertin
   assert.match(htmlPublic, /Active Statutory Public Notice Periods/);
   assert.match(htmlPublic, /Submit Official Public Comment/);
 });
-

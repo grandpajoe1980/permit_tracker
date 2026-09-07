@@ -470,9 +470,9 @@ test("Cockpit 3 [Workstream Graph & Gantt]: Parallel Review Acceleration Actions
   assert.match(html, /Critical Path Execution Graph &amp; Intelligence|Critical Path Execution Graph & Intelligence/);
   assert.match(html, /Project Delivery Schedule &amp; Variance Engine|Project Delivery Schedule & Variance Engine/);
   assert.match(html, /Immutable Baseline/);
-  assert.match(html, /2026-12-15/);
+  assert.match(html, /Dec 15, 2026/);
   assert.match(html, /Current Forecast/);
-  assert.match(html, /2026-12-28/);
+  assert.match(html, /Dec 28, 2026/);
   assert.match(html, /\+13 Days/);
 
   // Tab buttons

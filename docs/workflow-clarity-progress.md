@@ -22,7 +22,7 @@ Starting revision: `928926a089599181c6bd08ffc72069e314c01c92`
 | T13 | in_progress | Removed invented customer-request due dates and document-review due dates; missing dates now display as unscheduled. |
 | T14 | in_progress | Removed the unverified persistence-health badge, improved narrow-screen overflow behavior, added accessible schedule-row labels, clarified customer search controls, and completed a focused mobile layout pass across the shell, customer flows, work details, Gantt metrics, administration, and footer. Full viewport/keyboard verification remains. |
 | T11 | in_progress | Customer Home has direct View My Requests and a post-submit receipt card with confirmation number, assignment status, and Open request. Full cross-reload/workstream proof remains. |
-| T15 | pending | Final behavioral journeys and live persistence proof require configured isolated Supabase credentials. |
+| T15 | in_progress | Final offline regression contracts and live tagged-record read-back are verified. Full suite completion remains blocked by missing local Supabase test credentials, repeated test-harness port collisions, and browser access to the current Site preview. |
 
 ## Confirmed baseline findings
 
@@ -93,3 +93,12 @@ For each task: reproduce, patch minimally, run focused tests/build/lint as appro
 - Gantt schedule controls and tabs stack cleanly on mobile, while the dense DAG metrics grid becomes labeled mobile rows instead of a compressed desktop table.
 - Customer request status, the shared shell header, and the version footer use mobile-safe spacing and wrapping without reintroducing page-level clipping.
 - Verification: lint, production build/security scan, and 43 focused source/UX/navigation tests pass. Supervised local preview startup succeeded, but the cloud browser blocked the preview URL before a rendered 390px screenshot could be captured.
+
+## Final verification checkpoint — 2026-09-07
+
+- GitHub `main`, the local checkout, and the published Site source are aligned at `37d5c3ef9113d08978720316e113442fef3eca5c`; the older Site source head was preserved on `codex-backup-31a-mobile-sync` before synchronization.
+- Updated stale regression contracts to match the current product behavior: readable Gantt dates, non-clipping mobile overflow, and neutral workspace-status footer language. The focused shell, UI, and cockpit suites now pass 21/21 tests.
+- The earlier focused operational, navigation, and source-contract suites remain green at 43/43 tests. Lint, production build, and build-artifact secret scan pass.
+- Full `npm test` is not a clean environment result: live-Supabase tests fail without local URL/key variables, the shared test harness repeatedly reports port `24678` in use, and the run can hang behind those server collisions. These are verification-environment blockers, not a browser/mobile source failure.
+- Supabase read-back confirms `RFI-E2E-A9F4` and `RFI-GLOBAL-8C21` are `accepted`, `CR-E2E-A9F4` is `concurred`, and `RFI-2026-60A808BA` remains `issued` with no response after the blocked file-byte transfer attempt.
+- Browser boundary: the older Vercel shell loads, while the current supervised Site preview is blocked by the cloud browser before rendering. Browser-authenticated file upload with non-empty bytes and a rendered 390px screenshot remain the final external checks.
