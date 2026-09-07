@@ -824,7 +824,10 @@ export function getRecipientPreview(item: OperationalWorkItem, action: WorkActio
     };
   }
   if (action === "transfer") {
-    return { recipients: [{ label: "Supervisor", name: concierge?.fullName ?? "State Project Office", organization: concierge?.organizationName ?? "Louisiana Project Office" }] };
+    // The transfer dialog resolves a persisted team/member before submit. Do not
+    // invent a supervisor recipient here; the selected target is the source of
+    // truth and is rendered by the dialog itself.
+    return { recipients: [] };
   }
   return { recipients: [{ label: "Action owner", name: item.ownerName, organization: item.ownerOrganization }] };
 }
