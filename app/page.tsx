@@ -346,6 +346,7 @@ export default function Home() {
   const [questionText, setQuestionText] = useState("");
   const [questionDueDate, setQuestionDueDate] = useState("");
   const [transferType, setTransferType] = useState("Ask another reviewer");
+  const [transferTargetGroup] = useState(() => repository.getAssignmentGroups()[0]?.name ?? "");
   const [escalationType, setEscalationType] = useState("Supervisor decision");
   const [escalationTarget, setEscalationTarget] = useState("");
   const [statusUpdate, setStatusUpdate] = useState("in_progress");
@@ -1234,7 +1235,7 @@ export default function Home() {
       }
       const isAssignmentTransfer = transferType === "Transfer assignment";
       const targetName = isAssignmentTransfer
-        ? (item.nextHandoff || item.ownerOrganization || "Configured assignment team")
+        ? (transferTargetGroup || item.ownerOrganization || "Configured assignment team")
         : (item.ownerName || item.ownerOrganization || "Current work owner");
       const transferResult = await repository.transferWorkstreamPersisted({ workstreamId, transferType, targetName, actorName, actorOrgName, note: actionNote.trim() });
       if (!transferResult.success) {
