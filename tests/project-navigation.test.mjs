@@ -20,7 +20,7 @@ const { repository } = await vite.ssrLoadModule("/lib/repository.ts");
 const { getProjectOverview } = await vite.ssrLoadModule("/lib/customer-portal.ts");
 const { getOperationalWorkItems } = await vite.ssrLoadModule("/lib/operational-ux.ts");
 const { demoPersonas } = await vite.ssrLoadModule("/lib/demo-data.ts");
-const { buildShellPath, parseShellPath, NAVIGATION_DEFINITIONS } = await vite.ssrLoadModule("/lib/navigation.ts");
+const { buildDetailShellPath, buildShellPath, parseShellPath, NAVIGATION_DEFINITIONS } = await vite.ssrLoadModule("/lib/navigation.ts");
 const rootPageSource = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
 const projectOverviewSource = await readFile(new URL("../components/cockpits/ProjectOverviewPage.tsx", import.meta.url), "utf8");
 
@@ -110,18 +110,30 @@ test("deep project links preserve the exact workstream identifier", () => {
   assert.ok(NAVIGATION_DEFINITIONS.some((entry) => entry.id === "intake"));
 });
 
+test("canonical work-item links preserve kind, id, and request return state", () => {
+  const detailPath = buildDetailShellPath("rfi", "RFI-DEMO-TITLE-V");
+  const parsedDetail = parseShellPath(new URL(`https://path.demo${detailPath}`));
+  assert.equal(parsedDetail.route, "detail");
+  assert.equal(parsedDetail.workKind, "rfi");
+  assert.equal(parsedDetail.workItemId, "RFI-DEMO-TITLE-V");
+
+  const parsedRequest = parseShellPath(new URL("https://path.demo/?view=requests&request=REQ-2026-0001"));
+  assert.equal(parsedRequest.route, "requests");
+  assert.equal(parsedRequest.requestId, "REQ-2026-0001");
+});
+
 test("fresh authenticated project links are not overwritten by hydration defaults", () => {
   const hydration = rootPageSource.slice(rootPageSource.indexOf("void getBrowserUser"), rootPageSource.indexOf("const { data: listener"));
   assert.doesNotMatch(hydration, /setRoute\("my-work"\)/);
   assert.match(rootPageSource, /setSelectedProjectWorkstreamId\(shell\.workstreamId \?\? null\)/);
 });
 
-test("project summary cards open standalone project pages for persisted workstreams", () => {
+test("project summary cards open the focused in-app workspace for persisted workstreams", () => {
   assert.match(projectOverviewSource, /aria-label=\{attentionWorkstream \? `Open workstream workspace/);
   assert.match(projectOverviewSource, /onFocusWorkstream\(attentionWorkstream\.id\)/);
-  assert.match(projectOverviewSource, /<Link href=\{`\/workstreams\/\$\{encodeURIComponent\(workstream\.id\)\}`\}/);
+  assert.match(projectOverviewSource, /onClick=\{\(\) => onOpen\(workstream\.id\)\}/);
   assert.match(projectOverviewSource, /aria-label=\{`Open project page for \$\{workstream\.title\}`\}/);
-  assert.match(projectOverviewSource, /Each row opens its project page/);
+  assert.match(projectOverviewSource, /Each row opens the in-app workstream workspace/);
 });
 
 test("workstream resolution supports code, lowercase, URL-encoded, and ID lookup", () => {
@@ -186,4 +198,3 @@ test("project lookup supports project number, lowercase, and UUID lookup", () =>
   assert.ok(resolveProject(project.id));
   assert.ok(resolveProject(project.code));
 });
-
