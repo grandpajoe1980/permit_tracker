@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { WorkflowJourney } from "@/components/cockpits/WorkflowJourney";
+import { buildDetailShellPath } from "@/lib/navigation";
 import { workflowStageRowToDomain } from "@/lib/supabase/mappings";
 import { createRequestSupabaseClient } from "@/lib/supabase/server";
 import { resolveProjectRoute, resolveWorkstreamRoute } from "@/lib/supabase/route-resolvers";
@@ -67,7 +68,7 @@ export default async function WorkstreamRoute({ params }: { params: Promise<{ pr
 
   return <main className="mx-auto max-w-5xl space-y-6 p-8">
     <div className="flex flex-wrap gap-3"><Link href={`/projects/${encodeURIComponent(project.number)}`} className="text-sm font-bold text-teal-800 hover:underline">Back to project</Link><Link href="/" className="text-sm font-bold text-teal-800 hover:underline">Projects</Link></div>
-    <div><p className="mt-4 text-xs font-bold uppercase tracking-wider text-teal-700">Workstream route</p><div className="mt-2 flex flex-wrap items-center gap-3"><h1 className="text-3xl font-black text-slate-900">{workstream.title}</h1><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{workstream.code}</span></div><p className="mt-2 text-sm text-slate-600">{workstream.category} · {workstream.operational_state_label ?? workstream.operational_state}</p></div>
+    <div><p className="mt-4 text-xs font-bold uppercase tracking-wider text-teal-700">Workstream route</p><div className="mt-2 flex flex-wrap items-center gap-3"><h1 className="text-3xl font-black text-slate-900">{workstream.title}</h1><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{workstream.code}</span></div><p className="mt-2 text-sm text-slate-600">{workstream.category} · {workstream.operational_state_label ?? workstream.operational_state}</p><Link href={buildDetailShellPath("workflow", workstream.id)} className="mt-3 inline-flex text-sm font-bold text-teal-800 hover:underline">Open in PATH workspace →</Link></div>
     <section className="grid gap-4 md:grid-cols-2"><div className="rounded-xl border border-slate-200 bg-white p-5"><h2 className="font-bold text-slate-900">Current stage</h2><p className="mt-2 text-lg font-black text-teal-900">{workstream.current_stage_name ?? "Not assigned"}</p><p className="mt-3 text-sm text-slate-600">Baseline target: {workstream.baseline_target_date ?? "Not scheduled"}<br />Forecast target: {workstream.forecast_target_date ?? "Not scheduled"}</p></div><div className="rounded-xl border border-slate-200 bg-white p-5"><h2 className="font-bold text-slate-900">Required action</h2>{workstream.waiting_reason ? <><p className="mt-2 font-bold text-amber-900">Waiting on {workstream.waiting_on_entity ?? "a project dependency"}</p><p className="mt-1 text-sm text-slate-600">{workstream.waiting_reason}</p></> : <p className="mt-2 text-sm text-slate-600">No blocker is recorded on this workstream.</p>}</div></section>
     <WorkflowJourney source={journeySource} customerSafe={false} />
   </main>;
