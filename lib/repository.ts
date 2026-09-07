@@ -1493,16 +1493,6 @@ class ProjectDeliveryRepository {
     });
     this.auditEvents.unshift(event);
 
-    this.dispatchNotification({
-      userId: "user-maya-chen",
-      title: `Help requested on ${ws.code}`,
-      message: `${params.actorName} requested ${params.problemType}.`,
-      type: "escalation",
-      linkUrl: `/workstreams/${ws.code}`,
-      urgency: "high",
-      metadata: { workstreamCode: ws.code, escalationLevel: ws.escalationLevel },
-    });
-
     return ws;
   }
 
