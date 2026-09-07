@@ -1231,14 +1231,6 @@ export async function mutateTransferWorkstream(params: {
       newValue: `${params.transferType} → ${params.targetName}`,
       reason: params.note || "Help requested from supervisor.",
     }),
-    insertNotification({
-      userId: "maya.chen@spacex.com",
-      title: `Transfer request for ${params.workstreamCode}`,
-      message: `${params.actorName} requested ${params.transferType}.`,
-      type: "action_required",
-      linkUrl: `/workstreams/${params.workstreamCode}`,
-      urgency: "high",
-    }),
   ]);
 
   const sideEffectError = sideEffects.find((result) => result.error)?.error;
