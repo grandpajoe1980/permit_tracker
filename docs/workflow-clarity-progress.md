@@ -44,3 +44,13 @@ For each task: reproduce, patch minimally, run focused tests/build/lint as appro
 - `npm run build` completed, including the build secret scan.
 - Focused queue/RFI/navigation/commitment tests pass. The project-navigation assertion was updated to cover the focused in-app workspace rather than a stale standalone-link contract.
 - Supabase mutation tests require configured test credentials and were not run against shared data. Navigation checkpoint is pushed to `main` at `6c5aa855b30552111988b158427e8bd01832ce96` (GitHub contents commits); local implementation checkpoint is `f38af62c0b648b105388f95fedf298ec19a661ae`.
+
+## Live Supabase verification — 2026-09-07
+
+- Linked project: `zomzacaxwqfwjstkxbpv` (demo project). A development branch was not available on the current plan, so the approved demo project was used with uniquely tagged records only.
+- Applied and recorded forward migration `20260907120213_repair_customer_triage_columns`: adds the columns required by the deployed atomic triage RPC (`customer_requests.triaged_at`, `triaged_by_user_id`, `triage_notes`, `triaged_workstream_ids`, and `workstreams.customer_request_id`) plus its lookup index.
+- Applied and recorded forward migration `20260907120931_sync_customer_triage_state`: when a request is triaged, the trigger aligns `itsm_state` to `triaged`. `20260907121335_lock_down_triage_trigger_function` revokes API execute access from the trigger-only helper.
+- Persisted demo journey `PATH-2026-E2E-A9F4` (`customer-request-e2e-20260907-a9f4`) and triaged it into `E2E-A9F4-USACE`, `E2E-A9F4-LDEQ`, and `E2E-A9F4-STATEPO`. Read-back confirmed `status=in_progress`, `itsm_state=triaged`, three canonical workstream IDs, pinned request workflow stages, and `customer_request_id` links.
+- Assigned those workstreams through `rpc_assign_ticket` to the exact persisted groups `USACE - Federal Water and Wetlands Review`, `LDEQ - Air Quality & Environmental Review`, and `Governor's Project Office - Executive Triage & Delivery`; read-back confirmed group IDs, agency codes, three assignment audit events, the request audit trail, and the intake notification.
+- Transactional triage and trigger probes passed without leaving additional records. Security advisor no longer reports the trigger helper; pre-existing SECURITY DEFINER and performance policy advisories remain unchanged and require a separate security/performance sprint.
+- Remaining unverified scope: browser-authenticated cross-user journeys, file upload/RFI/coordination mutations, and mobile visual checks. No production business records were changed; the only persisted records are the explicitly tagged demo validation records above.
