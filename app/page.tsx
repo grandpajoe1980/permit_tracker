@@ -6,7 +6,6 @@ import {
   AlertOctagon,
   ArrowRight,
   Bell,
-  BookOpen,
   Building2,
   CalendarClock,
   CalendarDays,
@@ -119,6 +118,7 @@ import { DocumentVaultPanel } from "@/components/cockpits/DocumentVaultPanel";
 import { WorkflowDesignerPanel } from "@/components/cockpits/WorkflowDesignerPanel";
 import { PermitCatalogPanel } from "@/components/cockpits/PermitCatalogPanel";
 import { ProjectOverviewPage } from "@/components/cockpits/ProjectOverviewPage";
+import { WorkstreamTruthSummary } from "@/components/cockpits/WorkstreamTruthSummary";
 import { WorkflowMiniStepper } from "@/components/cockpits/WorkflowJourney";
 import { SystemVersionFooter } from "@/components/SystemVersionFooter";
 import { TicketWorkflowEditor } from "@/components/cockpits/TicketWorkflowEditor";
@@ -142,11 +142,14 @@ import {
 
 type Route = AppRoute;
 type SecondaryTool = "schedule" | "vault" | "catalog";
+type ProjectSection = "overview" | SecondaryTool;
 type DialogState = { action: WorkActionId; itemId: string } | null;
 type ShellHistoryState = {
   route: Route;
   selectedItemId: string | null;
   selectedProjectWorkstreamId: string | null;
+  projectSection: ProjectSection;
+  /** Legacy field retained so old history entries can be restored. */
   secondaryTool: SecondaryTool;
   queueSearch: string;
   queueKind: string;
@@ -154,6 +157,10 @@ type ShellHistoryState = {
   queueGroup: string;
   scrollY: number;
 };
+
+function isProjectSection(value: unknown): value is ProjectSection {
+  return value === "overview" || value === "schedule" || value === "vault" || value === "catalog";
+}
 
 function userIdForPersona(id: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
@@ -356,6 +363,7 @@ function suggestedTriageRows(request: CustomerRequestRecord): TriageRoutingRow[]
 export default function Home() {
   const [route, setRoute] = useState<Route>("my-work");
   const [secondaryTool, setSecondaryTool] = useState<SecondaryTool>("schedule");
+  const [projectSection, setProjectSection] = useState<ProjectSection>("overview");
   const [currentUser, setCurrentUser] = useState<DemoAccount | null>(null);
   const [currentPersona, setCurrentPersona] = useState<DemoPersona | null>(null);
   const [userPermits, setUserPermits] = useState<ServiceRequest[]>(allowsFixtureData() ? pecanIslandRequests : []);
@@ -641,10 +649,17 @@ export default function Home() {
 
     const restore = (state?: ShellHistoryState | null) => {
       if (state?.route) {
-        setRoute(state.route);
+        const restoredRoute = state.route === "secondary" ? "project" : state.route;
+        const restoredSection = isProjectSection(state.projectSection)
+          ? state.projectSection
+          : state.route === "secondary" && ["schedule", "vault", "catalog"].includes(state.secondaryTool)
+            ? state.secondaryTool
+            : "overview";
+        setRoute(restoredRoute);
         setSelectedItemId(state.selectedItemId);
         setSelectedProjectWorkstreamId(state.selectedProjectWorkstreamId);
         if (["schedule", "vault", "catalog"].includes(state.secondaryTool)) setSecondaryTool(state.secondaryTool);
+        setProjectSection(restoredSection);
         setQueueSearch(state.queueSearch);
         setQueueKind(state.queueKind);
         setQueueState(state.queueState);
@@ -692,10 +707,15 @@ export default function Home() {
         return;
       }
       const defaultRoute = activePersona.isCustomer && shell.route === "my-work" && !new URL(window.location.href).searchParams.has("view") ? "project" : shell.route;
-      setRoute(defaultRoute);
+      const restoredRoute = defaultRoute === "secondary" ? "project" : defaultRoute;
+      const restoredSection = shell.route === "secondary"
+        ? (isProjectSection(shell.tool) ? shell.tool : "schedule")
+        : isProjectSection(shell.tool) ? shell.tool : "overview";
+      setRoute(restoredRoute);
       setSelectedItemId(null);
       setSelectedProjectWorkstreamId(shell.workstreamId ?? null);
       if (["schedule", "vault", "catalog"].includes(shell.tool ?? "")) setSecondaryTool(shell.tool as SecondaryTool);
+      setProjectSection(restoredSection);
       setRequestedWorkItemPath(null);
     };
 
@@ -717,16 +737,15 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
   }, [route, selectedItemId, loggedIn]);
 
-  // Keep the selected secondary tool addressable even when a legacy button
-  // changes the tool and route in the same React event.
+  // Keep the selected project section addressable, including old secondary
+  // links, even when a legacy button changes the section and route together.
   useEffect(() => {
-    if (!loggedIn || route !== "secondary" || typeof window === "undefined") return;
+    if (!loggedIn || route !== "project" || typeof window === "undefined") return;
     const url = new URL(window.location.href);
-    if (url.searchParams.get("view") !== "secondary") return;
-    if (url.searchParams.get("tool") === secondaryTool) return;
-    url.searchParams.set("tool", secondaryTool);
-    window.history.replaceState({ ...currentHistoryState(), route: "secondary", secondaryTool }, "", url);
-  }, [secondaryTool, route, loggedIn]);
+    const desiredPath = buildShellPath("project", selectedProjectWorkstreamId ?? undefined, projectSection === "overview" ? undefined : projectSection);
+    if (`${url.pathname}${url.search}` === desiredPath) return;
+    window.history.replaceState({ ...currentHistoryState(), route: "project", projectSection }, "", desiredPath);
+  }, [projectSection, selectedProjectWorkstreamId, route, loggedIn]);
 
   useEffect(() => {
     if (!toast) return;
@@ -735,7 +754,7 @@ export default function Home() {
   }, [toast]);
 
   function currentHistoryState(): ShellHistoryState {
-    return { route, selectedItemId, selectedProjectWorkstreamId, secondaryTool, queueSearch, queueKind, queueState, queueGroup, scrollY: typeof window === "undefined" ? 0 : window.scrollY };
+    return { route, selectedItemId, selectedProjectWorkstreamId, projectSection, secondaryTool, queueSearch, queueKind, queueState, queueGroup, scrollY: typeof window === "undefined" ? 0 : window.scrollY };
   }
 
   function pushNavigation(path: string, state: ShellHistoryState) {
@@ -745,26 +764,44 @@ export default function Home() {
   }
 
   function navigate(nextRoute: Route) {
-    pushNavigation(buildShellPath(nextRoute, undefined, nextRoute === "secondary" ? secondaryTool : undefined), { ...currentHistoryState(), route: nextRoute, selectedItemId: null, selectedProjectWorkstreamId: nextRoute === "project" ? selectedProjectWorkstreamId : null, secondaryTool, scrollY: 0 });
-    setRoute(nextRoute);
+    if (nextRoute === "schedule") {
+      openProjectSection("schedule");
+      return;
+    }
+    if (nextRoute === "documents" && activePersona.isCustomer) {
+      openProjectSection("vault");
+      return;
+    }
+    const canonicalRoute = nextRoute === "secondary" ? "project" : nextRoute;
+    const nextSection = canonicalRoute === "project" ? "overview" : projectSection;
+    pushNavigation(buildShellPath(canonicalRoute, undefined, canonicalRoute === "project" && nextSection !== "overview" ? nextSection : undefined), { ...currentHistoryState(), route: canonicalRoute, projectSection: nextSection, selectedItemId: null, selectedProjectWorkstreamId: canonicalRoute === "project" ? selectedProjectWorkstreamId : null, secondaryTool, scrollY: 0 });
+    setRoute(canonicalRoute);
+    setProjectSection(nextSection);
     setSelectedItemId(null);
-    if (nextRoute !== "project") setSelectedProjectWorkstreamId(null);
+    if (canonicalRoute !== "project") setSelectedProjectWorkstreamId(null);
     setRequestedWorkItemPath(null);
     setMobileNavOpen(false);
   }
 
   function navigateSecondary(tool: SecondaryTool) {
-    setSecondaryTool(tool);
-    pushNavigation(buildShellPath("secondary", undefined, tool), { ...currentHistoryState(), route: "secondary", secondaryTool: tool, selectedItemId: null, selectedProjectWorkstreamId: null, scrollY: 0 });
-    setRoute("secondary");
+    openProjectSection(tool);
+  }
+
+  function openProjectSection(section: ProjectSection) {
+    const focusedWorkstreamId = selectedProjectWorkstreamId ?? undefined;
+    pushNavigation(buildShellPath("project", focusedWorkstreamId, section === "overview" ? undefined : section), { ...currentHistoryState(), route: "project", projectSection: section, secondaryTool: section === "overview" ? secondaryTool : section, selectedItemId: null, selectedProjectWorkstreamId: selectedProjectWorkstreamId, scrollY: 0 });
+    setProjectSection(section);
+    if (section !== "overview") setSecondaryTool(section);
+    setRoute("project");
     setSelectedItemId(null);
-    setSelectedProjectWorkstreamId(null);
     setRequestedWorkItemPath(null);
     setMobileNavOpen(false);
   }
 
-  function openProject(workstreamId?: string) {
-    pushNavigation(buildShellPath("project", workstreamId), { ...currentHistoryState(), route: "project", selectedItemId: null, selectedProjectWorkstreamId: workstreamId ?? null, scrollY: 0 });
+  function openProject(workstreamId?: string, section: ProjectSection = "overview") {
+    pushNavigation(buildShellPath("project", workstreamId, section === "overview" ? undefined : section), { ...currentHistoryState(), route: "project", projectSection: section, secondaryTool: section === "overview" ? secondaryTool : section, selectedItemId: null, selectedProjectWorkstreamId: workstreamId ?? null, scrollY: 0 });
+    setProjectSection(section);
+    if (section !== "overview") setSecondaryTool(section);
     setSelectedItemId(null);
     setSelectedProjectWorkstreamId(workstreamId ?? null);
     setRequestedWorkItemPath(null);
@@ -1618,7 +1655,10 @@ export default function Home() {
         setSaveStatus("error");
         return;
       }
-      notify(`${item.title} response recorded as ${result.data.status.replaceAll("_", " ")}. The dependency remains visible until explicitly resolved.`);
+      const notificationNote = result.data.responseNotificationRecipientCount === 0
+        ? " No configured requesting-team recipient was found; review the assignment directory."
+        : ` ${result.data.responseNotificationRecipientCount} requesting-team recipient${result.data.responseNotificationRecipientCount === 1 ? "" : "s"} notified.`;
+      notify(`${item.title} response recorded as ${result.data.status.replaceAll("_", " ")}.${notificationNote} The dependency remains visible until explicitly resolved.`);
       return;
     }
 
@@ -1787,6 +1827,7 @@ export default function Home() {
   function renderWorkCard(item: OperationalWorkItem) {
     const tone = toneClasses(item.statusTone);
     const actions = getAvailableActions(item, activePersona);
+    const workflowTemplates = repository.getWorkflowTemplates();
     const compactActions = actions.filter((action) => ["mark_blocked", "request_information", "respond", "accept_rfi_response", "approve_document"].includes(action)).slice(0, 1);
     const assignmentGroupLabel = item.assignmentGroupName ?? (item.ownerOrganization === "DOTD"
       ? "DOTD Heavy-Haul & Bridges"
@@ -1820,7 +1861,7 @@ export default function Home() {
             </div>
             <button type="button" onClick={() => openItem(item)} className="mt-1 block text-left text-lg font-black leading-tight text-[#00284d] hover:text-teal-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600">{item.title}</button>
             <button type="button" onClick={(e) => { e.stopPropagation(); openProject(item.workstreamId); }} className="mt-1 text-sm font-semibold text-slate-600 hover:text-teal-800 hover:underline text-left cursor-pointer transition-colors" title="View in project page">{item.workstreamTitle}</button>
-            {item.sourceWorkstream && <WorkflowMiniStepper source={item.sourceWorkstream} templates={repository.getWorkflowTemplates()} customerSafe={activePersona.isCustomer} />}
+            {item.sourceWorkstream && <><WorkstreamTruthSummary workstream={item.sourceWorkstream} templates={workflowTemplates} customerSafe={activePersona.isCustomer} /><WorkflowMiniStepper source={item.sourceWorkstream} templates={workflowTemplates} customerSafe={activePersona.isCustomer} /></>}
           </div>
         </div>
         <span className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-black uppercase ${tone.badge}`}><span className={`size-1.5 shrink-0 rounded-full ${tone.dot}`} />{item.statusLabel}</span>
@@ -2102,18 +2143,34 @@ export default function Home() {
     return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">{PROJECT_DISPLAY_NAME}</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Project context</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Vermilion Parish, Louisiana · shared operational context for the project team.</p></div><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-red-200 bg-red-50 p-4"><p className="text-xs font-black uppercase text-red-800">Blocked / at risk</p><p className="mt-2 text-3xl font-black text-red-950">{ragSummary.red}</p></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-black uppercase text-amber-800">Attention</p><p className="mt-2 text-3xl font-black text-amber-950">{ragSummary.yellow}</p></div><div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-black uppercase text-emerald-800">On track</p><p className="mt-2 text-3xl font-black text-emerald-950">{ragSummary.green}</p></div></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Building2 className="size-5 text-teal-700" /> Agency Workload</CardTitle></CardHeader><CardContent className="space-y-3">{workload.slice(0, 8).map((agency) => <div key={agency.agencyCode} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{agency.agencyCode}</p><p className="text-xs text-slate-500">{agency.agencyLevel} · {agency.agencyName}</p></div><div className="text-right text-xs font-bold text-slate-700">{agency.count} workstreams · {agency.blockedCount} blocked</div></div>)}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Route className="size-5 text-teal-700" /> Gantt and dependencies</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">Open the schedule to review the critical path, baseline, forecast, and agency dependencies.</p><Button type="button" onClick={() => navigateSecondary("schedule")} className="mt-4 bg-[#00284d] font-bold">Open Gantt <ArrowRight className="size-4" aria-hidden="true" /></Button></CardContent></Card></div>;
   }
 
+  function renderProjectWorkspace(section: ProjectSection) {
+    const tabs: Array<[ProjectSection, string]> = [["overview", "Project overview"], ["schedule", "Schedule"], ["vault", "Project documents"]];
+    if (section === "catalog") tabs.push(["catalog", "Services & permits"]);
+    return <div className="space-y-5">
+      <nav aria-label="Project context" className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+        {tabs.map(([tab, label]) => <Button key={tab} type="button" variant={section === tab ? "default" : "ghost"} onClick={() => openProjectSection(tab)} className="text-xs font-bold">{label}</Button>)}
+      </nav>
+      {section === "overview" && <ProjectOverviewPage project={projectRecord} customerSafe={activePersona.isCustomer} workflowTemplates={repository.getWorkflowTemplates()} focusedWorkstreamId={selectedProjectWorkstreamId} onFocusWorkstream={(workstreamId) => openProject(workstreamId ?? undefined)} onOpenSchedule={() => openProjectSection("schedule")} />}
+      {section === "schedule" && <div className="space-y-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Project context · Schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Baseline, forecast, dependencies, and parallel active stages for {projectRecord.name}. Select a workstream to return to the same Project context.</p></div><WorkstreamGraphGantt project={projectRecord} customerSafe={activePersona.isCustomer} onSelectWorkstream={(workstreamId) => openProject(workstreamId)} /></div>}
+      {section === "vault" && <div className="space-y-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Project context · Documents</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Project documents</h1><p className="mt-2 text-sm text-slate-600">The same authorized project documents remain in context while you move between workstreams and the schedule.</p></div><DocumentVaultPanel project={projectRecord} onUploadRevision={(documentId, event) => void uploadProjectRevision(documentId, event, activePersona.organization)} onDownloadDocument={(docId, verId) => void downloadVersion(docId, verId)} onSelectWorkstream={(workstreamId) => openProject(workstreamId)} /></div>}
+      {section === "catalog" && <div className="space-y-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Services & permits</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Permit catalog</h1></div><PermitCatalogPanel catalog={repository.getCatalog()} templates={repository.getWorkflowTemplates()} onStartRequest={(permitId) => { setSelectedCatalogPermitId(permitId); if (activePersona.isCustomer) { setRequestCenterMode("permit"); navigate("requests"); } else { showToast("Permit selected. Switch to a SpaceX demo persona to start a request.", "info"); } }} /></div>}
+    </div>;
+  }
+
   function renderProject() {
-    return <ProjectOverviewPage project={projectRecord} customerSafe={activePersona.isCustomer} workflowTemplates={repository.getWorkflowTemplates()} focusedWorkstreamId={selectedProjectWorkstreamId} onFocusWorkstream={(workstreamId) => openProject(workstreamId ?? undefined)} onOpenSchedule={() => navigateSecondary("schedule")} />;
+    return renderProjectWorkspace(projectSection);
   }
 
   function renderSecondary() {
-    return <div className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Project resources</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">{secondaryTool === "schedule" ? "Schedule" : secondaryTool === "vault" ? "Document Vault" : "Permit Catalog"}</h1></div><div className="flex flex-wrap gap-2">{([["schedule", "Schedule"], ["vault", "Document Vault"], ["catalog", "Permit Catalog"]] as Array<[SecondaryTool, string]>).map(([tool, label]) => <Button key={tool} type="button" variant={secondaryTool === tool ? "default" : "outline"} onClick={() => setSecondaryTool(tool)} className="text-xs font-bold">{label}</Button>)}</div></div>{secondaryTool === "schedule" && <WorkstreamGraphGantt project={projectRecord} onSelectWorkstream={(workstreamId) => openProject(workstreamId)} />}{secondaryTool === "vault" && <DocumentVaultPanel project={projectRecord} onUploadRevision={(documentId, event) => void uploadProjectRevision(documentId, event, activePersona.organization)} onDownloadDocument={(docId, verId) => void downloadVersion(docId, verId)} onSelectWorkstream={(workstreamId) => openProject(workstreamId)} />}{secondaryTool === "catalog" && <PermitCatalogPanel catalog={repository.getCatalog()} templates={repository.getWorkflowTemplates()} onStartRequest={(permitId) => { setSelectedCatalogPermitId(permitId); if (activePersona.isCustomer) { setRequestCenterMode("permit"); navigate("requests"); } else { showToast("Permit selected. Switch to a SpaceX demo persona to start a request.", "info"); } }} />}</div>;
+    // Compatibility renderer for old /?view=secondary links. Restore logic
+    // canonicalizes them into the same Project workspace and history model.
+    return renderProjectWorkspace(secondaryTool);
   }
 
   function renderAdmin() {
     const [firstUser] = teamUsers;
     if (activePersona.workspace === "state_office") return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">State project office</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Customer intake queue</h1><p className="mt-2 max-w-3xl text-sm text-slate-600">Review persisted customer requests, confirm the request details, and create the appropriate linked workstream(s) from the authorized project office queue.</p></div><CustomerRequestTriageQueue requests={repository.getCustomerRequests()} onTriage={(request) => setTriageRequest(request)} /></div>;
-    if (activePersona.workspace === "admin") return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Participants, profiles, workflows, and agencies</h1><p className="mt-2 text-sm text-slate-600">Manage people, permissions, workflow templates, authorization catalog records, and participating agencies from one audited administration area.</p></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent><AdminDirectory teamUsers={teamUsers} roleDefinitions={roleDefinitions} repository={repository} actorUserId={actorUserId()} onRoleChange={async (userId, roleId) => { const user = teamUsers.find((member) => member.id === userId); if (!user?.organizationId) { if (!allowsFixtureData()) { setToast("This team member has no organization membership to update."); return; } setTeamUsers((current) => current.map((member) => member.id === userId ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user?.name ?? "user"} to ${roleDefinitions[roleId].name}.`); return; } const result = await repository.setOrganizationMemberRolePersisted({ userId, organizationId: user.organizationId, role: membershipRoleForRoleId(roleId) }); if (result.error) { setToast(`Role update failed: ${result.error.message}`); return; } setTeamUsers((current) => current.map((member) => member.id === userId ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user.name} to ${roleDefinitions[roleId].name}.`); }} onMutation={(message) => { setToast(message); setMutationVersion((value) => value + 1); }} /></CardContent></Card><WorkflowDesignerPanel catalog={repository.getCatalog()} organizations={repository.getOrganizations()} templates={repository.getWorkflowTemplates()} /><p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Changes are confirmed by Supabase and audit logged.</p></div>;
+    if (activePersona.workspace === "admin") return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Participants, profiles, workflows, and agencies</h1><p className="mt-2 text-sm text-slate-600">Manage people, permissions, workflow templates, authorization catalog records, and participating agencies from one audited administration area.</p></div><Card id="admin-directory"><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent><AdminDirectory teamUsers={teamUsers} roleDefinitions={roleDefinitions} repository={repository} actorUserId={actorUserId()} onRoleChange={async (userId, roleId) => { const user = teamUsers.find((member) => member.id === userId); if (!user?.organizationId) { if (!allowsFixtureData()) { setToast("This team member has no organization membership to update."); return; } setTeamUsers((current) => current.map((member) => member.id === userId ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user?.name ?? "user"} to ${roleDefinitions[roleId].name}.`); return; } const result = await repository.setOrganizationMemberRolePersisted({ userId, organizationId: user.organizationId, role: membershipRoleForRoleId(roleId) }); if (result.error) { setToast(`Role update failed: ${result.error.message}`); return; } setTeamUsers((current) => current.map((member) => member.id === userId ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user.name} to ${roleDefinitions[roleId].name}.`); }} onMutation={(message) => { setToast(message); setMutationVersion((value) => value + 1); }} /></CardContent></Card><div id="agency-registry"><WorkflowDesignerPanel catalog={repository.getCatalog()} organizations={repository.getOrganizations()} templates={repository.getWorkflowTemplates()} /></div><p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Changes are confirmed by Supabase and audit logged.</p></div>;
     return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Participants, profiles, and roles</h1><p className="mt-2 text-sm text-slate-600">Administrators can manage project participation, profile visibility, roles, workstream responsibility, and access. Ordinary users can edit only their own contact fields.</p></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent className="space-y-3">{teamUsers.map((user) => { const profile = repository.getProfileByUserId(user.id); const participant = repository.getParticipants().find((entry) => entry.userId === user.id); return <div key={user.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{user.name} {user.name === "Joe Skaggs" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] uppercase text-amber-900">Space Czar</span>}</p><p className="text-xs font-bold text-teal-800">{profile?.displayTitle ?? user.displayTitle ?? roleDefinitions[user.roleId].name}</p><p className="text-xs text-slate-500">{profile?.workEmail ?? user.workEmail ?? user.email} · {profile?.organizationName ?? user.organization}</p><p className="mt-1 max-w-xl text-xs text-slate-500">{profile?.organizationalUnit ?? user.organizationalUnit ?? user.agency} · {participant?.workstreamIds.length ?? 0} assigned workstream(s)</p></div><select aria-label={`Role for ${user.name}`} value={user.roleId} onChange={(event) => { const roleId = event.target.value as RoleId; setTeamUsers((current) => current.map((member) => member.id === user.id ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user.name} to ${roleDefinitions[roleId].name}.`); }} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800">{(Object.keys(roleDefinitions) as RoleId[]).map((role) => <option key={role} value={role}>{roleDefinitions[role].name}</option>)}</select></div>; })}<p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Joe Skaggs · joe.skaggs@la.gov · Louisiana Economic Development (LED) · Space Czar.</p></CardContent></Card>{repository.getCustomerRequests().length > 0 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-amber-700" /> Customer request triage</CardTitle><p className="text-sm text-slate-600">Escalations, blockers, service requests, and permit tracking records submitted by SpaceX appear here for government-side follow-up.</p></CardHeader><CardContent className="space-y-3">{repository.getCustomerRequests().slice(0, 8).map((request) => <div key={request.id} className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3"><div><p className="text-sm font-black text-amber-950">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-amber-900">{request.requestType.replaceAll("_", " ")} · {request.description}</p><p className="mt-1 text-xs text-amber-800">{request.submittedByName} · {request.locationOrAffectedArea ?? "Project-wide"}</p></div><span className="rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-900">{request.status}</span></div>)}</CardContent></Card>}</div>;
   }
 
@@ -2146,7 +2203,7 @@ export default function Home() {
           <Button key={action} type="button" disabled={true} title="Action disabled: Awaiting government response." className="w-full bg-slate-200 text-slate-400 text-xs font-bold opacity-50 cursor-not-allowed sm:w-auto">{actionIcon(action)}{actionLabel(action)}</Button>
         );
       })}</div>}</section>
-       <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]"><div className="space-y-5"><Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">{customer ? "What this means for SpaceX" : "What you need to do"}</CardTitle></CardHeader><CardContent><p className="text-sm leading-6 text-slate-700">{customer ? selectedItem.customerVisibleSummary : selectedItem.whatToDo}</p>{!customer && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600"><strong className="text-slate-800">Why you’re seeing this:</strong> {selectedItem.whyHere}<br /><strong className="text-slate-800">What removes it from your queue:</strong> {selectedItem.removesFromQueue}</p>}</CardContent></Card>{linkedWorkstream && <p className="rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm text-teal-950"><strong>Linked workstream state:</strong> {linkedWorkstream.operationalStateLabel}</p>}{selectedItem.sourceRfi && <Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">{customer ? "Exact information requested" : "RFI record"}</CardTitle></CardHeader><CardContent className="space-y-3"><div><p className="text-xs font-black uppercase tracking-wider text-slate-500">{selectedItem.sourceRfi.code} · Question</p><p className="mt-1 text-sm leading-6 text-slate-700">{selectedItem.sourceRfi.questionText}</p></div>{selectedItem.sourceRfi.responses?.filter((response) => response.responseText).map((response) => <div key={response.id} className="rounded-lg border border-teal-200 bg-teal-50 p-3"><p className="text-xs font-black uppercase tracking-wider text-teal-800">Applicant response</p><p className="mt-1 text-sm leading-6 text-teal-950">{response.responseText}</p></div>)}</CardContent></Card>}
+       <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]"><div className="space-y-5">{linkedWorkstream && <WorkstreamTruthSummary workstream={linkedWorkstream} templates={repository.getWorkflowTemplates()} customerSafe={customer} />}<Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">{customer ? "What this means for SpaceX" : "What you need to do"}</CardTitle></CardHeader><CardContent><p className="text-sm leading-6 text-slate-700">{customer ? selectedItem.customerVisibleSummary : selectedItem.whatToDo}</p>{!customer && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600"><strong className="text-slate-800">Why you’re seeing this:</strong> {selectedItem.whyHere}<br /><strong className="text-slate-800">What removes it from your queue:</strong> {selectedItem.removesFromQueue}</p>}</CardContent></Card>{selectedItem.sourceRfi && <Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">{customer ? "Exact information requested" : "RFI record"}</CardTitle></CardHeader><CardContent className="space-y-3"><div><p className="text-xs font-black uppercase tracking-wider text-slate-500">{selectedItem.sourceRfi.code} · Question</p><p className="mt-1 text-sm leading-6 text-slate-700">{selectedItem.sourceRfi.questionText}</p></div>{selectedItem.sourceRfi.responses?.filter((response) => response.responseText).map((response) => <div key={response.id} className="rounded-lg border border-teal-200 bg-teal-50 p-3"><p className="text-xs font-black uppercase tracking-wider text-teal-800">Applicant response</p><p className="mt-1 text-sm leading-6 text-teal-950">{response.responseText}</p></div>)}</CardContent></Card>}
         {!customer && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ListChecks className="size-5 text-teal-700" /> Required inputs</CardTitle></CardHeader><CardContent><ul className="space-y-2">{selectedItem.requiredInputs.map((input) => <li key={input} className="flex items-start gap-2 text-sm text-slate-700"><Check className="mt-0.5 size-4 shrink-0 text-emerald-700" aria-hidden="true" />{input}</li>)}</ul></CardContent></Card>}
         {docsToDisplay.length > 0 && <Card><CardHeader><div className="flex items-center justify-between"><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Paperclip className="size-5 text-teal-700" /> Project Documents & Packages ({docsToDisplay.length})</CardTitle></div></CardHeader><CardContent className="space-y-3">{docsToDisplay.map((doc) => { const latestVer = doc.versions[0]; return <div key={doc.id} className="rounded-xl border border-slate-200 p-4 bg-white space-y-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex items-center gap-2"><p className="text-sm font-black text-[#00284d]">{doc.title}</p><span className="rounded bg-teal-50 border border-teal-200 px-1.5 py-0.5 text-[10px] font-mono font-bold text-teal-800">{latestVer?.versionTag || `v${doc.currentVersionNumber}.0`}</span></div><p className="mt-1 text-xs text-slate-500">{doc.category.replace(/_/g, " ")} · {doc.ownerOrgCode} · {doc.versions.length} revision(s)</p></div><div className="flex items-center gap-2"><Button type="button" size="sm" onClick={() => { setViewerModalDoc(doc as DocumentRecord); setViewerModalVer(latestVer); }} className="bg-[#00284d] hover:bg-[#003c70] text-white text-xs font-bold gap-1 shadow-xs"><Eye className="size-3.5" /> View Document</Button><Button type="button" variant="outline" size="sm" onClick={() => void downloadVersion(doc.id, latestVer?.id || "")} className="text-xs font-bold gap-1"><Download className="size-3.5" /> Download</Button></div></div>{latestVer && <div className="rounded-lg bg-slate-50 p-2.5 flex flex-wrap items-center justify-between text-xs text-slate-600 gap-2 font-mono"><span className="text-[11px] truncate max-w-sm">SHA-256: {latestVer.sha256Hash.slice(0, 16)}…</span><span className="text-[11px] text-slate-500 font-sans">Uploaded by {latestVer.uploadedByName}</span></div>}</div>; })}</CardContent></Card>}
         {selectedItem.kind === "document" && selectedItem.sourceDocument && <Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Version history</CardTitle></CardHeader><CardContent><p className="text-sm font-black text-[#00284d]">You are reviewing {selectedItem.exactDocumentVersionLabel}</p>{selectedItem.sourceDocument.versions.filter((version) => version.id !== selectedItem.exactDocumentVersionId).map((version) => <p key={version.id} className="mt-2 text-sm text-slate-600">Previously: {version.versionTag} uploaded {formatDate(version.uploadedAt)}.</p>)}</CardContent></Card>}
@@ -2216,5 +2273,5 @@ export default function Home() {
     return <>{hydrationError && <div role="alert" className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-950"><span className="flex-1">{hydrationError}</span><Button type="button" variant="outline" size="sm" onClick={() => void retryHydration()}>Retry</Button></div>}{content}{triageRequest && <TriageRoutingDialog request={triageRequest} initialRows={suggestedTriageRows(triageRequest)} organizations={triageOrganizations} assignmentGroups={triageGroups} workflowVersions={publishedTriageWorkflows} existingWorkstreams={triageExistingWorkstreams} busy={triageBusy} onCancel={() => setTriageRequest(null)} onConfirm={(rows) => void triageCustomerRequest(triageRequest, rows)} onRequestClarification={(notes) => void requestCustomerIntakeClarification(triageRequest, notes)} onLinkExisting={(workstreamId, notes) => void linkCustomerRequestToWorkstream(triageRequest, workstreamId, notes)} />}</>;
   }
 
-  return <div className="min-h-screen bg-[#f3f6f7] text-[#172033] flex flex-col justify-between"><a className="skip-link" href="#main-content">Skip to main content</a><div className="road-stripe" /><header className="site-header sticky top-0 z-30"><div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6"><Button type="button" variant="ghost" size="icon" onClick={() => setMobileNavOpen((value) => !value)} className="text-white hover:bg-white/10 lg:hidden" aria-label="Toggle navigation" aria-expanded={mobileNavOpen} aria-controls="mobile-navigation"><Menu className="size-5" /></Button><span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d] sm:size-9"><Zap className="size-5 fill-current" aria-hidden="true" /></span><div className="min-w-0"><p className="text-xs font-black text-white sm:text-sm">{PRODUCT_NAME}</p><button type="button" onClick={() => openProject()} className="block max-w-[42vw] truncate text-left text-[11px] font-semibold text-slate-300 hover:text-white hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 cursor-pointer sm:max-w-none" title="Go to project page">{workspaceTitle(activePersona.workspace)} · {PROGRAM_SUBTITLE}</button></div><div className="ml-auto hidden items-center gap-2 text-xs text-slate-200 md:flex"><span className="rounded-full border border-white/20 px-3 py-1.5">{activePersona.name}</span><span className="rounded-full border border-teal-300/40 bg-teal-900/40 px-3 py-1.5 font-bold text-teal-100">{activePersona.roleLabel}</span></div><Button type="button" variant="ghost" size="icon" onClick={() => navigate("notifications")} className="relative shrink-0 text-white hover:bg-white/10" aria-label="Open notifications"><Bell className="size-5" /><span className="absolute right-1 top-1 size-2 rounded-full bg-[#f4a100]" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => void signOut()} className="shrink-0 px-2 text-white hover:bg-white/10 sm:px-3" aria-label="Sign out"><LogOut className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Sign out</span></Button></div></header><div className="mx-auto flex max-w-[1600px] items-start flex-1 w-full"><aside id="mobile-navigation" ref={mobileNavRef} className={`${mobileNavOpen ? "block" : "hidden"} fixed inset-x-0 top-[calc(69px+0.45rem)] z-20 max-h-[calc(100vh-69px-0.45rem)] overflow-y-auto border-b border-slate-200 bg-white p-3 shadow-xl lg:sticky lg:top-[69px] lg:block lg:min-h-[calc(100vh-69px)] lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}><button type="button" onClick={() => openProject()} className="group mb-4 w-full rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-left transition hover:border-teal-400 hover:bg-teal-50 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 cursor-pointer" aria-label="Open project page" title="Open project page"><div className="flex items-center justify-between"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500 group-hover:text-teal-800">Current context</p><ArrowRight className="size-3 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-teal-700" aria-hidden="true" /></div><p className="mt-1 text-sm font-black text-[#00284d] group-hover:text-teal-950">{PROJECT_DISPLAY_NAME}</p><p className="mt-1 text-xs text-slate-500 group-hover:text-teal-900">Vermilion Parish · Louisiana</p></button><nav aria-label="Primary navigation" className="space-y-1"><p className="px-3 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Work</p>{primaryNav.map((item) => <button key={item.id} type="button" onClick={() => navigate(item.id)} aria-current={route === item.id ? "page" : undefined} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${route === item.id ? "bg-[#00284d] text-white shadow-sm" : "text-slate-700 hover:bg-teal-50 hover:text-teal-950"}`}>{item.icon}<span className="flex-1">{item.label}</span>{typeof item.count === "number" && <span className={`rounded-full px-2 py-0.5 text-[10px] ${route === item.id ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700"}`}>{item.count}</span>}</button>)}{!activePersona.isCustomer && <p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Secondary tools</p>}{!activePersona.isCustomer && <><button type="button" onClick={() => { setSecondaryTool("schedule"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "schedule" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><CalendarClock className="size-4" />Schedule</button><button type="button" onClick={() => { setSecondaryTool("vault"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "vault" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><BookOpen className="size-4" />Document Vault</button><button type="button" onClick={() => { setSecondaryTool("catalog"); navigate("secondary"); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "secondary" && secondaryTool === "catalog" ? "bg-teal-700 text-white" : "text-slate-700 hover:bg-teal-50"}`}><Landmark className="size-4" />Permit Catalog</button></>}{canAdmin && <><p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Administration</p><button type="button" onClick={() => navigate("admin")} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "admin" ? "bg-[#00284d] text-white" : "text-slate-700 hover:bg-teal-50"}`}><Settings2 className="size-4" />Administration</button></>}</nav></aside><main id="main-content" className="min-w-0 flex-1 px-3 py-5 sm:px-6 sm:py-6 lg:px-10 lg:py-8">{renderToast()}{renderMain()}</main></div><SystemVersionFooter />{renderDialog()}{viewerModalDoc && <DocumentViewerModal document={viewerModalDoc} version={viewerModalVer} isOpen={Boolean(viewerModalDoc)} onClose={() => { setViewerModalDoc(null); setViewerModalVer(undefined); }} onDownload={(docId, verId) => void downloadVersion(docId, verId)} />}</div>;
+  return <div className="min-h-screen bg-[#f3f6f7] text-[#172033] flex flex-col justify-between"><a className="skip-link" href="#main-content">Skip to main content</a><div className="road-stripe" /><header className="site-header sticky top-0 z-30"><div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6"><Button type="button" variant="ghost" size="icon" onClick={() => setMobileNavOpen((value) => !value)} className="text-white hover:bg-white/10 lg:hidden" aria-label="Toggle navigation" aria-expanded={mobileNavOpen} aria-controls="mobile-navigation"><Menu className="size-5" /></Button><span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d] sm:size-9"><Zap className="size-5 fill-current" aria-hidden="true" /></span><div className="min-w-0"><p className="text-xs font-black text-white sm:text-sm">{PRODUCT_NAME}</p><button type="button" onClick={() => openProject()} className="block max-w-[42vw] truncate text-left text-[11px] font-semibold text-slate-300 hover:text-white hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 cursor-pointer sm:max-w-none" title="Go to project page">{workspaceTitle(activePersona.workspace)} · {PROGRAM_SUBTITLE}</button></div><div className="ml-auto hidden items-center gap-2 text-xs text-slate-200 md:flex"><span className="rounded-full border border-white/20 px-3 py-1.5">{activePersona.name}</span><span className="rounded-full border border-teal-300/40 bg-teal-900/40 px-3 py-1.5 font-bold text-teal-100">{activePersona.roleLabel}</span></div><Button type="button" variant="ghost" size="icon" onClick={() => navigate("notifications")} className="relative shrink-0 text-white hover:bg-white/10" aria-label="Open notifications"><Bell className="size-5" /><span className="absolute right-1 top-1 size-2 rounded-full bg-[#f4a100]" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => void signOut()} className="shrink-0 px-2 text-white hover:bg-white/10 sm:px-3" aria-label="Sign out"><LogOut className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Sign out</span></Button></div></header><div className="mx-auto flex max-w-[1600px] items-start flex-1 w-full"><aside id="mobile-navigation" ref={mobileNavRef} className={`${mobileNavOpen ? "block" : "hidden"} fixed inset-x-0 top-[calc(69px+0.45rem)] z-20 max-h-[calc(100vh-69px-0.45rem)] overflow-y-auto border-b border-slate-200 bg-white p-3 shadow-xl lg:sticky lg:top-[69px] lg:block lg:min-h-[calc(100vh-69px)] lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}><button type="button" onClick={() => openProject()} className="group mb-4 w-full rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-left transition hover:border-teal-400 hover:bg-teal-50 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 cursor-pointer" aria-label="Open project page" title="Open project page"><div className="flex items-center justify-between"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500 group-hover:text-teal-800">Current context</p><ArrowRight className="size-3 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-teal-700" aria-hidden="true" /></div><p className="mt-1 text-sm font-black text-[#00284d] group-hover:text-teal-950">{PROJECT_DISPLAY_NAME}</p><p className="mt-1 text-xs text-slate-500 group-hover:text-teal-900">Vermilion Parish · Louisiana</p></button><nav aria-label="Primary navigation" className="space-y-1"><p className="px-3 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Work</p>{primaryNav.map((item) => <button key={item.id} type="button" onClick={() => navigate(item.id)} aria-current={route === item.id ? "page" : undefined} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${route === item.id ? "bg-[#00284d] text-white shadow-sm" : "text-slate-700 hover:bg-teal-50 hover:text-teal-950"}`}>{item.icon}<span className="flex-1">{item.label}</span>{typeof item.count === "number" && <span className={`rounded-full px-2 py-0.5 text-[10px] ${route === item.id ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700"}`}>{item.count}</span>}</button>)}{canAdmin && <><p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Administration</p><button type="button" onClick={() => navigate("admin")} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "admin" ? "bg-[#00284d] text-white" : "text-slate-700 hover:bg-teal-50"}`}><Settings2 className="size-4" />Administration</button></>}</nav></aside><main id="main-content" className="min-w-0 flex-1 px-3 py-5 sm:px-6 sm:py-6 lg:px-10 lg:py-8">{renderToast()}{renderMain()}</main></div><SystemVersionFooter />{renderDialog()}{viewerModalDoc && <DocumentViewerModal document={viewerModalDoc} version={viewerModalVer} isOpen={Boolean(viewerModalDoc)} onClose={() => { setViewerModalDoc(null); setViewerModalVer(undefined); }} onDownload={(docId, verId) => void downloadVersion(docId, verId)} />}</div>;
 }

@@ -342,6 +342,7 @@ export function coordinationRequestRowToDomain(row: Row): CoordinationRequestRec
     priority: (str(row.priority, "normal")) as CoordinationRequestRecord["priority"],
     status: (str(row.status, "pending")) as CoordinationRequestRecord["status"],
     responseSummary: str(row.response_summary) || undefined,
+    responseNotificationRecipientCount: num(row.notification_recipient_count, 0),
   };
 }
 
@@ -800,10 +801,15 @@ export function requirementResourceRowToDomain(row: Row): RequirementResourceRec
     permitTypeId: str(row.permit_type_id),
     resourceName: str(row.resource_name),
     resourceType: (str(row.resource_type, "portal_url")) as RequirementResourceRecord["resourceType"],
-    url: str(row.url),
+    url: str(row.url, ""),
+    supersededUrl: str(row.superseded_url) || undefined,
     versionTag: str(row.version_tag, "Current"),
-    verifiedAt: str(row.verified_at || new Date().toISOString()),
-    verifiedBy: str(row.verified_by, "PATH Team"),
+    effectiveDate: str(row.effective_date) || undefined,
+    verifiedAt: str(row.verified_at, ""),
+    verifiedBy: str(row.verified_by, ""),
+    instructions: str(row.instructions) || undefined,
+    sourceAuthority: str(row.source_authority) || undefined,
+    resourceClassification: (str(row.resource_classification, "unclassified")) as RequirementResourceRecord["resourceClassification"],
     isStale: bool(row.is_stale),
   };
 }

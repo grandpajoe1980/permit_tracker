@@ -116,6 +116,17 @@ Tasks:
 
 Acceptance: open one workstream from queue, project, notification and copied URL; refresh/back/forward/auth recovery returns to the same record. Complete a tagged stage separately in a future authorized verification sprint and confirm all views agree, including parallel work and mobile schedule.
 
+### S4 implementation checkpoint — 2026-09-07
+
+The navigation slice now uses one canonical Project workspace for the end-to-end story:
+
+- Queue cards, work-item detail, Project workstream cards, focused Project workspaces, and the mini-stepper consume the shared workstream truth projection for stage, owner, hold, baseline, forecast, and next action.
+- Schedule and Project documents are Project-context tabs with focus-preserving URL/history state. The old `secondary` route remains a compatibility alias and normalizes into Project; duplicate Contacts/Help labels are separated.
+- Authorized copied project and workstream URLs validate scope server-side and redirect into the same Project workspace instead of rendering a second record presentation.
+- History state carries the selected workstream, Project tab, queue filters, selected work item, and scroll position so refresh/back/forward can restore the complete story.
+
+The remaining S4 evidence boundary is rendered browser acceptance at 390px and 200% zoom, plus fresh customer/staff sessions for the queue → Project → notification → copied URL journey.
+
 ### S5 — Documents, RFI, coordination and assignment acceptance (T07–T09/T15)
 
 Tasks:
@@ -140,6 +151,16 @@ Tasks:
 
 Acceptance: catalog → correct resource → request with correct permit identity, no misleading download claim; unauthorized admin routes/API operations denied; seed rerun produces no duplicates. Official permit-content research is a separate future task, not validated by this code review.
 
+### S5/S6 implementation checkpoint — 2026-09-07
+
+The implementation slice for both follow-up sprints is now committed in source:
+
+- S5 adds an authenticated, project-scoped `rpc_update_coordination_request` transaction. It records the authenticated actor in the audit ledger, notifies configured requesting-team assignment members with a deduplicated key, returns the recipient count, and explicitly leaves dependency/workstream clearance to a separate action. Production mutation code uses the RPC; fixture mode retains a clearly bounded fallback.
+- S6 adds resource classification and provenance fields, a forward schema migration, and seed support for nullable/missing links and review metadata. The catalog distinguishes official resources, internal demo guides, unavailable entries, and file downloads; review-due/overdue/missing-date states are no longer presented as uniformly verified. Administration links now cover workflow templates, agency registry/resources, users and memberships, and the read-only record inspector.
+- The final local gate passed: build and artifact secret scan, 398 tests with 372 passed / 0 failed / 26 explicit skips, lint with no errors, and seed-script syntax validation. The two migrations are now applied to demo project `zomzacaxwqfwjstkxbpv`; read-back confirms the coordination RPC is `SECURITY DEFINER` with fixed `search_path`, anonymous execution denied, authenticated execution allowed, and resource provenance columns present. Browser acceptance at 390px and 200% zoom remains blocked by the unavailable browser runtime.
+
+At the initial source checkpoint the two forward migrations were included in the commit but not yet applied. They are now applied to the linked demo project and read back successfully; cross-person notification delivery, non-empty attachment transfer, and unauthorized admin probes remain acceptance work for the next integration run.
+
 ### S7 — Maintainability and release gate (T00/T15)
 
 Evidence: `app/page.tsx` is 1,974 lines with dense inline render functions; repository is 2,456 lines. Source-contract tests directly inspect source text. The progress table duplicates T13 and still cites resolved port-collision and credential blockers in places where later entries supersede them.
@@ -155,7 +176,7 @@ Acceptance: no unclassified skipped release checks, current deployment SHA match
 
 ## Working order and guardrails
 
-Recommended next implementation sprint: S4 — navigation and one coherent work story. Run S5 acceptance incrementally with each affected workflow, not only at the end. S6 is targeted completeness, and S7 runs throughout.
+Recommended next acceptance sprint: browser-verify S4 — navigation and one coherent work story — followed by the live S5/S6 integration probes above. Run S5 acceptance incrementally with each affected workflow, not only at the end. S6 is targeted completeness, and S7 runs throughout.
 
 The next logical end-to-end journey is: Alex submits two different permit requests (one with an optional attachment), refreshes after the receipt, and confirms each request keeps its own permit identity and no workstream is guessed; Sarah opens the intake queue, edits agency/team/member/workflow routing, previews the fan-out, confirms exactly the intended workstreams, and Jordan/Sam read back their respective queues after a fresh sign-in. A failed routing confirmation must be retryable without duplicate workstreams.
 

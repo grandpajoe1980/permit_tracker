@@ -81,9 +81,10 @@ test("ships final product metadata without starter preview markers", () => {
 
 test("keeps configuration under the authorized administration area", () => {
   const secondary = page.slice(page.indexOf("function renderSecondary"), page.indexOf("function renderAdmin"));
+  const projectWorkspace = page.slice(page.indexOf("function renderProjectWorkspace"), page.indexOf("function renderProject()"));
   const admin = page.slice(page.indexOf("function renderAdmin"), page.indexOf("function renderDetail"));
   assert.doesNotMatch(secondary, /WorkflowDesignerPanel/);
-  assert.match(secondary, /PermitCatalogPanel/);
+  assert.match(projectWorkspace, /PermitCatalogPanel/);
   assert.match(admin, /WorkflowDesignerPanel/);
   assert.match(page, /const canAdmin = isAdministrator\(activePersona\)/);
   assert.match(page, /route === "admin".*Administrator access required/s);
@@ -329,8 +330,8 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(identifierModule, /canonicalProjectReference/);
   assert.match(mutations, /canonicalProjectReference\(params\.projectId\)/);
   assert.match(projectRoute, /createRequestSupabaseClient/);
-  assert.match(workstreamRoute, /\.eq\("project_id", project\.id\)/);
-  assert.match(workstreamRoute, /buildDetailShellPath\("workflow"/);
+  assert.match(workstreamRoute, /resolveWorkstreamRoute\(client, project\.id, workstreamId\)/);
+  assert.match(workstreamRoute, /redirect\(buildShellPath\("project", workstream\.id\)\)/);
   assert.match(requestRoute, /createRequestSupabaseClient/);
   assert.match(requestRoute, /buildDetailShellPath\("customer_request"/);
   assert.match(requestApi, /\.eq\("id", requested\)/);

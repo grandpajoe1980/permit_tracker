@@ -143,14 +143,17 @@ export const requirementResources = sqliteTable("requirement_resources", {
   resourceType: text("resource_type", {
     enum: ["form_pdf", "portal_url", "guidance_doc", "checklist", "statute_link"],
   }).notNull(),
-  url: text("url").notNull(),
+  url: text("url"),
   supersededUrl: text("superseded_url"),
   versionTag: text("version_tag").default("v1.0").notNull(),
   effectiveDate: text("effective_date"),
-  verifiedAt: text("verified_at").notNull(),
-  verifiedBy: text("verified_by").notNull(),
+  verifiedAt: text("verified_at"),
+  verifiedBy: text("verified_by"),
   instructions: text("instructions"),
   sourceAuthority: text("source_authority"),
+  resourceClassification: text("resource_classification", {
+    enum: ["official_resource", "internal_demo_guide", "file_download", "unavailable", "unclassified"],
+  }).default("unclassified"),
   isStale: integer("is_stale", { mode: "boolean" }).default(false).notNull(),
   createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
@@ -971,4 +974,3 @@ export const taskDependenciesRelations = relations(taskDependencies, ({ one }) =
     relationName: "successor",
   }),
 }));
-

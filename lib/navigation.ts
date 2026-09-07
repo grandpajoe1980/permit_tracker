@@ -31,7 +31,7 @@ export const NAVIGATION_DEFINITIONS: NavigationDefinition[] = [
   { id: "customer-home", label: "Home", scope: "project", audiences: ["customer"] },
   { id: "catalog", label: "Services & Permits", scope: "support", audiences: ["customer", "staff", "supervisor", "admin"] },
   { id: "admin", label: "Administration", scope: "system", audiences: ["admin"] },
-  { id: "secondary", label: "Project resources", scope: "project", audiences: ["staff", "supervisor", "admin"] },
+  { id: "secondary", label: "Project workspace", scope: "project", audiences: ["staff", "supervisor", "admin"] },
   { id: "my-work", label: "My Work", scope: "queue", audiences: ["staff", "supervisor", "admin"] },
   { id: "agency-queue", label: "My Agency Queue", scope: "queue", audiences: ["staff", "supervisor", "admin"] },
   { id: "rfis", label: "Requests for Information", scope: "queue", audiences: ["staff", "supervisor", "admin"] },
@@ -42,8 +42,8 @@ export const NAVIGATION_DEFINITIONS: NavigationDefinition[] = [
   { id: "notifications", label: "Notifications", scope: "system", audiences: ["customer", "staff", "supervisor", "admin"] },
   { id: "requests", label: "My requests", scope: "record", audiences: ["customer"] },
   { id: "intake", label: "Customer Intake Queue", scope: "queue", audiences: ["staff", "supervisor", "admin"] },
-  { id: "contacts", label: "Contacts & Help", scope: "support", audiences: ["customer"] },
-  { id: "help", label: "Contacts & Help", scope: "support", audiences: ["customer"] },
+  { id: "contacts", label: "Contact directory", scope: "support", audiences: ["customer"] },
+  { id: "help", label: "Help & escalation", scope: "support", audiences: ["customer"] },
 ];
 
 export type WorkRouteKind = "workflow" | "task" | "rfi" | "coordination" | "document" | "commitment" | "determination" | "customer_request";
@@ -84,7 +84,7 @@ export function buildShellPath(route: AppRoute, workstreamId?: string, tool?: st
   const params = new URLSearchParams();
   if (route !== "my-work") params.set("view", route);
   if (workstreamId) params.set("workstream", workstreamId);
-  if (route === "secondary" && tool) params.set("tool", tool);
+  if ((route === "secondary" || route === "project") && tool) params.set("tool", tool);
   const query = params.toString();
   return query ? `/?${query}` : "/";
 }

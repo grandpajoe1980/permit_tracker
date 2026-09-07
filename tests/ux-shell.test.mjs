@@ -9,7 +9,8 @@ const styles = await readFile(new URL("../app/globals.css", import.meta.url), "u
 test("PATH shell keeps persistence health in the footer and removes sidebar noise", () => {
   assert.doesNotMatch(page, /Supabase DB/);
   assert.doesNotMatch(page, /Official filing notice/);
-  assert.match(page, /!activePersona\.isCustomer && <p[^>]*>Secondary tools/);
+  assert.doesNotMatch(page, /Secondary tools/);
+  assert.match(page, /aria-label="Project context"/);
   assert.doesNotMatch(footer, /Supabase Authoritative Persistence/);
   assert.match(footer, /Environment:/);
   assert.match(footer, /Operational data status is shown in the workspace/);

@@ -31,7 +31,7 @@ export interface CatalogAuditScanResult {
     resourceName: string;
     responsibleAgency: string;
     daysSinceVerified: number;
-    url: string;
+    url?: string;
   }>;
 }
 
@@ -127,7 +127,7 @@ export function run180DayCatalogVerificationScan(referenceDate?: string): Catalo
       title: `⚠️ Stale Statutory Resource Link: ${stale.permitCode}`,
       message: `${stale.resourceName} has not been re-verified in ${stale.daysSinceVerification} days (exceeds 180-day audit threshold).`,
       type: "system",
-      linkUrl: stale.url,
+      ...(stale.url ? { linkUrl: stale.url } : {}),
       urgency: "high",
       metadata: {
         permitCode: stale.permitCode,

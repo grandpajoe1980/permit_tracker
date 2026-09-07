@@ -140,6 +140,13 @@ export interface AssignmentGroupMembershipRecord {
   updatedAt?: string;
 }
 
+export type RequirementResourceClassification =
+  | "official_resource"
+  | "internal_demo_guide"
+  | "unavailable"
+  | "file_download"
+  | "unclassified";
+
 // ==========================================
 // STATUTORY CLOCK & PRIORITY MATRIX MODELS
 // ==========================================
@@ -318,6 +325,7 @@ export interface RequirementResourceRecord {
   verifiedBy: string;
   instructions?: string;
   sourceAuthority?: string;
+  resourceClassification?: RequirementResourceClassification;
   isStale: boolean; // Flagged if verifiedAt > 180 days ago
 }
 
@@ -541,6 +549,8 @@ export interface CoordinationRequestRecord {
   status: CoordinationRequestStatus;
   responseSummary?: string;
   concurredAt?: string;
+  /** Number of configured requesting-team recipients notified by the response transaction. */
+  responseNotificationRecipientCount?: number;
 }
 
 export interface RFIRecord {

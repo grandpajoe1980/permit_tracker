@@ -95,10 +95,14 @@ async function seed() {
         permit_type_id: permit.id,
         resource_name: res.resourceName,
         resource_type: res.resourceType,
-        url: res.url,
+        url: res.url ?? null,
         version_tag: res.versionTag,
-        verified_at: res.verifiedAt,
-        verified_by: res.verifiedBy,
+        effective_date: res.effectiveDate ?? null,
+        verified_at: res.verifiedAt ?? null,
+        verified_by: res.verifiedBy ?? null,
+        instructions: res.instructions ?? null,
+        source_authority: res.sourceAuthority ?? null,
+        resource_classification: res.resourceClassification ?? "unclassified",
         is_stale: Boolean(res.isStale),
       });
       if (rErr) console.warn("Resource upsert notice:", rErr.message);

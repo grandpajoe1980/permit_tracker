@@ -11,9 +11,9 @@ export interface FlaggedStaleResource {
   resourceId: string;
   resourceName: string;
   resourceType: string;
-  url: string;
-  verifiedAt: string;
-  verifiedBy: string;
+  url?: string;
+  verifiedAt?: string;
+  verifiedBy?: string;
   daysSinceVerification: number;
   thresholdDays: number;
 }

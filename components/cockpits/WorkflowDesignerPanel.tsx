@@ -355,10 +355,10 @@ export function WorkflowDesignerPanel({ catalog: catalogProp, organizations: org
                           <span className="font-medium text-slate-900">{res.resourceName}</span>
                         </div>
                         <div className="flex items-center gap-2 text-slate-500 text-[11px]">
-                          <span>Verified by {res.verifiedBy} ({res.verifiedAt})</span>
-                          <a href={res.url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline flex items-center gap-0.5">
+                          <span>{res.verifiedBy && res.verifiedAt ? `Verified by ${res.verifiedBy} (${res.verifiedAt})` : "Verification record incomplete"}</span>
+                          {res.url ? <a href={res.url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline flex items-center gap-0.5">
                             Open <ExternalLink className="size-3" />
-                          </a>
+                          </a> : <span className="font-semibold text-slate-500">No link configured</span>}
                         </div>
                       </div>
                     ))}
