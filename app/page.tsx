@@ -862,6 +862,7 @@ export default function Home() {
     setExternalReference("");
     setExternalRecordUrl("");
     setRequestCenterMode("menu");
+    navigate("customer-home");
     setToast(`${request.confirmationNumber} submitted. The State Project Office triage queue was notified.`);
     setMutationVersion((value) => value + 1);
   }
