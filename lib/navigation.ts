@@ -40,7 +40,7 @@ export const NAVIGATION_DEFINITIONS: NavigationDefinition[] = [
   { id: "project", label: "Project Overview", scope: "project", audiences: ["customer", "staff", "supervisor", "admin"] },
   { id: "schedule", label: "Schedule", scope: "schedule", audiences: ["customer", "staff", "supervisor", "admin"] },
   { id: "notifications", label: "Notifications", scope: "system", audiences: ["customer", "staff", "supervisor", "admin"] },
-  { id: "requests", label: "Submit a Request", scope: "record", audiences: ["customer"] },
+  { id: "requests", label: "My requests", scope: "record", audiences: ["customer"] },
   { id: "intake", label: "Customer Intake Queue", scope: "queue", audiences: ["staff", "supervisor", "admin"] },
   { id: "contacts", label: "Contacts & Help", scope: "support", audiences: ["customer"] },
   { id: "help", label: "Contacts & Help", scope: "support", audiences: ["customer"] },
