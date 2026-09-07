@@ -1185,14 +1185,6 @@ export async function mutateEscalateWorkstream(params: {
       newValue: `Escalation ${nextLevel}: ${params.problemType}`,
       reason: params.problemType,
     }),
-    insertNotification({
-      userId: "maya.chen@spacex.com",
-      title: `Help requested on ${params.workstreamCode}`,
-      message: `${params.actorName} requested ${params.problemType}.`,
-      type: "escalation",
-      linkUrl: `/workstreams/${params.workstreamCode}`,
-      urgency: "high",
-    }),
   ]);
 
   const sideEffectError = sideEffects.find((result) => result.error)?.error;
