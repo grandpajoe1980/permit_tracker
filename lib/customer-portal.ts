@@ -247,11 +247,31 @@ export function getProjectOverview(project: ProjectRecord, workstreams: Workstre
     nextMilestone: next ? { title: next.nextExpectedEvent, date: next.forecastTargetDate, owner: next.regulatoryLead.orgName } : { title: "Project closeout", date: project.currentForecastLaunchDate, owner: project.leadStateAgencyCode },
     scheduleDrivers: critical.slice(0, 3).map((workstream) => `${workstream.title} · ${workstream.scheduleVarianceDays > 0 ? `${workstream.scheduleVarianceDays} days variance` : "critical path"}`),
     customerActions: [
-      { label: "Requests needing your response", detail: "RFIs and customer submissions", count: customerRequests.filter((request) => request.status === "submitted" || request.status === "triage" || request.status === "in_progress").length },
+      {
+        label: "Requests needing your response",
+        detail: "RFIs and customer submissions awaiting response",
+        count: customerRequests.filter((request) => request.status === "pending_customer" || request.status === "draft" || request.itsmState === "pending_customer").length
+          + project.workstreams.flatMap((ws) => ws.rfis ?? []).filter((r) => !["accepted", "closed", "rejected", "withdrawn"].includes(r.status) && (!r.responses || !r.responses.some((resp) => !resp.reviewDecision))).length,
+      },
       { label: "External filings being tracked", detail: "Manual status updates from agency systems", count: filingsInProgress },
       { label: "Documents requested", detail: "Supporting versions and receipts", count: project.documents.reduce((count, document) => count + document.versions.length, 0) },
     ],
-    governmentActions: active.slice(0, 6).map((workstream) => ({ id: workstream.id, title: workstream.title, agency: workstream.regulatoryLead.orgName, stage: workstream.currentStageName ?? workstream.operationalStateLabel, targetDate: workstream.forecastTargetDate, customerAction: workstream.customerActionRequired })),
+    governmentActions: active.slice(0, 6).map((workstream) => {
+      const activeRfi = (workstream.rfis ?? []).find((r) => !["accepted", "closed", "rejected", "withdrawn"].includes(r.status) && (!r.responses || !r.responses.some((resp) => !resp.reviewDecision)));
+      const customerAction = activeRfi
+        ? `Submit response for ${activeRfi.code}`
+        : workstream.operationalState === "waiting_applicant" && workstream.waitingReason
+        ? workstream.waitingReason
+        : "No customer action required — with reviewing agency";
+      return {
+        id: workstream.id,
+        title: workstream.title,
+        agency: workstream.regulatoryLead.orgName,
+        stage: workstream.currentStageName ?? workstream.operationalStateLabel,
+        targetDate: workstream.forecastTargetDate,
+        customerAction,
+      };
+    }),
     blockers: blockers.slice(0, 5).map((workstream) => ({ title: workstream.waitingReason ?? workstream.currentActionSummary, owner: workstream.waitingOnEntity ?? workstream.regulatoryLead.orgName, impact: workstream.isCriticalPath ? "Critical path impact" : `${workstream.scheduleVarianceDays} day schedule variance`, expectedResolution: workstream.nextExpectedEvent })),
     upcomingEvents: project.meetings.map((meeting) => ({ title: meeting.title, date: meeting.meetingDate, type: "Meeting", detail: meeting.locationOrLink })).concat(project.decisions.map((decision) => ({ title: decision.title, date: decision.decisionDate, type: "Decision", detail: decision.decisionSummary }))).slice(0, 8),
   };

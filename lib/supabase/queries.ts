@@ -81,15 +81,29 @@ export async function fetchWorkstreams(projectId: string): Promise<WorkstreamRec
     return [];
   }
   const workstreamIds = wsRes.data.map((row) => String(row.id));
-  const taskRes = workstreamIds.length
-    ? await client.from("tasks").select("*").in("workstream_id", workstreamIds).order("task_code", { ascending: true })
-    : { data: [], error: null };
+  const [taskRes, rfiRes, respRes] = await Promise.all([
+    workstreamIds.length
+      ? client.from("tasks").select("*").in("workstream_id", workstreamIds).order("task_code", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    workstreamIds.length
+      ? client.from("rfis").select("*").in("workstream_id", workstreamIds).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+    client.from("rfi_responses").select("*").order("submitted_date", { ascending: true }),
+  ]);
   if (taskRes.error) recordQueryFailure("fetch tasks", taskRes.error);
+  if (rfiRes.error) recordQueryFailure("fetch rfis", rfiRes.error);
+  if (respRes.error) recordQueryFailure("fetch rfi responses", respRes.error);
+
   const tasks = (taskRes.data ?? []).map(taskRowToDomain);
+  const responses = (respRes.data ?? []).map(rfiResponseRowToDomain);
+  const rfis = (rfiRes.data ?? []).map((row) =>
+    rfiRowToDomain(row, responses.filter((response) => response.rfiId === row.id || response.rfiId === row.code))
+  );
+
   return wsRes.data.map((row) => {
-    const ws = workstreamRowToDomain(row);
-    ws.tasks = tasks.filter((task) => task.workstreamId === ws.id || task.workstreamId === ws.code);
-    return ws;
+    const wsTasks = tasks.filter((task) => task.workstreamId === String(row.id) || task.workstreamId === String(row.code));
+    const wsRfis = rfis.filter((rfi) => rfi.workstreamId === String(row.id) || rfi.workstreamId === String(row.code));
+    return workstreamRowToDomain(row, { tasks: wsTasks, rfis: wsRfis });
   });
 }
 

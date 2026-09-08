@@ -171,12 +171,15 @@ export function buildWorkflowJourney(source: WorkflowJourneySource, templates: W
 
   const currentStages = stages.filter((stage) => ["current", "waiting", "blocked"].includes(stage.state));
   const completedCount = stages.filter((stage) => ["completed", "waived"].includes(stage.state)).length;
+  const hasStageRuns = Boolean(source.stageRuns && source.stageRuns.length > 0);
   const current = currentStages[0];
   const summary = current
     ? `${current.customerLabel} · ${current.sequence} of ${stages.length}`
-    : stages.length > 0
-      ? `${completedCount} of ${stages.length} steps recorded`
-      : "Workflow steps are not available";
+    : isTerminal && !hasStageRuns
+      ? "Step history not recorded"
+      : stages.length > 0
+        ? `${completedCount} of ${stages.length} steps recorded`
+        : "Workflow steps are not available";
 
   return {
     stages,

@@ -1029,6 +1029,12 @@ export function mapCustomerRequestStatusToITSMState(status: string): ITSMState {
       return "triaged";
     case "in_progress":
       return "in_progress";
+    case "pending_customer":
+      return "pending_customer";
+    case "pending_agency":
+      return "pending_agency";
+    case "blocked":
+      return "blocked";
     case "resolved":
       return "resolved";
     case "closed":
@@ -1037,3 +1043,40 @@ export function mapCustomerRequestStatusToITSMState(status: string): ITSMState {
       return "submitted";
   }
 }
+
+export interface OperationalRecordProjection {
+  id: string;
+  kind: "workflow" | "task" | "rfi" | "coordination" | "document" | "commitment" | "determination" | "customer_request";
+  code?: string;
+  title: string;
+  projectId?: string;
+  projectName: string;
+  parentWorkstreamId?: string;
+  parentWorkstreamTitle?: string;
+  submitterId?: string;
+  submitterName?: string;
+  submitterEmail?: string;
+  assignedUserId?: string;
+  assigneeName: string;
+  assigneeEmail?: string;
+  assignmentGroupId?: string;
+  assignmentGroupName?: string;
+  owningAgencyCode?: string;
+  owningAgencyName?: string;
+  lifecycleState: ITSMState;
+  rawStatus: string;
+  health: RAGHealth;
+  clockState: ClockStatus;
+  waitingParty?: string;
+  waitingReason?: string;
+  currentStep?: string;
+  nextAction: string;
+  nextActionDisabledReason?: string;
+  relatedRfiIds: string[];
+  relatedResponseIds: string[];
+  relatedDocumentIds: string[];
+  relatedDependencyIds: string[];
+  customerSafeSummary: string;
+  updatedAt?: string;
+}
+

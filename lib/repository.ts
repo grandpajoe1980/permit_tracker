@@ -232,14 +232,18 @@ class ProjectDeliveryRepository {
 
       const keepFixtures = allowsFixtureData();
       const groupById = new Map(groups.map((group) => [group.id, group]));
-      const enrichedWorkstreams = ws.map((workstream) => ({
-        ...workstream,
-        assignmentGroupName: workstream.assignmentGroupName ?? (workstream.assignmentGroupId ? groupById.get(workstream.assignmentGroupId)?.name : undefined),
-        tasks: workstream.tasks.map((task) => ({
-          ...task,
-          assignmentGroupName: task.assignmentGroupName ?? (task.assignmentGroupId ? groupById.get(task.assignmentGroupId)?.name : undefined),
-        })),
-      }));
+      const enrichedWorkstreams = ws.map((workstream) => {
+        const linkedRfis = rfisList.filter((r) => r.workstreamId === workstream.id || r.workstreamId === workstream.code);
+        return {
+          ...workstream,
+          assignmentGroupName: workstream.assignmentGroupName ?? (workstream.assignmentGroupId ? groupById.get(workstream.assignmentGroupId)?.name : undefined),
+          tasks: workstream.tasks.map((task) => ({
+            ...task,
+            assignmentGroupName: task.assignmentGroupName ?? (task.assignmentGroupId ? groupById.get(task.assignmentGroupId)?.name : undefined),
+          })),
+          rfis: workstream.rfis.length > 0 ? workstream.rfis : linkedRfis,
+        };
+      });
       const enrichedCustomerRequests = custReqs.map((request) => ({
         ...request,
         assignmentGroupName: request.assignmentGroupName ?? (request.assignmentGroupId ? groupById.get(request.assignmentGroupId)?.name : undefined),

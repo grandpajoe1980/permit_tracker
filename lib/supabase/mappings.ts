@@ -156,7 +156,15 @@ export function workflowStageRowToDomain(row: Row): WorkflowStageRecord {
 // 1. WORKSTREAMS
 // ====================================================================
 
-export function workstreamRowToDomain(row: Row): WorkstreamRecord {
+export function workstreamRowToDomain(
+  row: Row,
+  options?: {
+    tasks?: TaskRecord[];
+    rfis?: RFIRecord[];
+    commitments?: CommitmentRecord[];
+    coordinationRequests?: CoordinationRequestRecord[];
+  }
+): WorkstreamRecord {
   const concierge = obj<{ name?: string; title?: string; agency?: string; email?: string; phone?: string }>(row.state_concierge, {});
   const lead = obj<{ orgCode?: string; orgName?: string; jurisdictionLevel?: string; assignedReviewerName?: string; assignedReviewerEmail?: string }>(row.regulatory_lead, {});
   const sixQ = obj<{ currentActionSummary?: string; nextExpectedEvent?: string; customerActionRequired?: string; primaryDelayReason?: string }>(row.six_questions, {});
@@ -225,10 +233,10 @@ export function workstreamRowToDomain(row: Row): WorkstreamRecord {
     clockPausedAt: str(row.clock_paused_at) || undefined,
     clockTotalPausedSeconds: num(row.clock_total_paused_seconds, 0),
 
-    tasks: [],
-    commitments: [],
-    coordinationRequests: [],
-    rfis: [],
+    tasks: options?.tasks ?? [],
+    commitments: options?.commitments ?? [],
+    coordinationRequests: options?.coordinationRequests ?? [],
+    rfis: options?.rfis ?? [],
   };
 }
 
