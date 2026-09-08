@@ -106,6 +106,7 @@ import {
   mutateSetTicketPriority,
   mutateSubmitRFIResponse,
   mutateRequestCustomerIntakeClarification,
+  mutateRespondToCustomerIntakeClarification,
   mutateTriageCustomerRequest,
   mutateTransferWorkstream,
   mutateUpdateExternalFiling,
@@ -917,6 +918,57 @@ class ProjectDeliveryRepository {
     return { data: this.customerRequests.find((entry) => entry.id === params.requestId) ?? result.data, error: null };
   }
 
+  respondToCustomerIntakeClarification(params: {
+    requestId: string;
+    responseText: string;
+    actorName: string;
+    attachmentDocumentVersionIds?: string[];
+  }): CustomerRequestRecord | null {
+    const request = this.customerRequests.find((entry) => entry.id === params.requestId);
+    if (!request) return null;
+
+    request.status = "submitted";
+    request.itsmState = "submitted";
+    request.description = `${request.description}\n\n[Clarification from ${params.actorName}]: ${params.responseText}`;
+    if (params.attachmentDocumentVersionIds?.length) {
+      request.attachmentDocumentVersionIds = Array.from(
+        new Set([...(request.attachmentDocumentVersionIds ?? []), ...params.attachmentDocumentVersionIds])
+      );
+    }
+    request.updatedAt = new Date().toISOString();
+
+    this.auditEvents.unshift(
+      createAuditEvent({
+        entityType: "customer_request",
+        entityId: request.id,
+        actorName: params.actorName,
+        actorOrgName: "SPACEX",
+        actionType: "customer_intake_clarification_submitted",
+        oldValue: "pending_customer",
+        newValue: "submitted",
+        reason: params.responseText,
+      })
+    );
+
+    return request;
+  }
+
+  async respondToCustomerIntakeClarificationPersisted(params: {
+    requestId: string;
+    responseText: string;
+    actorName: string;
+    attachmentDocumentVersionIds?: string[];
+  }): Promise<{ data: CustomerRequestRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      return { data: this.respondToCustomerIntakeClarification(params), error: null };
+    }
+    const result = await mutateRespondToCustomerIntakeClarification(params);
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Clarification response could not be saved.") };
+    await this.hydrateFromSupabase();
+    return { data: this.customerRequests.find((r) => r.id === params.requestId) ?? result.data, error: null };
+  }
+
   async linkCustomerRequestToWorkstreamPersisted(params: {
     requestId: string;
     workstreamId: string;
@@ -1107,11 +1159,27 @@ class ProjectDeliveryRepository {
     clockImpact?: RFIRecord["clockImpact"];
     scheduleImpactDays?: number;
     actorName: string;
+    id?: string;
+    code?: string;
   }): RFIRecord {
+    const ws = this.getWorkstreamById(params.workstreamId);
+    if (params.id) {
+      const existing = this.rfis.find((r) => r.id === params.id || (params.code && r.code === params.code));
+      if (existing) return existing;
+    }
+    const duplicate = this.rfis.find(
+      (r) =>
+        (r.workstreamId === params.workstreamId || (ws && (r.workstreamId === ws.id || r.workstreamId === ws.code))) &&
+        r.title === params.title &&
+        r.questionText === params.questionText &&
+        r.status === "issued"
+    );
+    if (duplicate) return duplicate;
+
     const count = this.rfis.length + 43;
-    const code = `RFI-2026-${String(count).padStart(4, "0")}`;
+    const code = params.code ?? `RFI-2026-${String(count).padStart(4, "0")}`;
     const newRfi: RFIRecord = {
-      id: `rfi-${Date.now()}`,
+      id: params.id ?? `rfi-${Date.now()}-${count}-${Math.random().toString(36).slice(2, 7)}`,
       code,
       workstreamId: params.workstreamId,
       workstreamTitle: params.workstreamTitle,
@@ -1132,7 +1200,6 @@ class ProjectDeliveryRepository {
     };
     this.rfis.unshift(newRfi);
 
-    const ws = this.getWorkstreamById(params.workstreamId);
     if (ws) {
       ws.operationalState = "waiting_applicant";
       ws.operationalStateLabel = "Waiting on Applicant (RFI Issued)";
@@ -1168,17 +1235,35 @@ class ProjectDeliveryRepository {
     clockImpact?: RFIRecord["clockImpact"];
     scheduleImpactDays?: number;
     actorName: string;
+    id?: string;
+    code?: string;
   }): Promise<{ data: RFIRecord | null; error: Error | null }> {
+    const workstream = this.getWorkstreamById(params.workstreamId);
+    if (!workstream) return { data: null, error: new Error("Workstream not found. Workstream RFI requires a valid resolved workstream.") };
+
+    if (params.id) {
+      const existing = this.rfis.find((r) => r.id === params.id || (params.code && r.code === params.code));
+      if (existing) return { data: existing, error: null };
+    }
+    const duplicate = this.rfis.find(
+      (r) =>
+        (r.workstreamId === workstream.id || r.workstreamId === workstream.code) &&
+        r.title === params.title &&
+        r.questionText === params.questionText &&
+        r.status === "issued"
+    );
+    if (duplicate) return { data: duplicate, error: null };
+
     if (!isSupabaseConfigured()) {
       if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
       return { data: this.createRFI(params), error: null };
     }
-    const workstream = this.getWorkstreamById(params.workstreamId);
-    if (!workstream) return { data: null, error: new Error("Workstream not found.") };
+    const rfiId = params.id ?? `rfi-${crypto.randomUUID()}`;
+    const rfiCode = params.code ?? `RFI-${new Date().getUTCFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     const result = await mutateCreateRFI({
       ...params,
-      id: `rfi-${crypto.randomUUID()}`,
-      code: `RFI-${new Date().getUTCFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+      id: rfiId,
+      code: rfiCode,
       workstreamId: workstream.id,
     });
     if (result.error || !result.data) return { data: null, error: result.error ?? new Error("RFI creation was not confirmed by the database.") };
@@ -1657,10 +1742,24 @@ class ProjectDeliveryRepository {
 
     const ws = this.getWorkstreamById(rfi.workstreamId);
     if (ws) {
-      ws.operationalState = "running";
-      ws.operationalStateLabel = "Running (Response Accepted)";
-      ws.waitingReason = undefined;
-      ws.waitingOnEntity = undefined;
+      const otherUnacceptedRfis = this.rfis.filter(
+        (entry) =>
+          (entry.workstreamId === ws.id || entry.workstreamId === ws.code) &&
+          entry.id !== rfi.id &&
+          !["accepted", "closed", "rejected", "withdrawn"].includes(entry.status)
+      );
+      if (otherUnacceptedRfis.length > 0) {
+        const nextWaiting = otherUnacceptedRfis[0];
+        ws.operationalState = "waiting_applicant";
+        ws.operationalStateLabel = "Waiting on Applicant (RFI Outstanding)";
+        ws.waitingReason = `Waiting for response to ${nextWaiting.code}.`;
+        ws.waitingOnEntity = nextWaiting.recipientOrgCode;
+      } else if (ws.operationalState === "waiting_applicant" || ws.waitingReason?.includes(rfi.code)) {
+        ws.operationalState = "running";
+        ws.operationalStateLabel = "Running (Response Accepted)";
+        ws.waitingReason = undefined;
+        ws.waitingOnEntity = undefined;
+      }
     }
 
     this.auditEvents.unshift(createAuditEvent({

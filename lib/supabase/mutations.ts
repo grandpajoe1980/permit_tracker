@@ -1896,3 +1896,51 @@ export async function mutateManageAssignmentGroupMembership(params: {
 
   return { data: record, error: null };
 }
+
+export async function mutateRespondToCustomerIntakeClarification(params: {
+  requestId: string;
+  responseText: string;
+  actorName: string;
+  attachmentDocumentVersionIds?: string[];
+}): Promise<MutationResult<CustomerRequestRecord>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+
+  const { data: existing, error: fetchErr } = await client
+    .from("customer_requests")
+    .select("*")
+    .eq("id", params.requestId)
+    .single();
+
+  if (fetchErr || !existing) {
+    return { data: null, error: fetchErr ?? new Error("Customer request not found") };
+  }
+
+  const newDescription = `${existing.description || ""}\n\n[Clarification from ${params.actorName}]: ${params.responseText}`;
+  const existingAttachments = Array.isArray(existing.attachment_document_version_ids)
+    ? existing.attachment_document_version_ids
+    : [];
+  const mergedAttachments = Array.from(
+    new Set([...existingAttachments, ...(params.attachmentDocumentVersionIds ?? [])])
+  );
+
+  const { data: updated, error: updateErr } = await client
+    .from("customer_requests")
+    .update({
+      status: "submitted",
+      itsm_state: "submitted",
+      description: newDescription,
+      attachment_document_version_ids: mergedAttachments,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", params.requestId)
+    .select()
+    .single();
+
+  if (updateErr || !updated) {
+    return { data: null, error: updateErr ?? new Error("Failed to update customer request") };
+  }
+
+  return { data: customerRequestRowToDomain(updated), error: null };
+}
+

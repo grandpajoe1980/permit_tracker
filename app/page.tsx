@@ -1738,6 +1738,24 @@ export default function Home() {
     }
 
     if (dialog.action === "request_clarification") {
+      if (item.kind === "customer_request") {
+        if (!questionText.trim()) {
+          setDialogError("Explain what clarification is needed before proceeding.");
+          return;
+        }
+        const clarifyRes = await repository.requestCustomerIntakeClarificationPersisted({
+          requestId: item.sourceId,
+          notes: questionText.trim(),
+        });
+        if (clarifyRes.error || !clarifyRes.data) {
+          setDialogError(clarifyRes.error?.message ?? "Clarification request could not be saved.");
+          return;
+        }
+        notify(`Clarification requested from ${item.submittedByName || "applicant"}.`);
+        closeDialog();
+        return;
+      }
+
       if (!item.sourceRfi || !questionText.trim()) {
         setDialogError("Tell SpaceX what needs clarification.");
         return;
@@ -1764,6 +1782,25 @@ export default function Home() {
     }
 
     if (dialog.action === "respond") {
+      if (item.kind === "customer_request") {
+        if (!actionNote.trim()) {
+          setDialogError("Add the response before submitting.");
+          return;
+        }
+        const respRes = await repository.respondToCustomerIntakeClarificationPersisted({
+          requestId: item.sourceId,
+          responseText: actionNote.trim(),
+          actorName,
+        });
+        if (respRes.error || !respRes.data) {
+          setDialogError(respRes.error?.message ?? "Clarification response could not be submitted.");
+          return;
+        }
+        notify("Clarification response submitted to project office.");
+        closeDialog();
+        return;
+      }
+
       if (!item.sourceRfi || !actionNote.trim()) {
         setDialogError("Add the response before submitting.");
         return;
