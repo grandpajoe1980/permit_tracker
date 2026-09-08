@@ -723,16 +723,53 @@ export function groupMyWork(items: OperationalWorkItem[]): QueueGroup[] {
     const isTerminal = isTerminalWorkItem(item);
     const isActionable = !isTerminal && requiresCurrentUserAction(item);
     const isWaiting = !isTerminal && !isActionable && (Boolean(item.waitingOn) || Boolean(item.waitLabel));
-    const relation = dateRelation(item.dueDate);
     const bucket: QueueSectionId = isTerminal
       ? "recently_completed"
+      : isActionable
+      ? "needs_action"
       : isWaiting
       ? "waiting"
-      : relation === "overdue" || relation === "today" || isActionable
-      ? "needs_action"
       : "due_soon";
     assigned.get(bucket)?.push(item);
   }
+  return sections.map(([id, label, description]) => ({ id, label, description, items: assigned.get(id) ?? [] }));
+}
+
+export type TeamWorkSectionId = "unassigned" | "assigned" | "waiting" | "completed";
+
+export type TeamWorkGroup = {
+  id: TeamWorkSectionId;
+  label: string;
+  description: string;
+  items: OperationalWorkItem[];
+};
+
+export function groupTeamWork(items: OperationalWorkItem[]): TeamWorkGroup[] {
+  const sections: Array<[TeamWorkSectionId, string, string]> = [
+    ["unassigned", "Unassigned", "Work waiting for a team member to take ownership."],
+    ["assigned", "Assigned", "Work actively owned by a team member."],
+    ["waiting", "Waiting", "Work waiting on applicant or another agency."],
+    ["completed", "Completed", "Work recently finished by the team."],
+  ];
+  const assigned = new Map<TeamWorkSectionId, OperationalWorkItem[]>();
+  for (const [id] of sections) assigned.set(id, []);
+
+  for (const item of items) {
+    const isTerminal = isTerminalWorkItem(item);
+    const hasAssignee = Boolean(item.assignedUserId);
+    const isWaiting = !isTerminal && (Boolean(item.waitingOn) || Boolean(item.waitLabel));
+
+    const bucket: TeamWorkSectionId = isTerminal
+      ? "completed"
+      : !hasAssignee
+      ? "unassigned"
+      : isWaiting
+      ? "waiting"
+      : "assigned";
+
+    assigned.get(bucket)?.push(item);
+  }
+
   return sections.map(([id, label, description]) => ({ id, label, description, items: assigned.get(id) ?? [] }));
 }
 

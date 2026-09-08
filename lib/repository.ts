@@ -2297,6 +2297,47 @@ class ProjectDeliveryRepository {
     return this.assignTicket({ ticketType, ticketId, assignedToUserId, actorName, reason });
   }
 
+  claimTicket(options: {
+    ticketType: "workstream" | "customer_request" | "task";
+    ticketId: string;
+    expectedPreviousUserId?: string | null;
+    userId: string;
+    actorName?: string;
+  }): { success: boolean; conflict?: boolean; error?: Error; ticket: MutableTicket | null } {
+    const ticket = this.findTicket(options.ticketType, options.ticketId);
+    if (!ticket) {
+      return { success: false, error: new Error("Ticket not found."), ticket: null };
+    }
+
+    if (options.expectedPreviousUserId !== undefined) {
+      const current = ticket.assignedToUserId ?? null;
+      if (current !== options.expectedPreviousUserId) {
+        return {
+          success: false,
+          conflict: true,
+          error: new Error(`Claim conflict: item is already assigned to ${ticket.assignedToUserName || current}.`),
+          ticket,
+        };
+      }
+    } else if (ticket.assignedToUserId && ticket.assignedToUserId !== options.userId) {
+      return {
+        success: false,
+        conflict: true,
+        error: new Error(`Claim conflict: item is already assigned to ${ticket.assignedToUserName || ticket.assignedToUserId}.`),
+        ticket,
+      };
+    }
+
+    const res = this.assignTicket({
+      ticketType: options.ticketType,
+      ticketId: options.ticketId,
+      assignedToUserId: options.userId,
+      actorName: options.actorName,
+      reason: "Claimed ownership (Take ownership)",
+    });
+    return { success: res.success, ticket: res.ticket };
+  }
+
   updateTicketITSMState(options: {
     ticketType: "workstream" | "customer_request" | "task";
     ticketId: string;
@@ -2522,6 +2563,45 @@ class ProjectDeliveryRepository {
     return memoryResult.success
       ? { data: memoryResult.ticket, error: null }
       : { data: null, error: new Error("Ticket not found") };
+  }
+
+  async claimTicketPersisted(options: {
+    ticketType: "workstream" | "customer_request" | "task";
+    ticketId: string;
+    expectedPreviousUserId?: string | null;
+    userId: string;
+    actorName?: string;
+  }): Promise<{ success: boolean; conflict?: boolean; error: Error | null; ticket: MutableTicket | null }> {
+    const ticket = this.findTicket(options.ticketType, options.ticketId);
+    if (!ticket) return { success: false, error: new Error("Ticket not found."), ticket: null };
+
+    if (options.expectedPreviousUserId !== undefined) {
+      const current = ticket.assignedToUserId ?? null;
+      if (current !== options.expectedPreviousUserId) {
+        return {
+          success: false,
+          conflict: true,
+          error: new Error(`Claim conflict: item is already assigned to ${ticket.assignedToUserName || current}.`),
+          ticket,
+        };
+      }
+    } else if (ticket.assignedToUserId && ticket.assignedToUserId !== options.userId) {
+      return {
+        success: false,
+        conflict: true,
+        error: new Error(`Claim conflict: item is already assigned to ${ticket.assignedToUserName || ticket.assignedToUserId}.`),
+        ticket,
+      };
+    }
+
+    const res = await this.assignTicketPersisted({
+      ticketType: options.ticketType,
+      ticketId: options.ticketId,
+      assignedToUserId: options.userId,
+      actorName: options.actorName,
+      reason: "Claimed ownership (Take ownership)",
+    });
+    return { success: !res.error, error: res.error, ticket: this.findTicket(options.ticketType, options.ticketId) };
   }
 
   async updateTicketITSMStatePersisted(options: {

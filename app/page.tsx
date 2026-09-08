@@ -130,6 +130,9 @@ import { GovernmentServices } from "@/components/path/customer/GovernmentService
 import { CustomerRequestList } from "@/components/path/customer/CustomerRequestList";
 import { SubmitRequestLauncher, type CustomerRequestIntent } from "@/components/path/customer/SubmitRequestLauncher";
 import { WorkItemPage } from "@/components/path/work/WorkItemPage";
+import { AppShell } from "@/components/path/AppShell";
+import { WorkInboxView } from "@/components/path/work/WorkInboxView";
+import { TeamWorkView } from "@/components/path/work/TeamWorkView";
 import { TriageRoutingDialog, type TriageRoutingGroupOption, type TriageRoutingOrganizationOption, type TriageRoutingRow } from "@/components/path/intake/TriageRoutingDialog";
 import { buildShellPath, buildWorkItemPath, NAVIGATION_DEFINITIONS, parseShellPath, parseWorkItemPath, type AppRoute } from "@/lib/navigation";
 import {
@@ -1859,7 +1862,12 @@ export default function Home() {
   const unreadNotificationCount = repository.getNotifications().filter((notification) => !notification.isRead).length;
   const primaryNav: Array<{ id: Route; label: string; icon: ReactNode; count?: number }> = activePersona.isCustomer
     ? [{ id: "customer-home", label: navigationLabel("customer-home", "Home"), icon: <LayoutList className="size-4" /> }, { id: "my-work", label: "My actions", icon: <LayoutList className="size-4" />, count: actionableCount }, { id: "requests", label: navigationLabel("requests", "My requests"), icon: <FilePlus2 className="size-4" /> }, { id: "project", label: navigationLabel("project", "Project Overview"), icon: <Building2 className="size-4" /> }, { id: "catalog", label: navigationLabel("catalog", "Services & Permits"), icon: <Landmark className="size-4" /> }, { id: "documents", label: navigationLabel("documents", "Documents"), icon: <FileCheck2 className="size-4" /> }, { id: "schedule", label: navigationLabel("schedule", "Schedule"), icon: <CalendarClock className="size-4" /> }, { id: "help", label: navigationLabel("help", "Help & escalation"), icon: <ShieldAlert className="size-4" /> }, { id: "notifications", label: navigationLabel("notifications", "Notifications"), icon: <Bell className="size-4" />, count: unreadNotificationCount }]
-    : [{ id: "my-work", label: navigationLabel("my-work", "My Work"), icon: <LayoutList className="size-4" />, count: actionableCount }, { id: "agency-queue", label: activePersona.workspace === "supervisor" ? "Supervisor queue" : "My Team Work", icon: <Building2 className="size-4" /> }, { id: "rfis", label: navigationLabel("rfis", "Requests for Information"), icon: <HelpCircle className="size-4" /> }, { id: "coordination", label: navigationLabel("coordination", "Coordination Requests"), icon: <Users className="size-4" /> }, { id: "documents", label: navigationLabel("documents", "Documents to Review"), icon: <FileCheck2 className="size-4" /> }, { id: "project", label: navigationLabel("project", "Project Overview"), icon: <Route className="size-4" /> }, { id: "catalog", label: navigationLabel("catalog", "Services & Permits"), icon: <Landmark className="size-4" /> }, ...(canTriage ? [{ id: "intake" as Route, label: navigationLabel("intake", "Customer Intake Queue"), icon: <ClipboardCheck className="size-4" /> }] : []), { id: "notifications", label: navigationLabel("notifications", "Notifications"), icon: <Bell className="size-4" />, count: unreadNotificationCount }];
+    : [
+        { id: "my-work", label: navigationLabel("my-work", "My Work"), icon: <LayoutList className="size-4" />, count: actionableCount },
+        { id: "agency-queue", label: "Team Work", icon: <Building2 className="size-4" /> },
+        { id: "project", label: navigationLabel("project", "Projects"), icon: <Route className="size-4" /> },
+        { id: "catalog", label: navigationLabel("catalog", "Services & Permits"), icon: <Landmark className="size-4" /> },
+      ];
 
   function renderWorkCard(item: OperationalWorkItem) {
     const tone = toneClasses(item.statusTone);
@@ -1918,7 +1926,7 @@ export default function Home() {
         <p className="min-w-0 flex-1 text-xs text-slate-600"><strong className="text-slate-800">Removes from your queue:</strong> {item.removesFromQueue}</p>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
           <Button type="button" onClick={() => openItem(item)} className="w-full bg-[#00284d] text-xs font-bold hover:bg-[#003c70] sm:w-auto">
-            Open Work & Workflow <ArrowRight className="size-3.5" aria-hidden="true" />
+            Open <ArrowRight className="size-3.5" aria-hidden="true" />
           </Button>
           {compactActions.map((action) => {
             const isActionPermitted = isAdministrator(activePersona) || canUserPerformAction(item, action, activePersona);
@@ -1970,21 +1978,54 @@ export default function Home() {
           <p className="text-xs font-black uppercase text-teal-800">Workspace & Agency</p>
           <p className="mt-1 text-sm font-black text-teal-950">{workspaceTitle(activePersona.workspace)}</p>
           <p className="text-xs font-bold text-teal-800">{activePersona.agencyCode}</p>
-         </div>
+        </div>
       </div>
-      {renderQueueFilters()}
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6" aria-label="My Work summary">
-        {queueGroups.map((group) => <button key={group.id} type="button" onClick={() => document.getElementById(`queue-${group.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })} className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-teal-400 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{queueLabel(group)}</p><p className="mt-1 text-2xl font-black text-[#00284d]">{group.items.length}</p></button>)}
-      </div>
-      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-start gap-3"><Info className="mt-0.5 size-5 shrink-0 text-teal-700" aria-hidden="true" /><div><p className="font-black text-[#00284d]">Start here</p><p className="mt-1 text-sm text-slate-600">The queue is prioritized by critical-path impact, due date, blockers, and handoff readiness. Waiting items stay visible without looking like failed work.</p></div></div></section>
-      <div className="space-y-7">{queueGroups.map((group) => <section id={`queue-${group.id}`} key={group.id} className="scroll-mt-28"><div className="mb-3 flex flex-wrap items-baseline justify-between gap-2"><div><h2 className="text-lg font-black text-[#00284d]">{queueLabel(group)} <span className="ml-1 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{group.items.length}</span></h2><p className="mt-1 text-sm text-slate-500">{group.description}</p></div>{group.id === "needs_action" && <span className="text-xs font-bold uppercase tracking-wider text-teal-800">Priority order</span>}</div>{group.items.length > 0 ? <div className="space-y-3">{group.items.map(renderWorkCard)}</div> : <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">Nothing in this section right now.</div>}</section>)}</div>
+      <WorkInboxView
+        groups={queueGroups}
+        onOpenItem={openItem}
+        title="My Work"
+        subtitle={`Prioritized actions for ${activePersona.name}.`}
+      />
       {activePersona.isCustomer && <form onSubmit={handleIntakeSubmit} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start gap-3"><Sparkles className="mt-0.5 size-5 text-teal-700" aria-hidden="true" /><div className="flex-1"><h2 className="font-black text-[#00284d]">Ask the project office for something</h2><p className="mt-1 text-sm text-slate-600">Describe the need in plain language. PATH will suggest the lead agency and send it to the triage queue.</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><Input value={intakeText} onChange={(event) => setIntakeText(event.target.value)} placeholder="We need a heavy-haul route review for oversized trailers…" aria-label="Describe a project need" /><Button id="intake-submit-btn" type="submit" className="bg-[#00284d] font-bold">Submit request <Send className="size-4" aria-hidden="true" /></Button></div>{intakePreview && <p role="status" aria-live="polite" className="mt-3 rounded-lg bg-teal-50 p-3 text-sm font-bold text-teal-950">Suggested route: {intakePreview.categoryLabel} → {intakePreview.suggestedLeadAgency} · {intakePreview.priority.toUpperCase()}</p>}{intakeStatus && <p role="status" aria-live="polite" className="mt-2 text-sm font-bold text-teal-800">{intakeStatus}</p>}</div></div></form>}
     </div>;
   }
 
   function renderQueue(routeKind: Route) {
+    if (routeKind === "agency-queue") {
+      const assignmentGroups = repository.getAssignmentGroups().filter((g) => g.active).map((g) => ({
+        id: g.id,
+        name: g.name,
+      }));
+      return (
+        <TeamWorkView
+          items={activeQueueItems}
+          teamOptions={assignmentGroups}
+          selectedTeamId={queueAgencyFilter === "all" ? undefined : queueAgencyFilter}
+          onSelectTeam={(teamId) => setQueueAgencyFilter(teamId)}
+          onOpenItem={openItem}
+          onTakeOwnership={async (item) => {
+            const ticketType = item.kind === "customer_request" ? "customer_request" : item.kind === "task" ? "task" : "workstream";
+            const ticketId = item.sourceId || item.id;
+            const res = await repository.claimTicketPersisted({
+              ticketType,
+              ticketId,
+              expectedPreviousUserId: item.assignedUserId ?? null,
+              userId: actorUserId(),
+              actorName: activePersona.name,
+            });
+            if (res.conflict || res.error) {
+              setToast(res.error?.message || "Item was claimed by someone else.");
+            } else {
+              setToast(`Claimed ownership of ${item.title}.`);
+              setMutationVersion((v) => v + 1);
+            }
+          }}
+          canTakeOwnership={true}
+        />
+      );
+    }
     const filtered = routeKind === "rfis" ? activeQueueItems.filter((item) => item.kind === "rfi") : routeKind === "coordination" ? activeQueueItems.filter((item) => item.kind === "coordination") : routeKind === "documents" ? activeQueueItems.filter((item) => item.kind === "document") : activeQueueItems;
-    const title = routeKind === "rfis" ? "RFIs" : routeKind === "coordination" ? "Coordination Requests" : routeKind === "documents" ? "Documents to Review" : activePersona.workspace === "supervisor" ? "Supervisor Queue" : "My Agency Queue";
+    const title = routeKind === "rfis" ? "RFIs" : routeKind === "coordination" ? "Coordination Requests" : routeKind === "documents" ? "Documents to Review" : "Team Work";
     return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Operational queue</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">{title}</h1><p className="mt-2 text-sm text-slate-600">Every item below explains its owner, due date, and the next action available to you.</p></div>{renderQueueFilters()}{filtered.length > 0 ? <div className="space-y-3">{filtered.map(renderWorkCard)}</div> : <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">No items are currently routed to this queue.</div>}</div>;
   }
 
@@ -2310,5 +2351,35 @@ export default function Home() {
     return <>{hydrationError && <div role="alert" className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-950"><span className="flex-1">{hydrationError}</span><Button type="button" variant="outline" size="sm" onClick={() => void retryHydration()}>Retry</Button></div>}{content}{triageRequest && <TriageRoutingDialog request={triageRequest} initialRows={suggestedTriageRows(triageRequest)} organizations={triageOrganizations} assignmentGroups={triageGroups} workflowVersions={publishedTriageWorkflows} existingWorkstreams={triageExistingWorkstreams} busy={triageBusy} onCancel={() => setTriageRequest(null)} onConfirm={(rows) => void triageCustomerRequest(triageRequest, rows)} onRequestClarification={(notes) => void requestCustomerIntakeClarification(triageRequest, notes)} onLinkExisting={(workstreamId, notes) => void linkCustomerRequestToWorkstream(triageRequest, workstreamId, notes)} />}</>;
   }
 
-  return <div className="min-h-screen bg-[#f3f6f7] text-[#172033] flex flex-col justify-between"><a className="skip-link" href="#main-content">Skip to main content</a><div className="road-stripe" /><header className="site-header sticky top-0 z-30"><div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6"><Button type="button" variant="ghost" size="icon" onClick={() => setMobileNavOpen((value) => !value)} className="text-white hover:bg-white/10 lg:hidden" aria-label="Toggle navigation" aria-expanded={mobileNavOpen} aria-controls="mobile-navigation"><Menu className="size-5" /></Button><span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d] sm:size-9"><Zap className="size-5 fill-current" aria-hidden="true" /></span><div className="min-w-0"><p className="text-xs font-black text-white sm:text-sm">{PRODUCT_NAME}</p><button type="button" onClick={() => openProject()} className="block max-w-[42vw] truncate text-left text-[11px] font-semibold text-slate-300 hover:text-white hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 cursor-pointer sm:max-w-none" title="Go to project page">{workspaceTitle(activePersona.workspace)} · {PROGRAM_SUBTITLE}</button></div><div className="ml-auto hidden items-center gap-2 text-xs text-slate-200 md:flex"><span className="rounded-full border border-white/20 px-3 py-1.5">{activePersona.name}</span><span className="rounded-full border border-teal-300/40 bg-teal-900/40 px-3 py-1.5 font-bold text-teal-100">{activePersona.roleLabel}</span></div><Button type="button" variant="ghost" size="icon" onClick={() => navigate("notifications")} className="relative shrink-0 text-white hover:bg-white/10" aria-label="Open notifications"><Bell className="size-5" /><span className="absolute right-1 top-1 size-2 rounded-full bg-[#f4a100]" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => void signOut()} className="shrink-0 px-2 text-white hover:bg-white/10 sm:px-3" aria-label="Sign out"><LogOut className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Sign out</span></Button></div></header><div className="mx-auto flex max-w-[1600px] items-start flex-1 w-full"><aside id="mobile-navigation" ref={mobileNavRef} className={`${mobileNavOpen ? "block" : "hidden"} fixed inset-x-0 top-[calc(69px+0.45rem)] z-20 max-h-[calc(100vh-69px-0.45rem)] overflow-y-auto border-b border-slate-200 bg-white p-3 shadow-xl lg:sticky lg:top-[69px] lg:block lg:min-h-[calc(100vh-69px)] lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}><button type="button" onClick={() => openProject()} className="group mb-4 w-full rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-left transition hover:border-teal-400 hover:bg-teal-50 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 cursor-pointer" aria-label="Open project page" title="Open project page"><div className="flex items-center justify-between"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500 group-hover:text-teal-800">Current context</p><ArrowRight className="size-3 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-teal-700" aria-hidden="true" /></div><p className="mt-1 text-sm font-black text-[#00284d] group-hover:text-teal-950">{PROJECT_DISPLAY_NAME}</p><p className="mt-1 text-xs text-slate-500 group-hover:text-teal-900">Vermilion Parish · Louisiana</p></button><nav aria-label="Primary navigation" className="space-y-1"><p className="px-3 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Work</p>{primaryNav.map((item) => <button key={item.id} type="button" onClick={() => navigate(item.id)} aria-current={route === item.id ? "page" : undefined} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${route === item.id ? "bg-[#00284d] text-white shadow-sm" : "text-slate-700 hover:bg-teal-50 hover:text-teal-950"}`}>{item.icon}<span className="flex-1">{item.label}</span>{typeof item.count === "number" && <span className={`rounded-full px-2 py-0.5 text-[10px] ${route === item.id ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700"}`}>{item.count}</span>}</button>)}{canAdmin && <><p className="px-3 pb-1 pt-6 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Administration</p><button type="button" onClick={() => navigate("admin")} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${route === "admin" ? "bg-[#00284d] text-white" : "text-slate-700 hover:bg-teal-50"}`}><Settings2 className="size-4" />Administration</button></>}</nav></aside><main id="main-content" className="min-w-0 flex-1 px-3 py-5 sm:px-6 sm:py-6 lg:px-10 lg:py-8">{renderToast()}{renderMain()}</main></div><SystemVersionFooter />{renderDialog()}{viewerModalDoc && <DocumentViewerModal document={viewerModalDoc} version={viewerModalVer} isOpen={Boolean(viewerModalDoc)} onClose={() => { setViewerModalDoc(null); setViewerModalVer(undefined); }} onDownload={(docId, verId) => void downloadVersion(docId, verId)} />}</div>;
+  return (
+    <AppShell
+      activePersona={activePersona}
+      currentRoute={route}
+      primaryNav={primaryNav}
+      canAdmin={canAdmin}
+      unreadNotifications={unreadNotificationCount}
+      projectName={PROJECT_DISPLAY_NAME}
+      projectSubtitle={`${workspaceTitle(activePersona.workspace)} · ${PROGRAM_SUBTITLE}`}
+      onNavigate={(targetRoute) => navigate(targetRoute as Route)}
+      onOpenProject={() => openProject()}
+      onSignOut={() => void signOut()}
+      footer={<SystemVersionFooter />}
+    >
+      {renderToast()}
+      {renderMain()}
+      {renderDialog()}
+      {viewerModalDoc && (
+        <DocumentViewerModal
+          document={viewerModalDoc}
+          version={viewerModalVer}
+          isOpen={Boolean(viewerModalDoc)}
+          onClose={() => {
+            setViewerModalDoc(null);
+            setViewerModalVer(undefined);
+          }}
+          onDownload={(docId, verId) => void downloadVersion(docId, verId)}
+        />
+      )}
+    </AppShell>
+  );
 }
