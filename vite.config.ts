@@ -44,6 +44,20 @@ export default defineConfig(async ({ mode }) => {
     runtimeEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     runtimeEnv.SUPABASE_ANON_KEY ||
     "";
+  let gitCommitSha = runtimeEnv.VERCEL_GIT_COMMIT_SHA || runtimeEnv.GIT_COMMIT_SHA || "";
+  let gitCommitAuthorDate = runtimeEnv.VERCEL_GIT_COMMIT_AUTHOR_DATE || "";
+  let gitCommitRef = runtimeEnv.VERCEL_GIT_COMMIT_REF || "";
+  if (!gitCommitSha) {
+    try {
+      const { execSync } = await import("node:child_process");
+      gitCommitSha = execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+      gitCommitAuthorDate = execSync("git log -1 --format=%cI", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+      gitCommitRef = execSync("git rev-parse --abbrev-ref HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    } catch {
+      // Git metadata unavailable
+    }
+  }
+
   const publicEnvDefines = {
     "process.env.NEXT_PUBLIC_SUPABASE_URL": JSON.stringify(publicSupabaseUrl),
     "process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(publicSupabaseKey),
@@ -52,9 +66,9 @@ export default defineConfig(async ({ mode }) => {
     "process.env.SUPABASE_ANON_KEY": JSON.stringify(publicSupabaseKey),
     "process.env.APP_DATA_MODE": JSON.stringify(runtimeEnv.APP_DATA_MODE ?? runtimeEnv.NEXT_PUBLIC_APP_DATA_MODE ?? "production"),
     "process.env.NEXT_PUBLIC_APP_DATA_MODE": JSON.stringify(runtimeEnv.NEXT_PUBLIC_APP_DATA_MODE ?? runtimeEnv.APP_DATA_MODE ?? "production"),
-    "process.env.VERCEL_GIT_COMMIT_SHA": JSON.stringify(runtimeEnv.VERCEL_GIT_COMMIT_SHA || runtimeEnv.GIT_COMMIT_SHA || ""),
-    "process.env.VERCEL_GIT_COMMIT_AUTHOR_DATE": JSON.stringify(runtimeEnv.VERCEL_GIT_COMMIT_AUTHOR_DATE || ""),
-    "process.env.VERCEL_GIT_COMMIT_REF": JSON.stringify(runtimeEnv.VERCEL_GIT_COMMIT_REF || ""),
+    "process.env.VERCEL_GIT_COMMIT_SHA": JSON.stringify(gitCommitSha),
+    "process.env.VERCEL_GIT_COMMIT_AUTHOR_DATE": JSON.stringify(gitCommitAuthorDate),
+    "process.env.VERCEL_GIT_COMMIT_REF": JSON.stringify(gitCommitRef),
     "process.env.VERCEL_ENV": JSON.stringify(runtimeEnv.VERCEL_ENV || ""),
     "process.env.BUILD_TIMESTAMP": JSON.stringify(runtimeEnv.BUILD_TIMESTAMP || new Date().toISOString()),
   };

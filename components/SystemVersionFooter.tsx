@@ -24,22 +24,28 @@ export function SystemVersionFooter() {
           <div className="flex items-center gap-1.5 font-mono text-slate-600">
             <GitCommit className="size-3.5 text-slate-400" />
             <span>Commit:</span>
-            <a
-              href={`${BUILD_INFO.repositoryUrl}/commit/${BUILD_INFO.commitHash}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-bold text-teal-800 underline-offset-2 hover:underline hover:text-teal-950 inline-flex items-center gap-0.5"
-              title="View git commit on GitHub"
-            >
-              {BUILD_INFO.commitShort}
-              <ExternalLink className="size-2.5 opacity-70" />
-            </a>
+            {BUILD_INFO.commitHash && BUILD_INFO.commitHash !== "unknown" ? (
+              <a
+                href={`${BUILD_INFO.repositoryUrl}/commit/${BUILD_INFO.commitHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-teal-800 underline-offset-2 hover:underline hover:text-teal-950 inline-flex items-center gap-0.5"
+                title="View git commit on GitHub"
+              >
+                {BUILD_INFO.commitShort}
+                <ExternalLink className="size-2.5 opacity-70" />
+              </a>
+            ) : (
+              <span className="font-sans text-slate-500 font-medium">Build identity unavailable</span>
+            )}
           </div>
 
-          <div className="flex items-center gap-1.5 text-slate-500 font-mono text-[11px]">
-            <Clock3 className="size-3.5 text-slate-400" />
-            <span>Committed: {BUILD_INFO.commitDate}</span>
-          </div>
+          {BUILD_INFO.commitDate && BUILD_INFO.commitDate !== "unknown" && (
+            <div className="flex items-center gap-1.5 text-slate-500 font-mono text-[11px]">
+              <Clock3 className="size-3.5 text-slate-400" />
+              <span>Committed: {BUILD_INFO.commitDate}</span>
+            </div>
+          )}
         </div>
 
         <div className="flex w-full flex-wrap items-center justify-start gap-3 sm:w-auto sm:justify-end">
