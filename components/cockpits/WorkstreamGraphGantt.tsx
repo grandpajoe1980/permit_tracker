@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getFullProjectRecord } from "@/lib/permit-utils";
+import { repository } from "@/lib/repository";
 import { evaluateProjectSchedule } from "@/lib/engines/schedule-engine";
 import type { OperationalState, ProjectRecord, TaskRecord } from "@/lib/domain-models";
 import { asOfDateTime } from "@/lib/time";
@@ -415,7 +416,7 @@ export function WorkstreamGraphGantt({
             </h1>
             <p className="mt-1 text-sm text-slate-600">
               {customerSafe
-                ? "Baseline and forecast dates, dependencies, critical path indicators, and government-owned milestones. Click on any permit or schedule bar to view full details."
+                ? "Baseline and forecast dates, related schedule items, timeline health, and government-owned milestones. Click on any permit or schedule bar to view full details."
                 : "Deterministic critical-path dependency graph, traditional schedule bars, immutable baseline tracking, and delay attribution."}
             </p>
           </div>
@@ -437,17 +438,25 @@ export function WorkstreamGraphGantt({
         </div>
 
         {/* View Switcher Tabs */}
-        <div className="mt-6 grid gap-2 border-b border-slate-200 pb-2 sm:flex sm:flex-wrap sm:items-center">
+        <div role="tablist" aria-label="Schedule views" className="mt-6 grid gap-2 border-b border-slate-200 pb-2 sm:flex sm:flex-wrap sm:items-center">
           <Button
+            id="schedule-tab-graph"
+            role="tab"
+            aria-selected={activeTab === "graph"}
+            aria-controls="schedule-panel-graph"
             variant={activeTab === "graph" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab("graph")}
             className="w-full justify-start whitespace-normal text-left text-xs sm:w-auto font-bold"
           >
-            <GitBranch className="size-3.5" /> Workstream DAG & Baseline Comparison
+            <GitBranch className="size-3.5" /> {customerSafe ? "Project timeline & baseline" : "Workstream DAG & Baseline Comparison"}
           </Button>
           {!customerSafe && (
             <Button
+              id="schedule-tab-advanced"
+              role="tab"
+              aria-selected={activeTab === "advanced"}
+              aria-controls="schedule-panel-advanced"
               variant={activeTab === "advanced" ? "default" : "ghost"}
               size="sm"
               onClick={() => setActiveTab("advanced")}
@@ -465,7 +474,7 @@ export function WorkstreamGraphGantt({
       {/* TAB: WORKSTREAM DAG & SCHEDULE TIMELINE                              */}
       {/* ==================================================================== */}
       {activeTab === "graph" && (
-        <div className="space-y-6">
+        <div id="schedule-panel-graph" role="tabpanel" aria-labelledby="schedule-tab-graph" tabIndex={0} className="space-y-6">
           {/* Schedule Controls & Mode Toggle */}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
             <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
@@ -474,6 +483,7 @@ export function WorkstreamGraphGantt({
               </span>
               <button
                 type="button"
+                aria-pressed={filterState === "all"}
                 onClick={() => setFilterState("all")}
                 className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${filterState === "all" ? "bg-[#00284d] text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
               >
@@ -481,13 +491,15 @@ export function WorkstreamGraphGantt({
               </button>
               <button
                 type="button"
+                aria-pressed={filterState === "critical"}
                 onClick={() => setFilterState("critical")}
                 className={`rounded-lg px-3 py-1.5 text-xs font-bold transition flex items-center gap-1 ${filterState === "critical" ? "bg-purple-800 text-white" : "bg-purple-50 text-purple-900 border border-purple-200 hover:bg-purple-100"}`}
               >
-                <Flame className="size-3 text-amber-400 fill-amber-400" /> Critical Path ({project.workstreams.filter((w) => w.isCriticalPath).length})
+                <Flame className="size-3 text-amber-400 fill-amber-400" /> {customerSafe ? "Priority sequence" : "Critical Path"} ({project.workstreams.filter((w) => w.isCriticalPath).length})
               </button>
               <button
                 type="button"
+                aria-pressed={filterState === "delayed"}
                 onClick={() => setFilterState("delayed")}
                 className={`rounded-lg px-3 py-1.5 text-xs font-bold transition flex items-center gap-1 ${filterState === "delayed" ? "bg-rose-800 text-white" : "bg-rose-50 text-rose-900 border border-rose-200 hover:bg-rose-100"}`}
               >
@@ -499,6 +511,7 @@ export function WorkstreamGraphGantt({
               <div className="flex w-full items-center rounded-lg border border-slate-200 bg-slate-50 p-1 sm:w-auto">
                 <button
                   type="button"
+                  aria-pressed={scheduleViewMode === "bars"}
                   onClick={() => setScheduleViewMode("bars")}
                   className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2.5 py-1 text-center text-xs font-bold transition whitespace-normal sm:flex-none ${scheduleViewMode === "bars" ? "bg-[#00284d] text-white shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
                 >
@@ -506,6 +519,7 @@ export function WorkstreamGraphGantt({
                 </button>
                 <button
                   type="button"
+                  aria-pressed={scheduleViewMode === "list"}
                   onClick={() => setScheduleViewMode("list")}
                   className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2.5 py-1 text-center text-xs font-bold transition whitespace-normal sm:flex-none ${scheduleViewMode === "list" ? "bg-[#00284d] text-white shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
                 >
@@ -513,15 +527,17 @@ export function WorkstreamGraphGantt({
                 </button>
                 <button
                   type="button"
+                  aria-pressed={scheduleViewMode === "table"}
                   onClick={() => setScheduleViewMode("table")}
                   className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2.5 py-1 text-center text-xs font-bold transition whitespace-normal sm:flex-none ${scheduleViewMode === "table" ? "bg-[#00284d] text-white shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
                 >
-                  <GitBranch className="size-3.5" /> DAG Metrics Table
+                  <GitBranch className="size-3.5" /> {customerSafe ? "Schedule metrics" : "DAG Metrics Table"}
                 </button>
               </div>
 
               <input
                 type="text"
+                aria-label="Search schedule"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search permit or agency..."
@@ -595,6 +611,7 @@ export function WorkstreamGraphGantt({
                   <button
                     key={state}
                     type="button"
+                    aria-pressed={isSelected}
                     onClick={() => setFilterState(isSelected ? "all" : state)}
                     className={`flex items-center gap-2 rounded-lg border p-2 text-left transition ${
                       isSelected
@@ -779,6 +796,14 @@ export function WorkstreamGraphGantt({
                       const forecastRight = getTimelinePosition(ws.forecastTargetDate);
 
                       const hasSlip = ws.scheduleVarianceDays > 0;
+                      const hasScheduleDates = Boolean(
+                        ws.baselineStartDate ||
+                        ws.baselineTargetDate ||
+                        ws.forecastStartDate ||
+                        ws.forecastTargetDate ||
+                        ws.actualStartDate ||
+                        ws.actualCompletionDate
+                      );
                       const currentStart = getTimelinePosition(ws.actualStartDate ?? ws.forecastStartDate ?? ws.baselineStartDate);
                       const currentEnd = ws.operationalState === "complete"
                         ? getTimelinePosition(ws.actualCompletionDate ?? ws.forecastTargetDate)
@@ -788,6 +813,10 @@ export function WorkstreamGraphGantt({
                       const pastWidth = Math.max(1.5, pastEnd - baselineLeft);
                       const currentWidth = Math.max(1.5, currentEnd - currentStart);
                       const futureWidth = ws.operationalState === "complete" ? 0 : Math.max(1.5, forecastRight - futureStart);
+                      const workflowStages = ws.workflowVersionId
+                        ? repository.getWorkflowTemplates().flatMap((template) => template.versions).find((version) => version.id === ws.workflowVersionId)?.stages ?? []
+                        : [];
+                      const currentStageIndex = workflowStages.findIndex((stage) => stage.id === ws.currentStageId || stage.name === ws.currentStageName);
 
                       return (
                         <div key={ws.id} className="divide-y divide-slate-50">
@@ -795,16 +824,9 @@ export function WorkstreamGraphGantt({
                           <div
                             onMouseEnter={() => setHoveredWorkstreamId(ws.id)}
                             onMouseLeave={() => setHoveredWorkstreamId(null)}
-                            role="button"
+                            role="group"
                             aria-label={`${ws.code}: ${ws.title}. Current stage ${ws.currentStageName || "Not configured"}. Owner ${ws.regulatoryLead.assignedReviewerName || "Unassigned"}.`}
-                            tabIndex={0}
                             onClick={() => onSelectWorkstream?.(ws.id)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
-                                onSelectWorkstream?.(ws.id);
-                              }
-                            }}
                             className={`grid grid-cols-12 items-center transition-colors cursor-pointer ${
                               isHovered ? "bg-slate-50/90" : "hover:bg-slate-50/60"
                             }`}
@@ -817,6 +839,7 @@ export function WorkstreamGraphGantt({
                                   <button
                                     type="button"
                                     onClick={(e) => toggleExpand(ws.id, e)}
+                                    onKeyDown={(e) => e.stopPropagation()}
                                     aria-expanded={isExpanded}
                                     aria-label={isExpanded ? `Collapse ${ws.code} stages and tasks` : `Expand ${ws.code} stages and tasks`}
                                     className="p-1 rounded text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition"
@@ -829,7 +852,7 @@ export function WorkstreamGraphGantt({
                                   </span>
                                   {ws.isCriticalPath && (
                                     <Badge className="bg-purple-100 text-purple-900 border-purple-200 text-[10px] py-0 font-bold flex items-center gap-0.5">
-                                      <Flame className="size-3 text-amber-500 fill-amber-500" /> Critical Path
+                                      <Flame className="size-3 text-amber-500 fill-amber-500" /> {customerSafe ? "Priority sequence" : "Critical Path"}
                                     </Badge>
                                   )}
                                 </div>
@@ -844,6 +867,7 @@ export function WorkstreamGraphGantt({
                                 <Link
                                   href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}`}
                                   onClick={(e) => {
+                                    e.stopPropagation();
                                     if (onSelectWorkstream) {
                                       e.preventDefault();
                                       onSelectWorkstream(ws.id);
@@ -861,6 +885,7 @@ export function WorkstreamGraphGantt({
                                 <Link
                                   href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}#phase-${encodeURIComponent(ws.currentStageName || "phase")}`}
                                   onClick={(e) => {
+                                    e.stopPropagation();
                                     if (onSelectWorkstream) {
                                       e.preventDefault();
                                       onSelectWorkstream(ws.id);
@@ -896,62 +921,95 @@ export function WorkstreamGraphGantt({
                                 style={{ left: `${todayPositionPercent}%` }}
                               />
 
-                              {/* Past / baseline history */}
-                              <div className="relative w-full h-5 mb-1">
-                                <div
-                                  className="absolute h-3.5 rounded border border-dashed border-slate-400 bg-slate-100/90 flex items-center px-1.5 text-[9px] font-mono text-slate-600 truncate transition-all"
-                                  style={{
-                                    left: `${baselineLeft}%`,
-                                    width: `${pastWidth}%`,
-                                  }}
-                                  title={`Baseline schedule: ${displayDate(ws.baselineStartDate)} → ${displayDate(ws.baselineTargetDate)}`}
-                                >
-                                  <span className="truncate opacity-80">Baseline: {displayDate(ws.baselineStartDate)}</span>
-                                </div>
-                              </div>
+                              {hasScheduleDates ? (
+                                <>
+                                  {/* Past / baseline history */}
+                                  <div className="relative w-full h-5 mb-1">
+                                    <div
+                                      className="absolute h-3.5 rounded border border-dashed border-slate-400 bg-slate-100/90 flex items-center px-1.5 text-[9px] font-mono text-slate-600 truncate transition-all"
+                                      style={{
+                                        left: `${baselineLeft}%`,
+                                        width: `${pastWidth}%`,
+                                      }}
+                                      title={`Baseline schedule: ${displayDate(ws.baselineStartDate)} → ${displayDate(ws.baselineTargetDate)}`}
+                                    >
+                                      <span className="truncate opacity-80">Baseline: {displayDate(ws.baselineStartDate)}</span>
+                                    </div>
+                                  </div>
 
-                              {/* Current state / actual execution */}
-                              <div className="relative w-full h-6 mb-1">
-                                <div
-                                  className={`absolute h-6 rounded-md shadow-sm border ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} flex items-center justify-between px-2.5 text-xs font-bold transition-all transform hover:scale-[1.01] hover:shadow-md cursor-pointer`}
-                                  style={{
-                                    left: `${currentStart}%`,
-                                    width: `${currentWidth}%`,
-                                  }}
-                                  title={`${ws.title} (${ws.code})\nState: ${stateConfig.label}\nForecast: ${displayDate(ws.forecastStartDate)} → ${displayDate(ws.forecastTargetDate)} (${hasSlip ? `+${ws.scheduleVarianceDays}d variance` : "On Track"})\nReviewer: ${ws.regulatoryLead.assignedReviewerName || "Unassigned"} (${ws.regulatoryLead.orgCode})`}
-                                >
-                                  <span className="truncate text-[10px] font-black drop-shadow-sm">Current: {stateConfig.shortLabel}</span>
+                                  {/* Current state / actual execution */}
+                                  <div className="relative w-full h-6 mb-1">
+                                    <div
+                                      className={`absolute h-6 rounded-md shadow-sm border ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} flex items-center justify-between px-2.5 text-xs font-bold transition-all transform hover:scale-[1.01] hover:shadow-md cursor-pointer`}
+                                      style={{
+                                        left: `${currentStart}%`,
+                                        width: `${currentWidth}%`,
+                                      }}
+                                      title={`${ws.title} (${ws.code})\nState: ${stateConfig.label}\nForecast: ${displayDate(ws.forecastStartDate)} → ${displayDate(ws.forecastTargetDate)} (${hasSlip ? `+${ws.scheduleVarianceDays}d variance` : "On Track"})\nReviewer: ${ws.regulatoryLead.assignedReviewerName || "Unassigned"} (${ws.regulatoryLead.orgCode})`}
+                                    >
+                                      <span className="truncate text-[10px] font-black drop-shadow-sm">Current: {stateConfig.shortLabel}</span>
 
-                                  {hasSlip && (
-                                    <span className="shrink-0 rounded bg-black/25 px-1.5 py-0.5 text-[10px] font-mono font-black text-white ml-1">
-                                      +{ws.scheduleVarianceDays}d
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
+                                      {hasSlip && (
+                                        <span className="shrink-0 rounded bg-black/25 px-1.5 py-0.5 text-[10px] font-mono font-black text-white ml-1">
+                                          +{ws.scheduleVarianceDays}d
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
 
-                              {/* Future state / forecast */}
-                              <div className="relative w-full h-5">
-                                <div
-                                  className={`absolute h-4 rounded-md border border-dashed ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} opacity-60 flex items-center px-2 text-[9px] font-bold ${futureWidth === 0 ? "hidden" : ""}`}
-                                  style={{ left: `${futureStart}%`, width: `${futureWidth}%` }}
-                                  title={`Future forecast: ${ws.forecastStartDate} -> ${ws.forecastTargetDate}${hasSlip ? ` (+${ws.scheduleVarianceDays}d variance)` : ""}`}
-                                >
-                                  <span className="truncate">Future: {ws.forecastTargetDate}</span>
-                                </div>
+                                  {/* Future state / forecast */}
+                                  <div className="relative w-full h-5">
+                                    <div
+                                      className={`absolute h-4 rounded-md border border-dashed ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} opacity-60 flex items-center px-2 text-[9px] font-bold ${futureWidth === 0 ? "hidden" : ""}`}
+                                      style={{ left: `${futureStart}%`, width: `${futureWidth}%` }}
+                                      title={`Future forecast: ${ws.forecastStartDate} -> ${ws.forecastTargetDate}${hasSlip ? ` (+${ws.scheduleVarianceDays}d variance)` : ""}`}
+                                    >
+                                      <span className="truncate">Future: {ws.forecastTargetDate}</span>
+                                    </div>
 
-                                {/* Forecast Target Marker / Flag */}
-                                <div
-                                  className="absolute top-0 text-[9px] font-mono font-black text-slate-800"
-                                  style={{ left: `calc(${forecastRight}% + 6px)` }}
-                                >
-                                  {ws.forecastTargetDate}
+                                    {/* Forecast Target Marker / Flag */}
+                                    <div
+                                      className="absolute top-0 text-[9px] font-mono font-black text-slate-800"
+                                      style={{ left: `calc(${forecastRight}% + 6px)` }}
+                                    >
+                                      {ws.forecastTargetDate}
+                                    </div>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="flex items-center gap-2 text-xs text-slate-500">
+                                  <span className="italic">Not scheduled</span>
+                                  <Link href={`/admin/workflows?template=${ws.permitTypeId || "all"}`} className="font-bold text-teal-700 hover:underline">
+                                    Configure schedule
+                                  </Link>
                                 </div>
-                              </div>
+                              )}
                             </div>
                           </div>
 
                           {/* Expanded Stages and Tasks Sub-Rows */}
+                          {isExpanded && workflowStages.length > 0 && (
+                            <div className="bg-white divide-y divide-slate-100 border-l-4 border-sky-500" aria-label={`${ws.code} workflow stages`}>
+                              {workflowStages.map((stage, index) => {
+                                const stageState = index < currentStageIndex || ws.operationalState === "complete" ? "Completed" : index === currentStageIndex ? stateConfig.shortLabel : "Upcoming";
+                                return (
+                                  <div key={stage.id} id={`phase-${encodeURIComponent(stage.name)}`} className="grid grid-cols-12 items-center bg-sky-50/30">
+                                    <div className="col-span-12 p-2.5 pl-8 md:col-span-4 md:border-r">
+                                      <Link
+                                        href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}#phase-${encodeURIComponent(stage.name)}`}
+                                        onClick={(event) => { event.stopPropagation(); if (onSelectWorkstream) { event.preventDefault(); onSelectWorkstream(ws.id); } }}
+                                        className="text-xs font-bold text-slate-800 hover:text-teal-800 hover:underline"
+                                      >
+                                        Step {stage.sequenceOrder}: {customerSafe ? stage.customerVisibilityLabel : stage.name}
+                                      </Link>
+                                      <p className="mt-0.5 text-[10px] text-slate-500">{customerSafe ? "Workflow milestone" : `${stage.responsibleOrgCode} · ${stage.targetDurationDays} day target`}</p>
+                                    </div>
+                                    <div className="col-span-12 p-2.5 text-right text-[10px] font-black uppercase text-slate-500 md:col-span-8 md:text-left">{stageState}</div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                           {isExpanded && ws.tasks && ws.tasks.length > 0 && (
                             <div className="bg-slate-50/70 divide-y divide-slate-100 border-l-4 border-teal-600">
                               {ws.tasks.map((task: TaskRecord) => {
@@ -1094,14 +1152,14 @@ export function WorkstreamGraphGantt({
           {/* ================================================================ */}
           {/* 12-COLUMN WORKSTREAM DAG & BASELINE COMPARISON TABLE             */}
           {/* ================================================================ */}
-          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+          <div className={`rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm ${scheduleViewMode === "table" ? "" : "hidden"}`}>
             <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
               <div className="hidden grid-cols-12 text-xs font-bold uppercase tracking-wider text-slate-600 md:grid">
-                <div className="col-span-4">Workstream / DAG Node</div>
+                <div className="col-span-4">{customerSafe ? "Workstream" : "Workstream / DAG Node"}</div>
                 <div className="col-span-2 text-center">Lead Agency</div>
                 <div className="col-span-2 text-center">Baseline Target</div>
                 <div className="col-span-2 text-center">Current Forecast</div>
-                <div className="col-span-2 text-right">Variance & Controlling Path</div>
+                <div className="col-span-2 text-right">{customerSafe ? "Variance & related schedule" : "Variance & Controlling Path"}</div>
               </div>
             </div>
 
@@ -1126,7 +1184,7 @@ export function WorkstreamGraphGantt({
                       <span className="font-mono text-xs text-slate-400 font-bold">{ws.code}</span>
                       {ws.isCriticalPath && (
                         <Badge className="bg-purple-100 text-purple-800 border-purple-200 text-[10px] py-0">
-                          Critical Path
+                          {customerSafe ? "Priority sequence" : "Critical Path"}
                         </Badge>
                       )}
                     </div>
@@ -1182,7 +1240,7 @@ export function WorkstreamGraphGantt({
       {/* TAB: ADVANCED ANALYSIS (SIMULATOR, DELAYS, ACCELERATION)             */}
       {/* ==================================================================== */}
       {!customerSafe && activeTab === "advanced" && (
-        <div className="space-y-6">
+        <div id="schedule-panel-advanced" role="tabpanel" aria-labelledby="schedule-tab-advanced" tabIndex={0} className="space-y-6">
           {/* Advanced Sub-Tabs */}
           <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
             <Button

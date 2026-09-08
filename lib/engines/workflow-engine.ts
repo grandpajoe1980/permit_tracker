@@ -213,6 +213,34 @@ export function validateWorkflowDraft(params: {
       errors.push(`Stage "${stage.name}" contains blank required document input.`);
     }
 
+    // Prerequisites must point at real, earlier stages. A self-reference is
+    // never satisfiable and an unknown key would leave the workflow blocked
+    // at runtime.
+    for (const dependency of stage.dependencies ?? []) {
+      const dependencyStage = stages.find((candidate) => candidate.stageKey === dependency);
+      if (!dependencyStage) {
+        errors.push(`Stage "${stage.name}" specifies an unknown prerequisite "${dependency}".`);
+      } else if (dependencyStage.stageKey === stage.stageKey) {
+        errors.push(`Stage "${stage.name}" cannot depend on itself.`);
+      } else if (dependencyStage.sequenceOrder >= stage.sequenceOrder) {
+        errors.push(`Stage "${stage.name}" prerequisite "${dependency}" must appear earlier in the workflow.`);
+      }
+    }
+
+    // Task definitions are part of the versioned process contract. Keep the
+    // draft validator strict enough that publishing cannot create anonymous
+    // or impossible task rows.
+    const taskIds = new Set<string>();
+    for (const task of stage.tasks ?? []) {
+      if (!task.id.trim()) errors.push(`Stage "${stage.name}" contains a task without an id.`);
+      if (!task.title.trim()) errors.push(`Stage "${stage.name}" contains a task without a title.`);
+      if (task.id && taskIds.has(task.id)) errors.push(`Stage "${stage.name}" contains duplicate task id "${task.id}".`);
+      taskIds.add(task.id);
+      if (task.defaultDays !== undefined && (!Number.isFinite(task.defaultDays) || task.defaultDays < 0)) {
+        errors.push(`Task "${task.title || task.id}" in stage "${stage.name}" has an invalid default duration.`);
+      }
+    }
+
     // Recognized terminal and action states in statutory workflows
     const isRecognizedTerminalOrAction = (t: string) => {
       const lower = t.toLowerCase().trim();
@@ -360,4 +388,3 @@ export function validateWorkflowDraft(params: {
     cyclicStages,
   };
 }
-

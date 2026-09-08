@@ -108,7 +108,7 @@ export function WorkflowJourney({
           {journey.stages.map((stage) => {
             const isCurrent = stage.state === "current" || stage.state === "waiting" || stage.state === "blocked";
             return (
-              <li key={stage.id} aria-current={isCurrent ? "step" : undefined} className={`flex gap-3 p-4 ${isCurrent ? "bg-teal-50/30" : ""}`}>
+              <li key={stage.id} id={`phase-${encodeURIComponent(stage.label)}`} aria-current={isCurrent ? "step" : undefined} className={`flex gap-3 p-4 ${isCurrent ? "bg-teal-50/30" : ""}`}>
                 <span className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-black ${stateClass[stage.state]}`}>
                   <StageIcon state={stage.state} />
                 </span>

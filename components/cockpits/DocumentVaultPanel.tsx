@@ -170,6 +170,7 @@ export function DocumentVaultPanel({
           <div className="relative md:col-span-6">
             <Search className="absolute left-3 top-2.5 size-4 text-slate-400" />
             <Input
+              aria-label="Search documents"
               placeholder="Search by title, file name, SHA-256 checksum, or uploader..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -279,7 +280,19 @@ export function DocumentVaultPanel({
                     </Badge>
                   </div>
 
-                  <h3 className="text-sm font-bold text-slate-900 mt-1.5 line-clamp-1">{doc.title}</h3>
+                  <h3 className="mt-1.5 line-clamp-1">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedDocId(doc.id);
+                      }}
+                      className="text-left text-sm font-bold text-slate-900 hover:text-teal-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+                      aria-label={`Select document ${doc.title}`}
+                    >
+                      {doc.title}
+                    </button>
+                  </h3>
 
                   {doc.workstreamTitle && (
                     <button
@@ -288,6 +301,7 @@ export function DocumentVaultPanel({
                         e.stopPropagation();
                         if (doc.workstreamId) onSelectWorkstream?.(doc.workstreamId);
                       }}
+                      onKeyDown={(e) => e.stopPropagation()}
                       className="text-[11px] font-semibold text-teal-800 hover:underline mt-0.5 truncate text-left cursor-pointer transition-colors"
                       title="Open workstream in project page"
                     >
@@ -301,7 +315,7 @@ export function DocumentVaultPanel({
                       {doc.versions.length} revision{doc.versions.length !== 1 ? "s" : ""}
                     </span>
 
-                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                       <Button
                         type="button"
                         size="sm"

@@ -262,13 +262,21 @@ export function SpaceXNoSurprises({ onSelectWorkstream, onSelectProject }: Props
                 <div
                   key={ws.id}
                   onClick={() => onSelectWorkstream?.(ws.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectWorkstream?.(ws.id);
+                    }
+                  }}
                   className={`group relative rounded-xl border p-5 transition-all hover:shadow-lg cursor-pointer bg-white ${
                     isBlocked
                       ? "border-rose-300 bg-rose-50/20"
                       : isActionNeeded
                       ? "border-amber-300 bg-amber-50/20"
                       : "border-slate-200"
-                  }`}
+                  } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600`}
                 >
                   <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                     <div className="space-y-1">

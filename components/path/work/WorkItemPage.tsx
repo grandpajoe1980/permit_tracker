@@ -133,8 +133,8 @@ export function WorkItemPage({
               {item.documents.map((doc) => (
                 <div key={doc.id} className="flex items-center justify-between rounded-lg border border-slate-100 p-3 bg-slate-50">
                   <div>
-                    <p className="text-sm font-bold text-[#00284d]">{doc.title}</p>
-                    <p className="text-xs text-slate-500">{doc.category || "Attachment"}</p>
+                    <p className="text-sm font-bold text-[#00284d]">{doc.label}</p>
+                    <p className="text-xs text-slate-500">Attachment{doc.version ? ` · ${doc.version}` : ""}</p>
                   </div>
                   <span className="rounded bg-teal-50 border border-teal-200 px-2 py-0.5 text-xs font-mono font-bold text-teal-800">{doc.id}</span>
                 </div>
@@ -147,4 +147,3 @@ export function WorkItemPage({
     </div>
   );
 }
-

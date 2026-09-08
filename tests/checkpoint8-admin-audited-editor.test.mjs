@@ -73,6 +73,17 @@ test("Checkpoint 8: administrative state correction requires reason and creates 
   assert.equal(refreshedWs.operationalState, "running");
 });
 
+test("Checkpoint 8: record explorer guards unsupported corrections instead of calling missing commands or reporting success", async () => {
+  const source = await readFile(new URL("../components/admin/AdminExplorer.tsx", import.meta.url), "utf8");
+
+  assert.doesNotMatch(source, /setWorkstreamStatePersisted/);
+  assert.match(source, /Workstream corrections are not available from this record explorer yet/);
+  assert.match(source, /No changes were saved\./);
+  assert.match(source, /result\.error \|\| !result\.data/);
+  assert.match(source, /Task correction saved:/);
+  assert.doesNotMatch(source, /Audit log entry saved/);
+});
+
 test("Checkpoint 8: non-admin access boundary protects administrative mutations and routes", async () => {
   const adminPageSource = await readFile(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
   const adminRecordsApiSource = await readFile(new URL("../app/api/admin/records/route.ts", import.meta.url), "utf8");

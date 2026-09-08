@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { ADMIN_RESOURCES, type AdminResource } from "@/lib/admin-resources";
 import { repository } from "@/lib/repository";
-import type { OperationalState, TaskRecord } from "@/lib/domain-models";
+import type { TaskRecord } from "@/lib/domain-models";
 
 type Row = Record<string, unknown>;
 
@@ -120,20 +120,18 @@ export function AdminExplorer({
         const recordCode = String(editingRecord.code || editingRecord.id);
 
         if (resource === "workstreams") {
-          const ws = repository.getWorkstreamById(recordId) || repository.getWorkstreamById(recordCode);
-          if (ws) {
-            if (editStatus) {
-              await repository.setWorkstreamStatePersisted({
-                workstreamId: ws.id,
-                operationalState: editStatus as OperationalState,
-                actorName: "PATH Administrator",
-                actorOrgName: "State Project Office",
-                reason: editReason.trim(),
-              });
-            }
-          }
-        } else if (resource === "tasks") {
-          await repository.updateTaskPersisted({
+          // There is no audited generic workstream-state correction command.
+          // Do not substitute a local-only repository mutation or claim success.
+          setNotice("Workstream corrections are not available from this record explorer yet. Open the work item and use its supported action instead.");
+          return;
+        }
+
+        if (resource !== "tasks") {
+          setNotice(`Editing ${ADMIN_RESOURCES[resource]} is not available from this record explorer yet. No changes were saved.`);
+          return;
+        }
+
+        const result = await repository.updateTaskPersisted({
             taskId: recordId,
             updates: {
               status: editStatus as TaskRecord["status"],
@@ -141,10 +139,12 @@ export function AdminExplorer({
             },
             actorName: "PATH Administrator",
             actorOrgName: "State Project Office",
-          });
+        });
+        if (result.error || !result.data) {
+          throw result.error ?? new Error("Task correction was not confirmed by the database.");
         }
 
-        setReceipt(`Correction recorded: ${resource} (${recordCode}) updated to "${editStatus || "updated"}". Audit log entry saved.`);
+        setReceipt(`Task correction saved: ${recordCode} updated to "${editStatus || "updated"}".`);
         setEditingRecord(null);
         setReload((n) => n + 1);
       } catch (err: unknown) {

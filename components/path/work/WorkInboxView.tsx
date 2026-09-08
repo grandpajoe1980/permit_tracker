@@ -196,6 +196,7 @@ export function WorkInboxView({
         <div className="flex items-center justify-between gap-4">
           <input
             type="search"
+            aria-label="Search work inbox"
             placeholder="Search work inbox..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

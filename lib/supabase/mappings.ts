@@ -149,6 +149,12 @@ export function workflowStageRowToDomain(row: Row): WorkflowStageRecord {
     isMilestoneGate: bool(row.is_milestone_gate),
     externalFilingUrl: str(row.external_filing_url) || undefined,
     legalAuthorityCitation: str(row.legal_authority_citation) || undefined,
+    defaultAssignmentGroupId: str(row.default_assignment_group_id) || undefined,
+    defaultAssigneeId: str(row.default_assignee_id) || undefined,
+    rfiBehavior: (str(row.rfi_behavior) || undefined) as WorkflowStageRecord["rfiBehavior"],
+    holdBehavior: (str(row.hold_behavior) || undefined) as WorkflowStageRecord["holdBehavior"],
+    dependencies: arr<string>(row.dependencies),
+    tasks: arr<{ id: string; title: string; required: boolean; defaultDays?: number }>(row.tasks),
   };
 }
 
@@ -200,10 +206,11 @@ export function workstreamRowToDomain(
     operationalStateLabel: str(row.operational_state_label, "Running"),
     ragHealth: (str(row.rag_status, "green")) as WorkstreamRecord["ragHealth"],
     isCriticalPath: bool(row.is_critical_path),
-    baselineStartDate: str(row.baseline_start_date || row.created_at || new Date().toISOString().split("T")[0]),
-    baselineTargetDate: str(row.baseline_target_date || new Date().toISOString().split("T")[0]),
-    forecastStartDate: str(row.forecast_start_date || row.created_at || new Date().toISOString().split("T")[0]),
-    forecastTargetDate: str(row.forecast_target_date || new Date().toISOString().split("T")[0]),
+    // Do not synthesize schedule dates from creation time or today's date.
+    baselineStartDate: str(row.baseline_start_date),
+    baselineTargetDate: str(row.baseline_target_date),
+    forecastStartDate: str(row.forecast_start_date),
+    forecastTargetDate: str(row.forecast_target_date),
     actualStartDate: str(row.actual_start_date) || undefined,
     actualCompletionDate: str(row.actual_completion_date) || undefined,
     scheduleVarianceDays: num(row.schedule_variance_days),

@@ -111,6 +111,7 @@ export function TeamWorkView({
         <div className="flex items-center justify-between gap-4">
           <input
             type="search"
+            aria-label="Filter team work"
             placeholder={`Filter ${currentGroup.label.toLowerCase()} items...`}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

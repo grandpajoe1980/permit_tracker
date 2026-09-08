@@ -46,6 +46,7 @@ export function AppShell({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const hamburgerRef = React.useRef<HTMLButtonElement>(null);
+  const mobileNavRef = React.useRef<HTMLElement>(null);
 
   React.useEffect(() => {
     if (!mobileNavOpen) return;
@@ -53,8 +54,28 @@ export function AppShell({
       if (e.key === "Escape") {
         setMobileNavOpen(false);
         hamburgerRef.current?.focus();
+        return;
+      }
+      if (e.key === "Tab") {
+        const focusable = mobileNavRef.current?.querySelectorAll<HTMLElement>(
+          "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+        );
+        if (!focusable || focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
+    const firstFocusable = mobileNavRef.current?.querySelector<HTMLElement>(
+      "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+    );
+    firstFocusable?.focus();
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [mobileNavOpen]);
@@ -77,6 +98,7 @@ export function AppShell({
             className="text-white hover:bg-white/10 lg:hidden min-h-[44px] min-w-[44px]"
             aria-label="Toggle navigation"
             aria-expanded={mobileNavOpen}
+            aria-controls="mobile-navigation"
           >
             {mobileNavOpen ? <X className="size-5" /> : <Menu className="size-5" />}
           </Button>
@@ -182,6 +204,7 @@ export function AppShell({
 
         {/* Navigation rail */}
         <aside
+          ref={mobileNavRef}
           id="mobile-navigation"
           role={mobileNavOpen ? "dialog" : undefined}
           aria-modal={mobileNavOpen ? "true" : undefined}

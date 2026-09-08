@@ -130,11 +130,11 @@ function FocusedWorkstreamWorkspace({
             <p className="mt-2 text-sm font-bold text-teal-950">{workstream.customerActionRequired}</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-black uppercase tracking-wider text-slate-600">Dependencies</p>
+            <p className="text-xs font-black uppercase tracking-wider text-slate-600">{customerSafe ? "Related schedule items" : "Dependencies"}</p>
             <p className="mt-2 text-sm text-slate-800">
               {workstream.controllingDependencyTitle ??
                 (workstream.tasks.flatMap((task) => task.predecessorTaskIds).length
-                  ? `${workstream.tasks.flatMap((task) => task.predecessorTaskIds).length} predecessor task link(s)`
+                  ? `${workstream.tasks.flatMap((task) => task.predecessorTaskIds).length} ${customerSafe ? "related task link(s)" : "predecessor task link(s)"}`
                   : "No unresolved dependency recorded.")}
             </p>
           </div>
@@ -196,7 +196,7 @@ function FocusedWorkstreamWorkspace({
             </CardContent>
           </Card>
         </div>
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Selected from DAG / Gantt</p>
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{customerSafe ? "Selected from project timeline" : "Selected from DAG / Gantt"}</p>
         <WorkflowJourney source={workstream} templates={workflowTemplates} customerSafe={customerSafe} />
       </CardContent>
     </Card>
@@ -401,11 +401,15 @@ export function ProjectOverviewPage({
       )}
 
       {/* Project Navigation Tabs */}
-      <nav aria-label="Project tabs" className="flex border-b border-slate-200 bg-white px-4 rounded-xl shadow-2xs">
+      <nav aria-label="Project tabs" role="tablist" className="flex overflow-x-auto border-b border-slate-200 bg-white px-4 rounded-xl shadow-2xs">
         <button
           type="button"
+          id="project-tab-overview"
+          role="tab"
+          aria-selected={activeTab === "overview"}
+          aria-controls="project-panel-overview"
           onClick={() => setActiveTab("overview")}
-          className={`px-4 py-3 text-sm font-bold transition border-b-2 cursor-pointer ${
+          className={`shrink-0 px-4 py-3 text-sm font-bold transition border-b-2 cursor-pointer ${
             activeTab === "overview"
               ? "border-teal-700 text-[#00284d]"
               : "border-transparent text-slate-500 hover:text-slate-800"
@@ -415,8 +419,12 @@ export function ProjectOverviewPage({
         </button>
         <button
           type="button"
+          id="project-tab-work"
+          role="tab"
+          aria-selected={activeTab === "work"}
+          aria-controls="project-panel-work"
           onClick={() => setActiveTab("work")}
-          className={`px-4 py-3 text-sm font-bold transition border-b-2 cursor-pointer flex items-center gap-1.5 ${
+          className={`shrink-0 px-4 py-3 text-sm font-bold transition border-b-2 cursor-pointer flex items-center gap-1.5 ${
             activeTab === "work"
               ? "border-teal-700 text-[#00284d]"
               : "border-transparent text-slate-500 hover:text-slate-800"
@@ -429,8 +437,12 @@ export function ProjectOverviewPage({
         </button>
         <button
           type="button"
+          id="project-tab-schedule"
+          role="tab"
+          aria-selected={activeTab === "schedule"}
+          aria-controls="project-panel-schedule"
           onClick={() => setActiveTab("schedule")}
-          className={`px-4 py-3 text-sm font-bold transition border-b-2 cursor-pointer ${
+          className={`shrink-0 px-4 py-3 text-sm font-bold transition border-b-2 cursor-pointer ${
             activeTab === "schedule"
               ? "border-teal-700 text-[#00284d]"
               : "border-transparent text-slate-500 hover:text-slate-800"
@@ -440,8 +452,12 @@ export function ProjectOverviewPage({
         </button>
         <button
           type="button"
+          id="project-tab-documents"
+          role="tab"
+          aria-selected={activeTab === "documents"}
+          aria-controls="project-panel-documents"
           onClick={() => setActiveTab("documents")}
-          className={`px-4 py-3 text-sm font-bold transition border-b-2 cursor-pointer flex items-center gap-1.5 ${
+          className={`shrink-0 px-4 py-3 text-sm font-bold transition border-b-2 cursor-pointer flex items-center gap-1.5 ${
             activeTab === "documents"
               ? "border-teal-700 text-[#00284d]"
               : "border-transparent text-slate-500 hover:text-slate-800"
@@ -454,8 +470,12 @@ export function ProjectOverviewPage({
         </button>
         <button
           type="button"
+          id="project-tab-people"
+          role="tab"
+          aria-selected={activeTab === "people"}
+          aria-controls="project-panel-people"
           onClick={() => setActiveTab("people")}
-          className={`px-4 py-3 text-sm font-bold transition border-b-2 cursor-pointer flex items-center gap-1.5 ${
+          className={`shrink-0 px-4 py-3 text-sm font-bold transition border-b-2 cursor-pointer flex items-center gap-1.5 ${
             activeTab === "people"
               ? "border-teal-700 text-[#00284d]"
               : "border-transparent text-slate-500 hover:text-slate-800"
@@ -470,7 +490,7 @@ export function ProjectOverviewPage({
 
       {/* Tab: Overview */}
       {activeTab === "overview" && (
-        <div className="space-y-6">
+        <div id="project-panel-overview" role="tabpanel" aria-labelledby="project-tab-overview" tabIndex={0} className="space-y-6">
           {/* Plain-Language Status Sentence */}
           <div className="rounded-xl border border-teal-200 bg-teal-50/70 p-4">
             <p className="text-sm font-semibold text-[#00284d]">
@@ -786,7 +806,7 @@ export function ProjectOverviewPage({
 
       {/* Tab: Work (Houses all 23 workstream cards with search/filter/sort) */}
       {activeTab === "work" && (
-        <section aria-label="Workstreams and current state" className="space-y-4">
+        <section id="project-panel-work" role="tabpanel" aria-labelledby="project-tab-work" tabIndex={0} aria-label="Workstreams and current state" className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Project execution detail</p>
@@ -804,7 +824,8 @@ export function ProjectOverviewPage({
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-2xs">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-2.5 size-3.5 text-slate-400" />
-              <Input
+                <Input
+                aria-label="Search project workstreams"
                 type="search"
                 placeholder="Search by workstream name, code, or agency..."
                 value={workSearch}
@@ -818,6 +839,7 @@ export function ProjectOverviewPage({
                 <button
                   key={filterVal}
                   type="button"
+                  aria-pressed={workHealthFilter === filterVal}
                   onClick={() => setWorkHealthFilter(filterVal)}
                   className={`rounded-md px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
                     workHealthFilter === filterVal
@@ -840,6 +862,7 @@ export function ProjectOverviewPage({
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-bold text-slate-500 uppercase">Sort:</span>
               <select
+                aria-label="Sort project workstreams"
                 value={workSort}
                 onChange={(e) => setWorkSort(e.target.value)}
                 className="h-7 rounded-md border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-700"
@@ -895,7 +918,7 @@ export function ProjectOverviewPage({
 
       {/* Tab: Schedule */}
       {activeTab === "schedule" && (
-        <Card>
+        <Card id="project-panel-schedule" role="tabpanel" aria-labelledby="project-tab-schedule" tabIndex={0}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]">
               <CalendarClock className="size-5 text-teal-700" /> Project timeline and dependencies
@@ -912,7 +935,7 @@ export function ProjectOverviewPage({
 
       {/* Tab: Documents */}
       {activeTab === "documents" && (
-        <Card>
+        <Card id="project-panel-documents" role="tabpanel" aria-labelledby="project-tab-documents" tabIndex={0}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]">
               <FileCheck2 className="size-5 text-teal-700" /> Project Document Packages
@@ -954,7 +977,7 @@ export function ProjectOverviewPage({
 
       {/* Tab: People */}
       {activeTab === "people" && (
-        <Card>
+        <Card id="project-panel-people" role="tabpanel" aria-labelledby="project-tab-people" tabIndex={0}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]">
               <Users className="size-5 text-teal-700" /> Project Directory & Participants

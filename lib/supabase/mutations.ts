@@ -21,7 +21,7 @@ import type {
   WorkstreamRecord,
   TaskRecord,
 } from "../domain-models";
-import { coordinationRequestRowToDomain, externalFilingRowToDomain, taskRowToDomain } from "./mappings";
+import { coordinationRequestRowToDomain, customerRequestRowToDomain, externalFilingRowToDomain, taskRowToDomain } from "./mappings";
 import { allowsFixtureData, requiresSupabase } from "../data-mode";
 import { canonicalProjectReference } from "../project-identifiers";
 import { calculateSHA256, uploadDocumentFile } from "./storage-primitives";
@@ -1943,4 +1943,3 @@ export async function mutateRespondToCustomerIntakeClarification(params: {
 
   return { data: customerRequestRowToDomain(updated), error: null };
 }
-

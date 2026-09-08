@@ -27,6 +27,9 @@ import type {
   ClockStatus,
   StatutoryClockState,
   TaskRecord,
+  WorkflowStageRecord,
+  WorkflowVersionRecord,
+  RequestCategory,
 } from "./domain-models";
 import {
   isITSMState,
@@ -571,6 +574,46 @@ class ProjectDeliveryRepository {
     return { data: params.stage, error: null };
   }
 
+  /**
+   * Replace the complete draft stage list in one transaction. The designer
+   * supports add/remove/reorder, so updating one existing row at a time is
+   * insufficient: a newly-added stage would otherwise exist only in browser
+   * storage and a subsequent publish would activate stale database state.
+   */
+  async replaceWorkflowDraftStagesPersisted(params: {
+    templateId: string;
+    draftVersionId: string;
+    stages: WorkflowStageRecord[];
+  }): Promise<{ data: WorkflowStageRecord[] | null; error: Error | null }> {
+    const template = this.workflowTemplates.find((t) => t.id === params.templateId);
+    if (!template) return { data: null, error: new Error("Workflow template not found.") };
+    const draft = template.versions.find((v) => v.id === params.draftVersionId);
+    if (!draft || draft.status !== "draft") return { data: null, error: new Error("Draft version not found.") };
+    if (params.stages.length === 0) return { data: null, error: new Error("A workflow requires at least one stage.") };
+
+    const normalizedStages = params.stages.map((stage, index) => ({
+      ...stage,
+      workflowVersionId: draft.id,
+      sequenceOrder: index + 1,
+    }));
+
+    const client = getSupabaseBrowser();
+    if (client) {
+      const { error } = await client.rpc("rpc_replace_workflow_draft_stages", {
+        p_version_id: params.draftVersionId,
+        p_stages: normalizedStages,
+      });
+      if (error) {
+        if (!allowsFixtureData()) return { data: null, error: new Error(error.message) };
+        // In fixture mode a configured-but-unavailable backend is allowed to
+        // fall back to the deterministic in-memory repository.
+      }
+    }
+
+    draft.stages = normalizedStages;
+    return { data: normalizedStages, error: null };
+  }
+
   async addWorkflowDraftStagePersisted(params: {
     templateId: string;
     draftVersionId: string;
@@ -843,7 +886,7 @@ class ProjectDeliveryRepository {
       if (params.action === "create") {
         if (!params.orgCode || !params.name) return { data: null, error: new Error("Organization code and team name are required.") };
         const lead = params.leadUserId ? this.getProfileByUserId(params.leadUserId) : undefined;
-        return { data: this.createAssignmentGroup({ orgCode: params.orgCode, name: params.name, description: params.description ?? "", leadUserId: params.leadUserId, leadUserName: lead?.fullName, active: params.active }), error: null };
+        return { data: this.createAssignmentGroup({ orgCode: params.orgCode, name: params.name, description: params.description ?? "", leadUserId: params.leadUserId, leadUserName: lead?.fullName, active: params.active ?? true }), error: null };
       }
       const group = params.id ? this.getAssignmentGroupById(params.id) : undefined;
       if (!group) return { data: null, error: new Error("Assignment group not found.") };
@@ -1117,40 +1160,49 @@ class ProjectDeliveryRepository {
       const versionId = params.workflowVersionId ?? activeVer?.id ?? "wf-ver-1";
       const newWs: WorkstreamRecord = {
         id: `ws-${params.code.toLowerCase()}`,
+        projectId: this.project.id,
         code: params.code,
         title: params.title,
-        category: params.category,
+        category: params.category as RequestCategory,
+        categoryLabel: params.category,
         permitTypeId: params.permitTypeId,
         workflowVersionId: versionId,
         currentStageName: activeVer?.stages[0]?.name ?? "Intake",
         currentStageId: activeVer?.stages[0]?.id,
         operationalState: "running",
         operationalStateLabel: "Running",
-        ragStatus: "green",
-        ragLabel: "On Track",
+        ragHealth: "green",
         isCriticalPath: false,
         regulatoryLead: {
-          orgId: params.leadOrgCode ?? "DOTD",
           orgCode: params.leadOrgCode ?? "DOTD",
           orgName: params.leadOrgName ?? "Department of Transportation and Development",
+          jurisdictionLevel: "State",
           assignedReviewerName: "Reviewer",
           assignedReviewerEmail: "reviewer@state.gov",
         },
         governmentConcierge: {
           name: "Concierge",
+          title: "Project Delivery Concierge",
+          agency: params.leadOrgName ?? "Louisiana Project Delivery Office",
           email: "concierge@state.gov",
           phone: "555-0100",
         },
-        baselineTargetDate: "2026-12-31",
-        forecastTargetDate: "2026-12-31",
+        baselineStartDate: "",
+        baselineTargetDate: "",
+        forecastStartDate: "",
+        forecastTargetDate: "",
         scheduleVarianceDays: 0,
-        remainingFloatDays: 10,
         currentActionSummary: "Under technical review",
         nextExpectedEvent: "Technical review milestone",
+        customerActionRequired: "No action currently required.",
+        primaryDelayReason: "none",
+        escalationLevel: 0,
         itsmState: "in_progress",
         priority: "P2",
         clockStatus: "active",
-        activeBlockers: [],
+        commitments: [],
+        coordinationRequests: [],
+        rfis: [],
         tasks: [],
       };
       this.workstreams.unshift(newWs);
@@ -2945,7 +2997,7 @@ class ProjectDeliveryRepository {
       actorName: options.actorName,
       reason: "Claimed ownership (Take ownership)",
     });
-    return { success: !res.error, error: res.error, ticket: this.findTicket(options.ticketType, options.ticketId) };
+    return { success: !res.error, error: res.error, ticket: this.findTicket(options.ticketType, options.ticketId) ?? null };
   }
 
   async updateTicketITSMStatePersisted(options: {

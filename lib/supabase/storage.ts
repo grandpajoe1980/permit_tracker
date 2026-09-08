@@ -1,4 +1,5 @@
 import { getSupabaseBrowser } from "./client";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { insertAuditEvent } from "./mutations";
 import { allowsFixtureData, requiresSupabase } from "../data-mode";
 import type { DocumentAgencyReviewRecord, DocumentVersionRecord } from "../domain-models";

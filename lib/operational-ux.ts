@@ -218,7 +218,7 @@ function permissionsForWorkspace(workspace: WorkspaceMode): PermissionKey[] {
   if (workspace === "customer") return ["submit_requests", "escalate_liaison"];
   if (workspace === "reviewer") return ["edit_workflow", "add_blockers", "resolve_blockers", "escalate_liaison"];
   if (workspace === "agency") return ["edit_workflow", "add_blockers", "resolve_blockers", "escalate_liaison"];
-  return ["manage_roles", "edit_workflow", "submit_requests", "add_blockers", "resolve_blockers", "escalate_liaison", "reassign_agency"];
+  return ["manage_roles", "edit_workflow", "triage_intake" as PermissionKey, "submit_requests", "add_blockers", "resolve_blockers", "escalate_liaison", "reassign_agency"];
 }
 
 export function getOperationalPersona(persona: DemoPersona | null): OperationalPersona {
@@ -362,9 +362,11 @@ function coordinationToWorkItem(request: CoordinationRequestRecord, persona: Ope
   };
 }
 
-function rfiToWorkItem(rfi: RFIRecord, persona: OperationalPersona): OperationalWorkItem {
+function rfiToWorkItem(rfi: RFIRecord, persona: OperationalPersona, workstream?: WorkstreamRecord): OperationalWorkItem {
   const response = rfi.responses?.find((entry) => !entry.reviewDecision);
   const forCustomer = persona.isCustomer && sameAgency(rfi.recipientOrgCode, "SPACEX");
+  const assignedReviewer = workstream?.regulatoryLead.assignedReviewerName
+    ?? participantForWorkstream(rfi.workstreamId)?.projectRole;
   const responseSubmitted = Boolean(response);
   const isTerminal = ["accepted", "closed", "rejected", "withdrawn"].includes(rfi.status);
   const waitingForApplicant = !responseSubmitted && !isTerminal;
@@ -468,13 +470,16 @@ function rfiToWorkItem(rfi: RFIRecord, persona: OperationalPersona): Operational
     statusTone,
     priorityScore: isTerminal ? 10 : responseSubmitted ? 94 : forCustomer && waitingForApplicant ? 88 : 35,
     isCriticalPath: !isTerminal && rfi.clockImpact === "clock_paused",
-    ownerName: forCustomer ? rfi.requestingOrgCode : "Assigned reviewer",
+    ownerName: forCustomer ? rfi.requestingOrgCode : assignedReviewer ?? "Assigned reviewer",
     ownerOrganization: rfi.requestingOrgCode,
+    assignedUserId: workstream?.assignedToUserId ?? participantForWorkstream(rfi.workstreamId)?.userId,
+    nextOwner: responseSubmitted ? assignedReviewer ?? rfi.requestingOrgCode : undefined,
     waitingOn,
     nextHandoff: isTerminal ? "Review resumed" : response ? "Resume the linked review" : "Applicant response",
     requiredInputs: rfi.requiredDocumentTypes,
     documents: (response?.attachedDocumentVersionIds ?? []).map((id) => ({ id, label: "Submitted response document" })),
     sourceRfi: rfi,
+    sourceWorkstream: workstream,
     hasRfiResponse: Boolean(response),
     customerVisibleSummary,
     requiresCurrentUserAction: !isTerminal && ((forCustomer && waitingForApplicant) || Boolean(responseSubmitted && persona.workspace !== "customer")),
@@ -487,7 +492,13 @@ function documentToWorkItem(document: DocumentRecord, persona: OperationalPerson
   const currentVersion = document.versions.find((version) => version.versionTag.startsWith(`v${document.currentVersionNumber}`)) ?? document.versions[0];
   if (!currentVersion) return [];
   const pendingReviews = document.agencyReviews.filter((review) => review.documentVersionId === currentVersion.id && review.reviewStatus === "under_review");
-  const visibleReviews = persona.isCustomer ? [] : pendingReviews.filter((review) => persona.workspace !== "reviewer" || sameAgency(review.reviewingOrgCode, persona.agencyCode));
+  const visibleReviews = persona.isCustomer
+    ? []
+    : pendingReviews.filter((review) =>
+        (persona.workspace === "reviewer" || persona.workspace === "agency")
+          ? sameAgency(review.reviewingOrgCode, persona.agencyCode)
+          : true
+      );
   return visibleReviews.map((review) => ({
     id: `${document.id}:${currentVersion.id}:${review.reviewingOrgCode}`,
     sourceId: currentVersion.id,
@@ -522,7 +533,7 @@ function documentToWorkItem(document: DocumentRecord, persona: OperationalPerson
 }
 
 function commitmentToWorkItem(commitment: CommitmentRecord, persona: OperationalPersona): OperationalWorkItem | null {
-  if (persona.isCustomer || persona.workspace === "reviewer" && !sameAgency(commitment.committingOrgCode, persona.agencyCode)) return null;
+  if (persona.isCustomer || (persona.workspace === "reviewer" || persona.workspace === "agency") && !sameAgency(commitment.committingOrgCode, persona.agencyCode)) return null;
   return {
     id: commitment.id,
     sourceId: commitment.id,
@@ -656,7 +667,7 @@ export function getOperationalWorkItems(options: {
       const workstream = workstreamById.get(requestWorkstreamMap[request.id]);
       const item = requestToWorkItem(request, persona, workstream);
       const relevant = persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin"
-        || persona.workspace === "agency"
+        || (persona.workspace === "agency" && sameAgency(request.leadAgencyCode, persona.agencyCode))
         || Boolean(item.assignedUserId && personaUserIds.has(item.assignedUserId))
         || includesAny(request.owner.name, [persona.name, persona.name.split(" ")[0]]);
       if (relevant) items.push(item);
@@ -673,7 +684,7 @@ export function getOperationalWorkItems(options: {
   for (const rfi of options.rfis ?? rfisData) {
     const responseReadyForAssignedReviewer = rfi.responses?.some((response) => !response.reviewDecision) && personaUserIds.has(participantForWorkstream(rfi.workstreamId)?.userId ?? "");
     if (persona.workspace === "customer" || persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin" || sameAgency(rfi.requestingOrgCode, persona.agencyCode) || Boolean(responseReadyForAssignedReviewer)) {
-      items.push(rfiToWorkItem(rfi, persona));
+      items.push(rfiToWorkItem(rfi, persona, workstreamById.get(rfi.workstreamId)));
     }
   }
   for (const document of options.documents ?? projectDocumentsData) items.push(...documentToWorkItem(document, persona));
@@ -681,10 +692,14 @@ export function getOperationalWorkItems(options: {
     const item = commitmentToWorkItem(commitment, persona);
     if (item && (persona.workspace !== "reviewer" || sameAgency(commitment.committingOrgCode, persona.agencyCode))) items.push(item);
   }
+  // SpaceX team members (including the program supervisor persona) are still
+  // customer-tenanted for request privacy. Government personas retain the
+  // broader triage/agency projection below.
+  const isCustomerTenant = persona.isCustomer || persona.organization.toUpperCase().includes("SPACEX");
   for (const customerRequest of options.customerRequests ?? []) {
     const ws = customerRequest.relatedWorkstreamId ? workstreamById.get(customerRequest.relatedWorkstreamId) : undefined;
-    const isTarget = persona.workspace === "customer"
-      ? customerRequest.submittedByUserId === persona.id || persona.isCustomer
+    const isTarget = isCustomerTenant
+      ? Boolean(customerRequest.submittedByUserId && personaUserIds.has(customerRequest.submittedByUserId))
       : persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin" || (customerRequest.knownAgencyCode && sameAgency(customerRequest.knownAgencyCode, persona.agencyCode)) || !customerRequest.knownAgencyCode;
     if (isTarget) {
       items.push(customerRequestToWorkItem(customerRequest, persona, ws));
@@ -723,14 +738,17 @@ export function groupMyWork(items: OperationalWorkItem[]): QueueGroup[] {
     const isTerminal = isTerminalWorkItem(item);
     const isActionable = !isTerminal && requiresCurrentUserAction(item);
     const isWaiting = !isTerminal && !isActionable && (Boolean(item.waitingOn) || Boolean(item.waitLabel));
-    const bucket: QueueSectionId = isTerminal
+    const hasDueDate = !isTerminal && !isActionable && Boolean(item.dueDate);
+    const bucket: QueueSectionId | null = isTerminal
       ? "recently_completed"
       : isActionable
       ? "needs_action"
       : isWaiting
       ? "waiting"
-      : "due_soon";
-    assigned.get(bucket)?.push(item);
+      : hasDueDate
+      ? "due_soon"
+      : null;
+    if (bucket) assigned.get(bucket)?.push(item);
   }
   return sections.map(([id, label, description]) => ({ id, label, description, items: assigned.get(id) ?? [] }));
 }
@@ -783,14 +801,14 @@ export function toOperationalRecordProjection(item: OperationalWorkItem): Operat
   const rfiIds = item.sourceWorkstream?.rfis?.map((r) => r.id) ?? (item.sourceRfi ? [item.sourceRfi.id] : []);
   const responseIds = item.sourceRfi?.responses?.map((r) => r.id) ?? [];
   const docIds = item.documents.map((d) => d.id);
-  const depIds = item.sourceWorkstream?.tasks?.flatMap((t) => t.dependencies ?? []) ?? [];
+  const depIds = item.sourceWorkstream?.tasks?.flatMap((t) => t.predecessorTaskIds ?? []) ?? [];
 
   return {
     id: item.sourceId || item.id,
     kind: item.kind,
     code: item.sourceRfi?.code ?? item.sourceWorkstream?.code ?? item.id,
     title: item.title,
-    projectId: item.sourceWorkstream?.projectId ?? item.sourceRequest?.projectId,
+    projectId: item.sourceWorkstream?.projectId ?? (item.sourceRequest as (ServiceRequest & { projectId?: string }) | undefined)?.projectId,
     projectName: item.projectName,
     parentWorkstreamId: item.workstreamId,
     parentWorkstreamTitle: item.workstreamTitle,
@@ -820,6 +838,9 @@ export function toOperationalRecordProjection(item: OperationalWorkItem): Operat
 
 export function getAvailableActions(item: OperationalWorkItem, persona: OperationalPersona): WorkActionId[] {
   if (persona.isCustomer) {
+    if (item.kind === "customer_request" && (item.itsmState === "pending_customer" || item.statusLabel.toLowerCase().includes("pending"))) {
+      return ["respond"];
+    }
     if (item.kind === "rfi" && (item.statusTone === "red" || item.statusLabel.toLowerCase().includes("waiting") || !item.hasRfiResponse)) {
       return ["respond", "upload_documents"];
     }
@@ -840,7 +861,13 @@ export function getAvailableActions(item: OperationalWorkItem, persona: Operatio
       actions.push("request_information", "add_note");
     }
   } else if (item.kind === "customer_request") {
-    actions.push("complete_step", "update_status", "request_information", "mark_blocked", "escalate", "transfer", "add_note");
+    // An agency-routed request can open an RFI even before a workstream is
+    // linked. A truly unassigned intake only supports clarification until the
+    // state office establishes the authoritative workstream relationship.
+    const informationAction = item.workstreamId || item.requiresOrganizationAction || item.ownerOrganization !== "State Project Office"
+      ? "request_information"
+      : "request_clarification";
+    actions.push("complete_step", "update_status", informationAction, "mark_blocked", "escalate", "transfer", "add_note");
   } else if (item.kind === "commitment") {
     // Commitments need the ability to mark fulfilled, update status, request info, and block
     if (item.statusTone !== "green") {
@@ -916,9 +943,8 @@ export function canUserModifyItem(item: OperationalWorkItem, persona: Operationa
   const personaId = String(p.id ?? "");
 
   if (isCustomer) {
-    if (item.kind === "customer_request" && (item.ownerName?.includes("SpaceX") || item.sourceRequest?.applicant?.includes("SpaceX"))) {
-      return true;
-    }
+    const customerIds = new Set([String(p.id ?? ""), `user-${String(p.id ?? "")}`]);
+    if (item.kind === "customer_request" && Boolean(item.submittedByUserId && customerIds.has(item.submittedByUserId))) return true;
     if (item.kind === "rfi" && (item.statusTone === "red" || item.statusLabel.toLowerCase().includes("waiting") || !item.hasRfiResponse)) {
       return true;
     }

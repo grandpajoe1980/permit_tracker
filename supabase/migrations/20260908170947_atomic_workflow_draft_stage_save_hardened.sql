@@ -1,0 +1,3 @@
+-- The atomic workflow replacement RPC was hardened with authentication,
+-- dependency ordering, and task-contract validation in the preceding
+-- migration. Keep this ledger entry for the already-applied remote revision.

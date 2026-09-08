@@ -71,6 +71,15 @@ test("Checkpoint 9: WorkflowDesignerPanel renders dynamic version numbers and no
   assert.match(source, /draft version \(v\{nextVersionNumber\}\.0\)/);
 });
 
+test("Checkpoint 9: draft lifecycle handlers use the consolidated draft state setter", async () => {
+  const source = await readFile(new URL("../components/cockpits/WorkflowDesignerPanel.tsx", import.meta.url), "utf8");
+
+  assert.doesNotMatch(source, /setDraftVersionId\(/);
+  assert.doesNotMatch(source, /setDraftStages\(/);
+  assert.match(source, /persistDraftChanges\(clonedStages, newDraftId\)/);
+  assert.match(source, /setDraftState\(\{ draftVersionId: null, draftStages: \[\] \}\)/);
+});
+
 test("Checkpoint 9: validateWorkflowDraft catches unreachable stages, cycles, missing owners, and SLA violations", async () => {
   const { validateWorkflowDraft } = await vite.ssrLoadModule("/lib/engines/workflow-engine.ts");
 

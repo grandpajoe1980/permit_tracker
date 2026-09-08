@@ -32,7 +32,7 @@ export function getActionDescriptor(
     persona.workspace === "supervisor" ||
     persona.workspace === "state_office" ||
     persona.workspace === "admin" ||
-    (persona.permissions?.includes("triage_intake") ?? false);
+    ((persona.permissions as string[] | undefined)?.includes("triage_intake") ?? false);
 
   switch (actionId) {
     case "request_clarification": {

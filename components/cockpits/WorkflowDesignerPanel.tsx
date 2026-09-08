@@ -27,6 +27,7 @@ import { mutateCreatePermitType, mutateRegisterOrganization } from "@/lib/supaba
 import { repository } from "@/lib/repository";
 import { validateWorkflowDraft, type WorkflowDraftValidationResult } from "@/lib/engines/workflow-engine";
 import type { OrganizationRecord, PermitTypeRecord, WorkflowTemplateRecord, WorkflowStageRecord } from "@/lib/domain-models";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 
 export function WorkflowDesignerPanel({
   catalog: catalogProp,
@@ -46,6 +47,9 @@ export function WorkflowDesignerPanel({
   const [designerMessage, setDesignerMessage] = useState("");
   const [designerBusy, setDesignerBusy] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [draftSaveState, setDraftSaveState] = useState<"clean" | "dirty" | "saving" | "saved" | "error">("clean");
+  const [draftSaveError, setDraftSaveError] = useState("");
+  const draftSaveQueue = React.useRef(Promise.resolve(true));
   const [permitForm, setPermitForm] = useState({ code: "", name: "", responsibleOrgCode: "LDEQ", statutoryCitation: "", triggerExplanation: "" });
   const [organizationForm, setOrganizationForm] = useState({ code: "", name: "", generalContactEmail: "" });
 
@@ -56,6 +60,9 @@ export function WorkflowDesignerPanel({
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
   const activeVersion = selectedTemplate?.versions.find((v) => v.status === "published") || selectedTemplate?.versions[0];
   const nextVersionNumber = Math.max(...(selectedTemplate?.versions.map((v) => v.versionNumber) ?? [1]), 0) + 1;
+  const assignmentGroups = repository.getAssignmentGroups();
+  const profiles = repository.getProfiles();
+  const previewDialogRef = useDialogFocus(showPreviewModal, () => setShowPreviewModal(false));
 
   function getInitialDraft(template: WorkflowTemplateRecord | undefined): { draftVersionId: string | null; draftStages: WorkflowStageRecord[] } {
     if (!template) return { draftVersionId: null, draftStages: [] };
@@ -84,22 +91,63 @@ export function WorkflowDesignerPanel({
   const [draftState, setDraftState] = useState(() => getInitialDraft(selectedTemplate));
   const draftVersionId = draftState.draftVersionId;
   const draftStages = draftState.draftStages;
+  const draftVersionNumber = draftVersionId
+    ? (selectedTemplate?.versions.find((version) => version.id === draftVersionId)?.versionNumber ?? nextVersionNumber - 1)
+    : nextVersionNumber;
 
   function handleSelectTemplate(templateId: string) {
     setSelectedTemplateId(templateId);
     const tmpl = templates.find((t) => t.id === templateId) || templates[0];
     setDraftState(getInitialDraft(tmpl));
+    setDraftSaveState("clean");
+    setDraftSaveError("");
     setExpandedStageKey(null);
   }
 
   // Persist draft changes
   function persistDraftChanges(stages: WorkflowStageRecord[], draftId: string) {
     setDraftState({ draftVersionId: draftId, draftStages: stages });
+    setDraftSaveState("dirty");
+    setDraftSaveError("");
     try {
       if (selectedTemplate) {
         localStorage.setItem(`path_draft_${selectedTemplate.id}`, JSON.stringify({ draftVersionId: draftId, stages }));
       }
     } catch {}
+  }
+
+  function saveDraftChanges(
+    stages = draftStages,
+    draftId = draftVersionId,
+    notify = true,
+  ): Promise<boolean> {
+    if (!draftId || !selectedTemplate) return Promise.resolve(false);
+    const templateId = selectedTemplate.id;
+    const versionNumber = draftVersionNumber;
+    const saveOperation = draftSaveQueue.current.then(async () => {
+      setDraftSaveState("saving");
+      setDraftSaveError("");
+      const result = await repository.replaceWorkflowDraftStagesPersisted({
+        templateId,
+        draftVersionId: draftId,
+        stages,
+      });
+      if (result.error || !result.data) {
+        const message = result.error?.message ?? "Draft changes were not saved.";
+        setDraftSaveState("error");
+        setDraftSaveError(message);
+        setDesignerMessage(`Draft save failed: ${message}`);
+        return false;
+      }
+      setDraftSaveState("saved");
+      setDraftSaveError("");
+      if (notify) {
+        setDesignerMessage(`Draft v${versionNumber}.0 saved with ${result.data.length} stage${result.data.length === 1 ? "" : "s"}.`);
+      }
+      return true;
+    });
+    draftSaveQueue.current = saveOperation.catch(() => false);
+    return saveOperation;
   }
 
   const orgs = React.useMemo(
@@ -118,8 +166,9 @@ export function WorkflowDesignerPanel({
     return validateWorkflowDraft({
       stages: visibleStages,
       organizations: orgs,
+      assignmentGroups,
     });
-  }, [draftVersionId, visibleStages, orgs]);
+  }, [draftVersionId, visibleStages, orgs, assignmentGroups]);
 
   async function createDraft() {
     if (!activeVersion || !selectedTemplate) return;
@@ -144,15 +193,16 @@ export function WorkflowDesignerPanel({
       sequenceOrder: idx + 1,
     }));
 
-    setDraftVersionId(newDraftId);
     persistDraftChanges(clonedStages, newDraftId);
+    setDraftSaveState("saved");
     setDesignerMessage(`Draft ${newDraftId} (v${res.data.versionNumber}.0) created. You can now add, reorder, and configure stages.`);
   }
 
   function discardDraft() {
     if (!selectedTemplate) return;
-    setDraftVersionId(null);
-    setDraftStages([]);
+    setDraftState({ draftVersionId: null, draftStages: [] });
+    setDraftSaveState("clean");
+    setDraftSaveError("");
     setExpandedStageKey(null);
     try {
       localStorage.removeItem(`path_draft_${selectedTemplate.id}`);
@@ -186,6 +236,7 @@ export function WorkflowDesignerPanel({
 
     const nextStages = [...draftStages, newStage];
     persistDraftChanges(nextStages, draftVersionId);
+    void saveDraftChanges(nextStages, draftVersionId, false);
     setExpandedStageKey(newStageKey);
     setDesignerMessage(`Added stage "${newStage.name}" to draft.`);
   }
@@ -196,6 +247,7 @@ export function WorkflowDesignerPanel({
       .filter((s) => s.stageKey !== stageKey)
       .map((s, idx) => ({ ...s, sequenceOrder: idx + 1 }));
     persistDraftChanges(nextStages, draftVersionId);
+    void saveDraftChanges(nextStages, draftVersionId, false);
     if (expandedStageKey === stageKey) setExpandedStageKey(null);
     setDesignerMessage(`Removed stage from draft.`);
   }
@@ -212,6 +264,7 @@ export function WorkflowDesignerPanel({
 
     const resequenced = nextStages.map((s, idx) => ({ ...s, sequenceOrder: idx + 1 }));
     persistDraftChanges(resequenced, draftVersionId);
+    void saveDraftChanges(resequenced, draftVersionId, false);
     setDesignerMessage(`Stages reordered.`);
   }
 
@@ -219,6 +272,7 @@ export function WorkflowDesignerPanel({
     if (!draftVersionId) return;
     const nextStages = draftStages.map((s) => (s.stageKey === stageKey ? { ...s, [field]: value } : s));
     persistDraftChanges(nextStages, draftVersionId);
+    void saveDraftChanges(nextStages, draftVersionId, false);
   }
 
   async function handlePublishDraft() {
@@ -227,6 +281,10 @@ export function WorkflowDesignerPanel({
       setDesignerMessage(`Cannot publish: Draft contains ${validationResult.errors.length} validation errors.`);
       return;
     }
+
+    // Publishing must never race ahead of an unsaved local add/remove/reorder
+    // or field edit. The server publishes its draft rows, not localStorage.
+    if (!(await saveDraftChanges())) return;
 
     setDesignerBusy(true);
     const res = await repository.publishWorkflowVersionPersisted({
@@ -244,8 +302,9 @@ export function WorkflowDesignerPanel({
     try {
       localStorage.removeItem(`path_draft_${selectedTemplate.id}`);
     } catch {}
-    setDraftVersionId(null);
-    setDraftStages([]);
+    setDraftState({ draftVersionId: null, draftStages: [] });
+    setDraftSaveState("clean");
+    setDraftSaveError("");
     setShowPreviewModal(false);
     setDesignerMessage(`Workflow published as v${res.data.versionNumber}.0! Existing workstreams remain pinned to prior versions. New workstreams will use this version.`);
   }
@@ -358,7 +417,7 @@ export function WorkflowDesignerPanel({
               </Badge>
               {draftVersionId && (
                 <Badge className="bg-amber-100 text-amber-900 border-amber-300 font-mono text-xs font-bold">
-                  Editing Draft v{nextVersionNumber}.0
+                  Editing Draft v{draftVersionNumber}.0
                 </Badge>
               )}
             </div>
@@ -376,6 +435,16 @@ export function WorkflowDesignerPanel({
                 </Button>
               ) : (
                 <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void saveDraftChanges()}
+                    disabled={designerBusy || draftSaveState === "saving" || draftSaveState === "clean" || draftSaveState === "saved"}
+                    className="text-xs font-bold gap-1"
+                  >
+                    {draftSaveState === "saving" ? "Saving…" : "Save Draft"}
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -408,6 +477,19 @@ export function WorkflowDesignerPanel({
               )}
             </div>
           </div>
+
+          {draftVersionId && (
+            <div
+              role={draftSaveState === "error" ? "alert" : "status"}
+              className={`rounded-lg border p-2 text-xs font-semibold ${draftSaveState === "error" ? "border-red-200 bg-red-50 text-red-900" : draftSaveState === "dirty" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-slate-200 bg-white text-slate-600"}`}
+            >
+              {draftSaveState === "dirty" && "Unsaved draft changes. Save before leaving this workflow."}
+              {draftSaveState === "saving" && "Saving draft changes…"}
+              {draftSaveState === "saved" && "Draft changes saved to the database."}
+              {draftSaveState === "error" && `Draft changes were not saved: ${draftSaveError}`}
+              {draftSaveState === "clean" && "Draft loaded from the database."}
+            </div>
+          )}
 
           {designerMessage && (
             <div role="status" className="rounded-lg border border-slate-200 bg-white p-3 text-xs font-semibold text-slate-700">
@@ -446,7 +528,7 @@ export function WorkflowDesignerPanel({
             <ShieldCheck className="size-4 text-sky-600 shrink-0 mt-0.5" />
             <div>
               <strong className="font-semibold block">Immutable Versioning Guardrail:</strong>
-              Active workstreams in flight execute on their assigned version (v{activeVersion.versionNumber}.0). Edits will create a new draft version (v{nextVersionNumber}.0) without modifying live case histories until formal publication.
+              Active workstreams in flight execute on their assigned version (v{activeVersion.versionNumber}.0). Edits are saved to draft v{draftVersionNumber}.0 without modifying live case histories until formal publication. Discarding this draft and creating another uses draft version (v{nextVersionNumber}.0).
             </div>
           </div>
 
@@ -456,6 +538,9 @@ export function WorkflowDesignerPanel({
               const isExpanded = expandedStageKey === stage.stageKey;
               const isUnreachable = validationResult.unreachableStages.includes(stage.stageKey);
               const isCyclic = validationResult.cyclicStages.includes(stage.stageKey);
+              const stageDomKey = stage.stageKey.replace(/[^a-zA-Z0-9_-]/g, "-");
+              const stageGroups = assignmentGroups.filter((group) => group.active && group.orgCode.toUpperCase() === stage.responsibleOrgCode.toUpperCase());
+              const stageProfiles = profiles.filter((profile) => profile.isActive && (!stage.responsibleOrgId || profile.organizationId === stage.responsibleOrgId));
 
               return (
                 <Card
@@ -569,25 +654,28 @@ export function WorkflowDesignerPanel({
                       <div className="space-y-4 rounded-xl border border-teal-200 bg-teal-50/30 p-4 text-xs">
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div>
-                            <label className="font-bold text-slate-700 block mb-1">Stage Title</label>
-                            <input
-                              value={stage.name}
+                              <label className="font-bold text-slate-700 block mb-1" htmlFor={`workflow-stage-title-${stageDomKey}`}>Stage Title</label>
+                              <input
+                                id={`workflow-stage-title-${stageDomKey}`}
+                                value={stage.name}
                               onChange={(e) => updateStageField(stage.stageKey, "name", e.target.value)}
                               className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium"
                             />
                           </div>
                           <div>
-                            <label className="font-bold text-slate-700 block mb-1">Customer Visibility Label</label>
-                            <input
-                              value={stage.customerVisibilityLabel}
+                              <label className="font-bold text-slate-700 block mb-1" htmlFor={`workflow-stage-customer-label-${stageDomKey}`}>Customer Visibility Label</label>
+                              <input
+                                id={`workflow-stage-customer-label-${stageDomKey}`}
+                                value={stage.customerVisibilityLabel}
                               onChange={(e) => updateStageField(stage.stageKey, "customerVisibilityLabel", e.target.value)}
                               className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium"
                             />
                           </div>
                           <div>
-                            <label className="font-bold text-slate-700 block mb-1">Owning Agency / Responsible Org</label>
-                            <select
-                              value={stage.responsibleOrgCode}
+                              <label className="font-bold text-slate-700 block mb-1" htmlFor={`workflow-stage-org-${stageDomKey}`}>Owning Agency / Responsible Org</label>
+                              <select
+                                id={`workflow-stage-org-${stageDomKey}`}
+                                value={stage.responsibleOrgCode}
                               onChange={(e) => updateStageField(stage.stageKey, "responsibleOrgCode", e.target.value)}
                               className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium"
                             >
@@ -600,8 +688,9 @@ export function WorkflowDesignerPanel({
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <label className="font-bold text-slate-700 block mb-1">Target SLA (Days)</label>
+                              <label className="font-bold text-slate-700 block mb-1" htmlFor={`workflow-stage-target-days-${stageDomKey}`}>Target SLA (Days)</label>
                               <input
+                                id={`workflow-stage-target-days-${stageDomKey}`}
                                 type="number"
                                 min={1}
                                 value={stage.targetDurationDays}
@@ -610,8 +699,9 @@ export function WorkflowDesignerPanel({
                               />
                             </div>
                             <div>
-                              <label className="font-bold text-slate-700 block mb-1">Statutory Min (Days)</label>
+                              <label className="font-bold text-slate-700 block mb-1" htmlFor={`workflow-stage-statutory-days-${stageDomKey}`}>Statutory Min (Days)</label>
                               <input
+                                id={`workflow-stage-statutory-days-${stageDomKey}`}
                                 type="number"
                                 min={0}
                                 value={stage.minimumStatutoryDays}
@@ -622,11 +712,49 @@ export function WorkflowDesignerPanel({
                           </div>
                         </div>
 
+                        <div className="grid gap-3 sm:grid-cols-2 border-t border-teal-100 pt-3">
+                          <div className="sm:col-span-2">
+                            <label className="font-bold text-slate-700 block mb-1" htmlFor={`workflow-stage-description-${stageDomKey}`}>Internal process description</label>
+                            <textarea
+                              id={`workflow-stage-description-${stageDomKey}`}
+                              rows={2}
+                              value={stage.internalDescription ?? ""}
+                              onChange={(e) => updateStageField(stage.stageKey, "internalDescription", e.target.value || undefined)}
+                              className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-bold text-slate-700 block mb-1" htmlFor={`workflow-stage-team-${stageDomKey}`}>Default team</label>
+                            <select
+                              id={`workflow-stage-team-${stageDomKey}`}
+                              value={stage.defaultAssignmentGroupId ?? ""}
+                              onChange={(e) => updateStageField(stage.stageKey, "defaultAssignmentGroupId", e.target.value || undefined)}
+                              className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium"
+                            >
+                              <option value="">No default team</option>
+                              {stageGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="font-bold text-slate-700 block mb-1" htmlFor={`workflow-stage-assignee-${stageDomKey}`}>Default person</label>
+                            <select
+                              id={`workflow-stage-assignee-${stageDomKey}`}
+                              value={stage.defaultAssigneeId ?? ""}
+                              onChange={(e) => updateStageField(stage.stageKey, "defaultAssigneeId", e.target.value || undefined)}
+                              className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium"
+                            >
+                              <option value="">No default person</option>
+                              {stageProfiles.map((profile) => <option key={profile.userId} value={profile.userId}>{profile.fullName} — {profile.displayTitle}</option>)}
+                            </select>
+                          </div>
+                        </div>
+
                         {/* Behaviors & Parallelism */}
                         <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t border-teal-100">
                           <div className="flex items-center gap-4">
-                            <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                            <label htmlFor={`workflow-stage-parallel-${stageDomKey}`} className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
                               <input
+                                id={`workflow-stage-parallel-${stageDomKey}`}
                                 type="checkbox"
                                 checked={stage.canRunInParallel}
                                 onChange={(e) => updateStageField(stage.stageKey, "canRunInParallel", e.target.checked)}
@@ -634,8 +762,9 @@ export function WorkflowDesignerPanel({
                               />
                               Run In Parallel
                             </label>
-                            <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                            <label htmlFor={`workflow-stage-milestone-${stageDomKey}`} className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
                               <input
+                                id={`workflow-stage-milestone-${stageDomKey}`}
                                 type="checkbox"
                                 checked={stage.isMilestoneGate}
                                 onChange={(e) => updateStageField(stage.stageKey, "isMilestoneGate", e.target.checked)}
@@ -646,8 +775,9 @@ export function WorkflowDesignerPanel({
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <label className="font-bold text-slate-700 block mb-1">RFI Behavior</label>
+                              <label className="font-bold text-slate-700 block mb-1" htmlFor={`workflow-stage-rfi-${stageDomKey}`}>RFI Behavior</label>
                               <select
+                                id={`workflow-stage-rfi-${stageDomKey}`}
                                 value={stage.rfiBehavior ?? "pauses_clock"}
                                 onChange={(e) => updateStageField(stage.stageKey, "rfiBehavior", e.target.value as "pauses_clock" | "continuous_clock" | "customer_hold")}
                                 className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs"
@@ -658,8 +788,9 @@ export function WorkflowDesignerPanel({
                               </select>
                             </div>
                             <div>
-                              <label className="font-bold text-slate-700 block mb-1">Hold Behavior</label>
+                              <label className="font-bold text-slate-700 block mb-1" htmlFor={`workflow-stage-hold-${stageDomKey}`}>Hold Behavior</label>
                               <select
+                                id={`workflow-stage-hold-${stageDomKey}`}
                                 value={stage.holdBehavior ?? "standard_running"}
                                 onChange={(e) => updateStageField(stage.stageKey, "holdBehavior", e.target.value as "standard_running" | "statutory_hold" | "applicant_hold")}
                                 className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs"
@@ -675,10 +806,11 @@ export function WorkflowDesignerPanel({
                         {/* Document Inputs & Completion Requirements */}
                         <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t border-teal-100">
                           <div>
-                            <label className="font-bold text-slate-700 block mb-1">
+                            <label className="font-bold text-slate-700 block mb-1" htmlFor={`workflow-stage-required-inputs-${stageDomKey}`}>
                               Required Document Inputs (comma separated)
                             </label>
                             <textarea
+                              id={`workflow-stage-required-inputs-${stageDomKey}`}
                               rows={2}
                               value={stage.requiredInputs.join(", ")}
                               onChange={(e) =>
@@ -695,10 +827,11 @@ export function WorkflowDesignerPanel({
                             />
                           </div>
                           <div>
-                            <label className="font-bold text-slate-700 block mb-1">
+                            <label className="font-bold text-slate-700 block mb-1" htmlFor={`workflow-stage-completion-requirements-${stageDomKey}`}>
                               Checklist Gates to Advance (comma separated)
                             </label>
                             <textarea
+                              id={`workflow-stage-completion-requirements-${stageDomKey}`}
                               rows={2}
                               value={stage.completionRequirements.join(", ")}
                               onChange={(e) =>
@@ -716,12 +849,81 @@ export function WorkflowDesignerPanel({
                           </div>
                         </div>
 
+                        <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t border-teal-100">
+                          <div>
+                            <label className="font-bold text-slate-700 block mb-1" htmlFor={`workflow-stage-dependencies-${stageDomKey}`}>
+                              Prerequisite stages (comma separated)
+                            </label>
+                            <input
+                              id={`workflow-stage-dependencies-${stageDomKey}`}
+                              value={(stage.dependencies ?? []).join(", ")}
+                              onChange={(e) => updateStageField(stage.stageKey, "dependencies", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
+                              className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium"
+                            />
+                            <p className="mt-1 text-[11px] text-slate-500">Use stage keys; each prerequisite must be earlier in the process.</p>
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-700 block mb-1">Tasks created for this stage</span>
+                            <div className="space-y-2">
+                              {(stage.tasks ?? []).map((task, taskIndex) => (
+                                <div key={task.id || taskIndex} className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-2 rounded-md border border-slate-200 bg-white p-2">
+                                  <input
+                                    aria-label={`Task ${taskIndex + 1} title`}
+                                    value={task.title}
+                                    onChange={(e) => updateStageField(stage.stageKey, "tasks", (stage.tasks ?? []).map((entry, idx) => idx === taskIndex ? { ...entry, title: e.target.value } : entry))}
+                                    className="min-w-0 rounded border border-slate-300 px-2 py-1 text-xs"
+                                  />
+                                  <label className="flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-slate-600">
+                                    <input
+                                      type="checkbox"
+                                      aria-label={`Task ${taskIndex + 1} required`}
+                                      checked={task.required}
+                                      onChange={(e) => updateStageField(stage.stageKey, "tasks", (stage.tasks ?? []).map((entry, idx) => idx === taskIndex ? { ...entry, required: e.target.checked } : entry))}
+                                    />
+                                    Required
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    aria-label={`Task ${taskIndex + 1} default duration in days`}
+                                    placeholder="Days"
+                                    value={task.defaultDays ?? ""}
+                                    onChange={(e) => updateStageField(stage.stageKey, "tasks", (stage.tasks ?? []).map((entry, idx) => idx === taskIndex ? { ...entry, defaultDays: e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)) } : entry))}
+                                    className="w-16 rounded border border-slate-300 px-2 py-1 text-xs"
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={`Remove task ${taskIndex + 1}`}
+                                    title="Remove task"
+                                    onClick={() => updateStageField(stage.stageKey, "tasks", (stage.tasks ?? []).filter((_, idx) => idx !== taskIndex))}
+                                    className="size-7 text-red-500 hover:bg-red-50 hover:text-red-700"
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                  </Button>
+                                </div>
+                              ))}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => updateStageField(stage.stageKey, "tasks", [...(stage.tasks ?? []), { id: `${stage.stageKey}-task-${(stage.tasks ?? []).length + 1}`, title: "New task", required: true }])}
+                                className="text-[11px] font-bold"
+                              >
+                                <Plus className="mr-1 size-3" /> Add task
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+
                         {/* Permitted Transitions */}
                         <div className="pt-2 border-t border-teal-100">
-                          <label className="font-bold text-slate-700 block mb-1">
+                          <label className="font-bold text-slate-700 block mb-1" htmlFor={`workflow-stage-transitions-${stageDomKey}`}>
                             Permitted Transitions (comma separated, e.g. &quot;complete&quot;, &quot;stage_2&quot;)
                           </label>
                           <input
+                            id={`workflow-stage-transitions-${stageDomKey}`}
                             value={stage.permittedTransitions.join(", ")}
                             onChange={(e) =>
                               updateStageField(
@@ -764,6 +966,14 @@ export function WorkflowDesignerPanel({
                             <p className="text-slate-400 italic">No checklist gates configured</p>
                           )}
                         </div>
+                        <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
+                          <span className="font-bold text-slate-700 block mb-1">Prerequisite stages:</span>
+                          {(stage.dependencies ?? []).length > 0 ? (stage.dependencies ?? []).join(", ") : <span className="text-slate-400 italic">None</span>}
+                        </div>
+                        <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
+                          <span className="font-bold text-slate-700 block mb-1">Stage tasks:</span>
+                          {(stage.tasks ?? []).length > 0 ? (stage.tasks ?? []).map((task) => task.title).join(", ") : <span className="text-slate-400 italic">No tasks configured</span>}
+                        </div>
                       </div>
                     )}
 
@@ -782,18 +992,26 @@ export function WorkflowDesignerPanel({
 
       {/* Pre-Publish Change Preview Modal */}
       {showPreviewModal && draftVersionId && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-          <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
+          <div
+            ref={previewDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="workflow-publish-review-title"
+            aria-describedby="workflow-publish-review-description"
+            tabIndex={-1}
+            className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 space-y-5"
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-lg font-black text-slate-900">
+                <h3 id="workflow-publish-review-title" className="text-lg font-black text-slate-900">
                   Pre-Publish Workflow Version Review
                 </h3>
-                <p className="text-xs text-slate-500">
+                <p id="workflow-publish-review-description" className="text-xs text-slate-500">
                   Confirm the changes for {selectedTemplate?.name} before activating.
                 </p>
               </div>
-              <Button type="button" variant="ghost" size="icon" onClick={() => setShowPreviewModal(false)}>
+              <Button type="button" variant="ghost" size="icon" aria-label="Close workflow review" onClick={() => setShowPreviewModal(false)}>
                 <X className="size-4" />
               </Button>
             </div>
@@ -806,7 +1024,7 @@ export function WorkflowDesignerPanel({
               </strong>
               <p>
                 Existing in-flight workstreams remain pinned to their current published version (v{activeVersion?.versionNumber}.0) and will NOT be modified.
-                New workstreams created after publication will execute on this new version (v{nextVersionNumber}.0).
+                New workstreams created after publication will execute on this new version (v{draftVersionNumber}.0).
               </p>
             </div>
 
@@ -818,7 +1036,7 @@ export function WorkflowDesignerPanel({
                   <p className="mt-1 text-slate-600">{activeVersion?.stages.length} workflow stages</p>
                 </div>
                 <div className="rounded-lg bg-emerald-50 p-3 border border-emerald-200">
-                  <span className="font-bold text-emerald-900 block">New Version to Publish (v{nextVersionNumber}.0)</span>
+                  <span className="font-bold text-emerald-900 block">New Version to Publish (v{draftVersionNumber}.0)</span>
                   <p className="mt-1 text-emerald-800">{draftStages.length} workflow stages</p>
                 </div>
               </div>
@@ -847,7 +1065,7 @@ export function WorkflowDesignerPanel({
                 disabled={designerBusy}
                 className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs"
               >
-                Confirm & Publish Version v{nextVersionNumber}.0
+                Confirm & Publish Version v{draftVersionNumber}.0
               </Button>
             </div>
           </div>

@@ -33,16 +33,8 @@ export function WorkInboxRow({ item, onOpen, onClaim, canClaim = false }: WorkIn
 
   return (
     <div
-      role="button"
-      tabIndex={0}
       data-testid={`inbox-row-${item.id}`}
       onClick={() => onOpen(item)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen(item);
-        }
-      }}
       className="group flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3.5 shadow-xs transition hover:border-teal-400 hover:bg-teal-50/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-500 sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="min-w-0 flex-1">
@@ -53,9 +45,17 @@ export function WorkInboxRow({ item, onOpen, onClaim, canClaim = false }: WorkIn
             <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-800">Critical path</span>
           )}
         </div>
-        <p className="mt-1 text-sm font-black text-[#00284d] group-hover:text-teal-950 group-hover:underline truncate">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen(item);
+          }}
+          className="mt-1 block max-w-full text-left text-sm font-black text-[#00284d] group-hover:text-teal-950 group-hover:underline truncate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+          aria-label={`Open ${item.title}`}
+        >
           {item.title}
-        </p>
+        </button>
         <p className="mt-0.5 text-xs text-slate-500 truncate">
           <span className="font-semibold text-slate-700">Next:</span> {item.waitingOn ? `Waiting on ${item.waitingOn}` : item.whatToDo || "Review record"}
         </p>
@@ -79,6 +79,7 @@ export function WorkInboxRow({ item, onOpen, onClaim, canClaim = false }: WorkIn
               e.stopPropagation();
               onClaim(item);
             }}
+            onKeyDown={(e) => e.stopPropagation()}
             className="rounded-md bg-[#00284d] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#003c70] transition min-h-[36px] sm:min-h-[32px]"
           >
             Take ownership
