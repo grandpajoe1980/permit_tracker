@@ -136,6 +136,12 @@ test("project summary cards open the focused in-app workspace for persisted work
   assert.match(projectOverviewSource, /Each row opens the in-app workstream workspace/);
 });
 
+test("focused workstream scrolling targets the selected workspace, not an unrelated pressed control", () => {
+  assert.match(projectOverviewSource, /data-focused-workstream-id=\{workstream\.id\}/);
+  assert.match(projectOverviewSource, /\[data-focused-workstream-id="\$\{focused\.id\}"\]/);
+  assert.doesNotMatch(projectOverviewSource, /button\[aria-pressed='true'\]/);
+});
+
 test("workstream resolution supports code, lowercase, URL-encoded, and ID lookup", () => {
   const workstreams = repository.getWorkstreams();
   assert.ok(workstreams.length > 0);

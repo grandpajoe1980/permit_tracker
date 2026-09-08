@@ -107,6 +107,7 @@ test("Checkpoint 10: AppShell provides 44px touch targets, persona-selector ID, 
   const appShellSource = await readFile(new URL("../components/path/AppShell.tsx", import.meta.url), "utf8");
   assert.match(appShellSource, /Escape/);
   assert.match(appShellSource, /hamburgerRef/);
+  assert.match(appShellSource, /hidden rounded-full[^\n]*sm:inline/);
 });
 
 test("Checkpoint 10: globals.css enforces reduced motion, coarse pointer 44px targets, visible focus, and mobile viewport constraints", async () => {

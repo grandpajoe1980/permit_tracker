@@ -102,7 +102,12 @@ function FocusedWorkstreamWorkspace({
   const stages = activeVersion?.stages ?? [];
 
   return (
-    <Card className="border-teal-400 bg-white shadow-md" aria-label={`Workstream workspace: ${workstream.title}`}>
+    <Card
+      className="border-teal-400 bg-white shadow-md"
+      aria-label={`Workstream workspace: ${workstream.title}`}
+      data-focused-workstream-id={workstream.id}
+      tabIndex={-1}
+    >
       <CardHeader className="border-b border-slate-100 bg-teal-50/50">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -266,14 +271,14 @@ export function ProjectOverviewPage({
     .slice(0, 4);
 
   useEffect(() => {
-    if (!focusedWorkstreamId) return;
+    if (!focused) return;
     window.requestAnimationFrame(() =>
-      document.querySelector<HTMLButtonElement>("button[aria-pressed='true']")?.scrollIntoView({
+      document.querySelector<HTMLElement>(`[data-focused-workstream-id="${focused.id}"]`)?.scrollIntoView({
         behavior: "smooth",
         block: "center",
       })
     );
-  }, [focusedWorkstreamId]);
+  }, [focused]);
 
   const filteredWorkstreams = useMemo(() => {
     let list = [...project.workstreams];

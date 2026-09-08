@@ -114,7 +114,7 @@ export function AppShell({
             >
               <User className="size-3.5 text-teal-300" aria-hidden="true" />
               <span className="font-bold hidden sm:inline">{activePersona.name}</span>
-              <span className="rounded-full border border-teal-300/40 bg-teal-900/40 px-2 py-0.5 text-[10px] font-bold text-teal-100">
+              <span className="hidden rounded-full border border-teal-300/40 bg-teal-900/40 px-2 py-0.5 text-[10px] font-bold text-teal-100 sm:inline">
                 {activePersona.roleLabel}
               </span>
             </button>
