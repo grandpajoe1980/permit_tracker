@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   ArrowRight,
   Calendar,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clock3,
@@ -13,11 +13,9 @@ import {
   Filter,
   Flame,
   GitBranch,
-  Info,
   Layers,
+  List,
   Sparkles,
-  TrendingDown,
-  TrendingUp,
   Zap,
 } from "lucide-react";
 
@@ -26,9 +24,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getFullProjectRecord } from "@/lib/permit-utils";
 import { evaluateProjectSchedule } from "@/lib/engines/schedule-engine";
-import type { OperationalState, ProjectRecord, WorkstreamRecord } from "@/lib/domain-models";
+import type { OperationalState, ProjectRecord, TaskRecord } from "@/lib/domain-models";
 import { asOfDateTime } from "@/lib/time";
-
 import { InteractiveScheduleSimulator } from "./InteractiveScheduleSimulator";
 
 function displayDate(value?: string) {
@@ -170,24 +167,40 @@ export function WorkstreamGraphGantt({
   customerSafe = false,
   onSelectWorkstream,
   onSelectProject,
+  onSelectTask,
   project: projectOverride,
   asOfDate,
 }: {
   customerSafe?: boolean;
   onSelectWorkstream?: (workstreamId: string) => void;
   onSelectProject?: (workstreamId?: string) => void;
+  onSelectTask?: (taskId: string) => void;
   project?: ProjectRecord;
   asOfDate?: string | Date;
 }) {
   const project = projectOverride ?? getFullProjectRecord();
   const schedule = evaluateProjectSchedule(project.workstreams);
-  const [activeTab, setActiveTab] = useState<"graph" | "simulator" | "delays" | "acceleration">("graph");
-  const [scheduleViewMode, setScheduleViewMode] = useState<"bars" | "table">("bars");
+  const [activeTab, setActiveTab] = useState<"graph" | "advanced">("graph");
+  const [advancedSection, setAdvancedSection] = useState<"simulator" | "delays" | "acceleration">("simulator");
+  const [scheduleViewMode, setScheduleViewMode] = useState<"bars" | "list" | "table">("bars");
   const [filterState, setFilterState] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [hoveredWorkstreamId, setHoveredWorkstreamId] = useState<string | null>(null);
+  const [expandedWorkstreamIds, setExpandedWorkstreamIds] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState<"day" | "week" | "month">("week");
+  const [fitProject, setFitProject] = useState(false);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
   const todayDate = useMemo(() => asOfDateTime(asOfDate), [asOfDate]);
+
+  const toggleExpand = (wsId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setExpandedWorkstreamIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(wsId)) next.delete(wsId);
+      else next.add(wsId);
+      return next;
+    });
+  };
 
   // Timeline boundaries include the earliest baseline work and the current forecast.
   const timelineStart = useMemo(() => {
@@ -197,6 +210,7 @@ export function WorkstreamGraphGantt({
     const earliest = Math.min(...dates);
     return new Date(Number.isFinite(earliest) ? earliest : todayDate.getTime());
   }, [project, todayDate]);
+
   const timelineEnd = useMemo(() => {
     const dates = [project.currentForecastLaunchDate, ...project.workstreams.flatMap((ws) => [ws.forecastTargetDate, ws.baselineTargetDate])]
       .filter(Boolean)
@@ -204,6 +218,7 @@ export function WorkstreamGraphGantt({
     const latest = Math.max(...dates);
     return new Date(Number.isFinite(latest) ? latest : todayDate.getTime());
   }, [project, todayDate]);
+
   const totalTimelineDays = useMemo(() => {
     return Math.max(1, Math.round((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24)));
   }, [timelineStart, timelineEnd]);
@@ -214,8 +229,16 @@ export function WorkstreamGraphGantt({
     return Math.max(0, Math.min(100, (elapsed / totalTimelineDays) * 100));
   }, [todayDate, timelineStart, totalTimelineDays]);
 
-  // Month segments are derived from the actual persisted schedule range so
-  // the header remains correct when a project starts or ends in another year.
+  // Viewport scrolling: on mount and when fitProject is false, place Today ~25% from the left
+  useEffect(() => {
+    if (!fitProject && timelineScrollRef.current) {
+      const container = timelineScrollRef.current;
+      const todayPx = (todayPositionPercent / 100) * container.scrollWidth;
+      container.scrollLeft = Math.max(0, todayPx - container.clientWidth * 0.25);
+    }
+  }, [fitProject, todayPositionPercent, zoom]);
+
+  // Month segments are derived from the actual persisted schedule range
   const months = useMemo(() => {
     const segments: Array<{ label: string; days: number; isCurrent: boolean }> = [];
     const cursor = new Date(Date.UTC(timelineStart.getUTCFullYear(), timelineStart.getUTCMonth(), 1));
@@ -234,6 +257,7 @@ export function WorkstreamGraphGantt({
     }
     return segments;
   }, [timelineStart, timelineEnd, todayDate]);
+
   const monthGridTemplate = months.map((month) => `${month.days}fr`).join(" ");
 
   // Helper to compute percentage position on timeline
@@ -263,6 +287,84 @@ export function WorkstreamGraphGantt({
       return true;
     });
   }, [project.workstreams, filterState, searchQuery]);
+
+  // Chronological list projection for mobile and screen readers
+  const chronologicalItems = useMemo(() => {
+    interface ChronoRow {
+      id: string;
+      workstreamId: string;
+      workstreamCode: string;
+      workstreamTitle: string;
+      taskTitle?: string;
+      taskId?: string;
+      agency: string;
+      dateLabel: string;
+      sortTime: number;
+      isScheduled: boolean;
+      state: OperationalState;
+      stateLabel: string;
+      isCriticalPath: boolean;
+      varianceDays: number;
+      canonicalHref: string;
+    }
+
+    const items: ChronoRow[] = [];
+
+    for (const ws of filteredWorkstreams) {
+      const wsDate = ws.actualCompletionDate ?? ws.forecastTargetDate ?? ws.baselineTargetDate;
+      const wsTime = wsDate ? new Date(wsDate).getTime() : Infinity;
+      items.push({
+        id: `ws-${ws.id}`,
+        workstreamId: ws.id,
+        workstreamCode: ws.code,
+        workstreamTitle: ws.title,
+        agency: ws.regulatoryLead.orgCode,
+        dateLabel: wsDate ? displayDate(wsDate) : "Not scheduled",
+        sortTime: Number.isFinite(wsTime) ? wsTime : Infinity,
+        isScheduled: Boolean(wsDate),
+        state: ws.operationalState,
+        stateLabel: ws.operationalStateLabel || ws.operationalState,
+        isCriticalPath: ws.isCriticalPath,
+        varianceDays: ws.scheduleVarianceDays,
+        canonicalHref: `/workstreams/${encodeURIComponent(ws.code || ws.id)}`,
+      });
+
+      if (ws.tasks) {
+        for (const task of ws.tasks) {
+          const taskDate = task.actualCompletionDate ?? task.forecastDueDate ?? task.baselineDueDate;
+          const taskTime = taskDate ? new Date(taskDate).getTime() : Infinity;
+          const taskState: OperationalState = task.status === "completed"
+            ? "complete"
+            : task.status === "blocked"
+              ? "blocked"
+              : task.status === "in_progress"
+                ? "running"
+                : task.status === "waiting"
+                  ? "waiting_applicant"
+                  : "scheduled_hold";
+          items.push({
+            id: `task-${task.id}`,
+            workstreamId: ws.id,
+            workstreamCode: ws.code,
+            workstreamTitle: ws.title,
+            taskTitle: task.title,
+            taskId: task.id,
+            agency: task.assignedOrgCode || ws.regulatoryLead.orgCode,
+            dateLabel: taskDate ? displayDate(taskDate) : "Not scheduled",
+            sortTime: Number.isFinite(taskTime) ? taskTime : Infinity,
+            isScheduled: Boolean(taskDate),
+            state: taskState,
+            stateLabel: task.status.replace("_", " "),
+            isCriticalPath: task.isCriticalPath,
+            varianceDays: 0,
+            canonicalHref: `/work/task/${encodeURIComponent(task.id)}`,
+          });
+        }
+      }
+    }
+
+    return items.sort((a, b) => a.sortTime - b.sortTime);
+  }, [filteredWorkstreams]);
 
   // Counts for legend
   const stateCounts = useMemo(() => {
@@ -336,49 +438,29 @@ export function WorkstreamGraphGantt({
 
         {/* View Switcher Tabs */}
         <div className="mt-6 grid gap-2 border-b border-slate-200 pb-2 sm:flex sm:flex-wrap sm:items-center">
-          {!customerSafe && (
-            <Button
-              variant={activeTab === "simulator" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setActiveTab("simulator")}
-              className="w-full justify-start whitespace-normal text-left text-xs font-bold sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white"
-            >
-              <Zap className="size-3.5" /> Interactive &quot;What-If&quot; Simulator
-            </Button>
-          )}
           <Button
             variant={activeTab === "graph" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab("graph")}
-            className="w-full justify-start whitespace-normal text-left text-xs sm:w-auto"
+            className="w-full justify-start whitespace-normal text-left text-xs sm:w-auto font-bold"
           >
             <GitBranch className="size-3.5" /> Workstream DAG & Baseline Comparison
           </Button>
           {!customerSafe && (
             <Button
-              variant={activeTab === "delays" ? "default" : "ghost"}
+              variant={activeTab === "advanced" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setActiveTab("delays")}
-              className="w-full justify-start whitespace-normal text-left text-xs sm:w-auto"
+              onClick={() => setActiveTab("advanced")}
+              className="w-full justify-start whitespace-normal text-left text-xs font-bold sm:w-auto text-indigo-700 hover:text-indigo-800"
             >
-              <Clock3 className="size-3.5" /> Delay Taxonomy Attribution
-            </Button>
-          )}
-          {!customerSafe && (
-            <Button
-              variant={activeTab === "acceleration" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setActiveTab("acceleration")}
-              className="w-full justify-start whitespace-normal text-left text-xs text-emerald-700 sm:w-auto"
-            >
-              <Sparkles className="size-3.5" /> Parallel Acceleration Opportunities ({schedule.accelerationOpportunities.length})
+              <Zap className="size-3.5" /> Advanced Analysis
             </Button>
           )}
         </div>
       </div>
 
       {/* ==================================================================== */}
-      {/* TAB: WORKSTREAM DAG & TRADITIONAL GANTT SCHEDULE BARS               */}
+      {/* TAB: WORKSTREAM DAG & SCHEDULE TIMELINE                              */}
       {/* ==================================================================== */}
       {activeTab === "graph" && (
         <div className="space-y-6">
@@ -422,6 +504,13 @@ export function WorkstreamGraphGantt({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setScheduleViewMode("list")}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2.5 py-1 text-center text-xs font-bold transition whitespace-normal sm:flex-none ${scheduleViewMode === "list" ? "bg-[#00284d] text-white shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
+                >
+                  <List className="size-3.5" /> Chronological List
+                </button>
+                <button
+                  type="button"
                   onClick={() => setScheduleViewMode("table")}
                   className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2.5 py-1 text-center text-xs font-bold transition whitespace-normal sm:flex-none ${scheduleViewMode === "table" ? "bg-[#00284d] text-white shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
                 >
@@ -436,7 +525,40 @@ export function WorkstreamGraphGantt({
                 placeholder="Search permit or agency..."
                 className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:border-teal-600 focus:bg-white focus:outline-none sm:w-auto sm:py-1.5"
               />
-              <div className="grid w-full grid-cols-2 gap-1 sm:flex sm:w-auto" aria-label="Schedule controls"><Button type="button" variant="outline" size="sm" onClick={() => setZoom("day")} aria-pressed={zoom === "day"}>Day</Button><Button type="button" variant="outline" size="sm" onClick={() => setZoom("week")} aria-pressed={zoom === "week"}>Week</Button><Button type="button" variant="outline" size="sm" onClick={() => setZoom("month")} aria-pressed={zoom === "month"}>Month</Button><Button type="button" variant="outline" size="sm" onClick={() => setFilterState("all")}>Fit project</Button><Button type="button" variant="outline" size="sm" onClick={() => window.scrollTo({ top: document.querySelector("[aria-label='Timeline horizons']")?.getBoundingClientRect().top ?? 0, behavior: "smooth" })}>Today</Button></div>
+              <div className="grid w-full grid-cols-2 gap-1 sm:flex sm:w-auto" aria-label="Schedule controls">
+                <Button type="button" variant="outline" size="sm" onClick={() => { setZoom("day"); setFitProject(false); }} aria-pressed={zoom === "day"}>Day</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setZoom("week"); setFitProject(false); }} aria-pressed={zoom === "week"}>Week</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setZoom("month"); setFitProject(false); }} aria-pressed={zoom === "month"}>Month</Button>
+                <Button
+                  type="button"
+                  variant={fitProject ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setFitProject(true);
+                    if (timelineScrollRef.current) {
+                      timelineScrollRef.current.scrollLeft = 0;
+                    }
+                  }}
+                >
+                  Fit project
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setFitProject(false);
+                    if (timelineScrollRef.current) {
+                      const container = timelineScrollRef.current;
+                      const todayPx = (todayPositionPercent / 100) * container.scrollWidth;
+                      container.scrollTo({
+                        left: Math.max(0, todayPx - container.clientWidth * 0.25),
+                        behavior: "smooth",
+                      });
+                    }
+                  }}
+                >Today</Button>
+              </div>
             </div>
           </div>
 
@@ -444,7 +566,7 @@ export function WorkstreamGraphGantt({
           {/* OPERATIONAL STATE COLOR CODE LEGEND                              */}
           {/* ================================================================ */}
           <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm">
-              <div className="flex flex-col items-start gap-2 border-b border-slate-200 pb-2.5 mb-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col items-start gap-2 border-b border-slate-200 pb-2.5 mb-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <span className="flex size-5 items-center justify-center rounded-full bg-[#00284d] text-white text-[10px] font-black">i</span>
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
@@ -454,13 +576,13 @@ export function WorkstreamGraphGantt({
               <span className="text-[11px] font-semibold text-slate-500">
                 Click any bar or workstream row to open permit details
               </span>
-              </div>
+            </div>
 
-              <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-600" aria-label="Timeline horizons">
-                <span className="rounded border border-dashed border-slate-400 bg-slate-100 px-2 py-1">Past / baseline history</span>
-                <span className="rounded border border-emerald-600 bg-emerald-500 px-2 py-1 text-white">Current state as of today</span>
-                <span className="rounded border border-dashed border-indigo-500 bg-indigo-100 px-2 py-1 text-indigo-900">Future forecast</span>
-              </div>
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-600" aria-label="Timeline horizons">
+              <span className="rounded border border-dashed border-slate-400 bg-slate-100 px-2 py-1">Past / baseline history</span>
+              <span className="rounded border border-emerald-600 bg-emerald-500 px-2 py-1 text-white">Current state as of today</span>
+              <span className="rounded border border-dashed border-indigo-500 bg-indigo-100 px-2 py-1 text-indigo-900">Future forecast</span>
+            </div>
 
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-5">
               {legendStates.map((state) => {
@@ -509,219 +631,463 @@ export function WorkstreamGraphGantt({
           </div>
 
           {/* ================================================================ */}
+          {/* CHRONOLOGICAL LIST VIEW (MOBILE & SCREEN READER SAFE)             */}
+          {/* ================================================================ */}
+          <div
+            className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3 ${
+              scheduleViewMode === "list" ? "block" : "block md:hidden"
+            }`}
+            role="list"
+            aria-label="Chronological schedule list"
+          >
+              <div className="border-b border-slate-100 pb-2">
+                <h3 className="text-sm font-black text-slate-900">Chronological Schedule Events</h3>
+                <p className="text-xs text-slate-500">Accessible sequence ordered by target milestones and forecast dates. Usable on all devices without horizontal overflow.</p>
+              </div>
+
+              {chronologicalItems.map((item) => {
+                const config = STATE_COLOR_MAP[item.state] || STATE_COLOR_MAP.running;
+                return (
+                  <div
+                    key={item.id}
+                    role="listitem"
+                    className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between hover:bg-slate-50/80 transition"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap text-xs">
+                        <span className="font-mono font-bold text-slate-500">{item.workstreamCode}</span>
+                        <Badge variant="outline" className="text-[10px] font-bold">{item.agency}</Badge>
+                        {item.isCriticalPath && (
+                          <Badge className="bg-purple-100 text-purple-900 border-purple-200 text-[10px] py-0 font-bold flex items-center gap-0.5">
+                            <Flame className="size-2.5 text-amber-500 fill-amber-500" /> Critical
+                          </Badge>
+                        )}
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${config.badgeBg} ${config.badgeText}`}>
+                          <span className={`size-1.5 rounded-full ${config.dotColor}`} />
+                          {item.stateLabel}
+                        </span>
+                      </div>
+
+                      <div className="mt-1">
+                        <Link
+                          href={item.canonicalHref}
+                          onClick={(e) => {
+                            if (item.taskId && onSelectTask) {
+                              e.preventDefault();
+                              onSelectTask(item.taskId);
+                            } else if (!item.taskId && onSelectWorkstream) {
+                              e.preventDefault();
+                              onSelectWorkstream(item.workstreamId);
+                            }
+                          }}
+                          className="font-bold text-slate-900 text-sm hover:text-teal-800 hover:underline inline-flex items-center gap-1"
+                        >
+                          {item.taskTitle ? `${item.workstreamTitle} → ${item.taskTitle}` : item.workstreamTitle}
+                          <ExternalLink className="size-3 text-slate-400 shrink-0" />
+                        </Link>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between sm:flex-col sm:items-end sm:justify-center shrink-0 text-xs">
+                      <span className="font-mono font-bold text-slate-700">
+                        {item.isScheduled ? item.dateLabel : <span className="text-slate-400 italic">Not scheduled</span>}
+                      </span>
+                      {!item.isScheduled && (
+                        <Link href="/admin/workflows" className="text-[10px] text-teal-700 hover:underline font-bold">
+                          Configure
+                        </Link>
+                      )}
+                      {item.varianceDays > 0 && (
+                        <span className="font-mono text-rose-600 font-bold text-[10px]">
+                          +{item.varianceDays}d slip
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {chronologicalItems.length === 0 && (
+                <div className="p-6 text-center text-slate-500 text-xs font-bold">
+                  No schedule items found.
+                </div>
+              )}
+            </div>
+
+          {/* ================================================================ */}
           {/* TRADITIONAL GANTT SCHEDULE TIMELINE CHART                        */}
           {/* ================================================================ */}
-          {scheduleViewMode === "bars" && (
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              {/* Timeline Header Row */}
-              <div className="grid grid-cols-12 border-b border-slate-200 bg-slate-100/90 text-xs font-bold text-slate-700">
-                {/* Left Column: Workstream Header */}
-                <div className="col-span-12 md:col-span-4 p-3 border-r border-slate-200 flex items-center justify-between">
-                  <span className="font-black uppercase tracking-wider text-slate-700">Workstream / Project</span>
-                  <span className="text-[11px] font-semibold text-slate-500">Lead Agency & State</span>
-                </div>
-
-                {/* Right Column: Timeline Months Grid */}
-                <div className="hidden md:col-span-8 md:grid relative py-2.5" style={{ gridTemplateColumns: monthGridTemplate }}>
-                  {months.map((month) => (
-                    <div
-                      key={month.label}
-                      className={`text-center text-[11px] font-bold uppercase tracking-wider border-r border-slate-200 last:border-0 ${
-                        month.isCurrent ? "text-red-700 bg-red-50/60 font-black" : "text-slate-600"
-                      }`}
-                    >
-                      {month.label}
+          <div className={`rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden ${scheduleViewMode === "bars" ? "hidden md:block" : "hidden"}`}>
+              <div
+                ref={timelineScrollRef}
+                className="overflow-x-auto"
+                tabIndex={0}
+                aria-label="Gantt schedule timeline"
+              >
+                <div
+                  style={{
+                    minWidth: fitProject ? "100%" : zoom === "day" ? "1800px" : zoom === "week" ? "1200px" : "960px",
+                  }}
+                >
+                  {/* Timeline Header Row */}
+                  <div className="grid grid-cols-12 border-b border-slate-200 bg-slate-100/90 text-xs font-bold text-slate-700">
+                    {/* Left Column: Workstream Header */}
+                    <div className="col-span-12 md:col-span-4 p-3 border-r border-slate-200 flex items-center justify-between">
+                      <span className="font-black uppercase tracking-wider text-slate-700">Workstream / Project</span>
+                      <span className="text-[11px] font-semibold text-slate-500">Lead Agency & State</span>
                     </div>
-                  ))}
 
-                  {/* Vertical "Today" line marker in header */}
-                  <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-red-600 z-10 pointer-events-none"
-                    style={{ left: `${todayPositionPercent}%` }}
-                  >
-                    <span className="absolute -top-1 -translate-x-1/2 rounded bg-red-600 px-1 py-0.5 text-[9px] font-black uppercase text-white shadow">
-                      Today
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Workstream Gantt Rows */}
-              <div className="divide-y divide-slate-100">
-                {filteredWorkstreams.map((ws) => {
-                  const stateConfig = STATE_COLOR_MAP[ws.operationalState] || STATE_COLOR_MAP.running;
-                  const isHovered = hoveredWorkstreamId === ws.id;
-
-                  // Baseline coordinates
-                  const baselineLeft = getTimelinePosition(ws.baselineStartDate);
-
-                  // Forecast coordinates
-                  const forecastLeft = getTimelinePosition(ws.forecastStartDate);
-                  const forecastRight = getTimelinePosition(ws.forecastTargetDate);
-
-                  const hasSlip = ws.scheduleVarianceDays > 0;
-                  const currentStart = getTimelinePosition(ws.actualStartDate ?? ws.forecastStartDate ?? ws.baselineStartDate);
-                  const currentEnd = ws.operationalState === "complete"
-                    ? getTimelinePosition(ws.actualCompletionDate ?? ws.forecastTargetDate)
-                    : todayPositionPercent;
-                  const pastEnd = Math.min(todayPositionPercent, currentStart);
-                  const futureStart = ws.operationalState === "complete" ? forecastRight : Math.max(todayPositionPercent, forecastLeft);
-                  const pastWidth = Math.max(1.5, pastEnd - baselineLeft);
-                  const currentWidth = Math.max(1.5, currentEnd - currentStart);
-                  const futureWidth = ws.operationalState === "complete" ? 0 : Math.max(1.5, forecastRight - futureStart);
-
-                  return (
-                    <div
-                      key={ws.id}
-                      onMouseEnter={() => setHoveredWorkstreamId(ws.id)}
-                      onMouseLeave={() => setHoveredWorkstreamId(null)}
-                      role="button"
-                      aria-label={`${ws.code}: ${ws.title}. Current stage ${ws.currentStageName || "Not configured"}. Owner ${ws.regulatoryLead.assignedReviewerName || "Unassigned"}.`}
-                      tabIndex={0}
-                      onClick={() => onSelectWorkstream?.(ws.id)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          onSelectWorkstream?.(ws.id);
-                        }
-                      }}
-                      className={`grid grid-cols-12 items-center transition-colors cursor-pointer ${
-                        isHovered ? "bg-slate-50/90" : "hover:bg-slate-50/60"
-                      }`}
-                      title={`Click to open ${ws.title} (${ws.code}) details page`}
-                    >
-                      {/* Left Meta Column */}
-                      <div className="col-span-12 border-b border-slate-200 p-3.5 md:col-span-4 md:border-b-0 md:border-r">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-mono text-xs font-black text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
-                              {ws.code}
-                            </span>
-                            {ws.isCriticalPath && (
-                              <Badge className="bg-purple-100 text-purple-900 border-purple-200 text-[10px] py-0 font-bold flex items-center gap-0.5">
-                                <Flame className="size-3 text-amber-500 fill-amber-500" /> Critical Path
-                              </Badge>
-                            )}
-                          </div>
-
-                          <Badge variant="outline" className="font-bold text-[11px] shrink-0">
-                            {ws.regulatoryLead.orgCode}
-                          </Badge>
-                        </div>
-
-                        {/* Workstream Title & Link */}
-                        <div className="mt-1 flex items-center justify-between group">
-                          <span className="font-bold text-slate-900 text-sm group-hover:text-teal-800 transition line-clamp-1">
-                            {ws.title}
-                          </span>
-                          <ExternalLink className="size-3 text-slate-400 group-hover:text-teal-700 shrink-0 ml-1 opacity-0 group-hover:opacity-100 transition" />
-                        </div>
-
-                        {/* Current Stage & State Badge */}
-                        <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap text-xs">
-                          <span className="text-slate-500 truncate max-w-[200px]">
-                            {ws.currentStageName || "Technical Review"}
-                          </span>
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${stateConfig.badgeBg} ${stateConfig.badgeText}`}>
-                            <span className={`size-1.5 rounded-full ${stateConfig.dotColor}`} />
-                            {stateConfig.shortLabel}
-                          </span>
-                        </div>
-                        <p className="mt-1 truncate text-[11px] text-slate-500" title={`Current owner: ${ws.regulatoryLead.assignedReviewerName}`}>
-                          Owner: {ws.regulatoryLead.assignedReviewerName || "Unassigned"} · {ws.regulatoryLead.orgCode}
-                        </p>
-                      </div>
-
-                      {/* Right Timeline Column with Traditional Bars */}
-                      <div className="col-span-12 relative flex h-[112px] flex-col justify-center overflow-hidden border-t border-slate-100 p-3 md:col-span-8 md:border-t-0">
-                        {/* Background monthly grid lines */}
-                        <div className="absolute inset-0 grid pointer-events-none opacity-20" style={{ gridTemplateColumns: monthGridTemplate }}>
-                          {months.map((m) => (
-                            <div key={m.label} className="border-r border-slate-300 h-full last:border-0" />
-                          ))}
-                        </div>
-
-                        {/* Vertical "Today" line marker across row */}
+                    {/* Right Column: Timeline Months Grid */}
+                    <div className="hidden md:col-span-8 md:grid relative py-2.5" style={{ gridTemplateColumns: monthGridTemplate }}>
+                      {months.map((month) => (
                         <div
-                          className="absolute top-0 bottom-0 w-0.5 bg-red-500/80 z-10 pointer-events-none"
-                          style={{ left: `${todayPositionPercent}%` }}
-                        />
-
-                        {/* Past / baseline history */}
-                        <div className="relative w-full h-5 mb-1">
-                          <div
-                            className="absolute h-3.5 rounded border border-dashed border-slate-400 bg-slate-100/90 flex items-center px-1.5 text-[9px] font-mono text-slate-600 truncate transition-all"
-                            style={{
-                              left: `${baselineLeft}%`,
-                              width: `${pastWidth}%`,
-                            }}
-                            title={`Baseline schedule: ${displayDate(ws.baselineStartDate)} → ${displayDate(ws.baselineTargetDate)}`}
-                          >
-                            <span className="truncate opacity-80">Past / Baseline: {displayDate(ws.baselineStartDate)}</span>
-                          </div>
+                          key={month.label}
+                          className={`text-center text-[11px] font-bold uppercase tracking-wider border-r border-slate-200 last:border-0 ${
+                            month.isCurrent ? "text-red-700 bg-red-50/60 font-black" : "text-slate-600"
+                          }`}
+                        >
+                          {month.label}
                         </div>
+                      ))}
 
-                        {/* Current state / actual execution */}
-                        <div className="relative w-full h-6 mb-1">
-                          <div
-                            className={`absolute h-6 rounded-md shadow-sm border ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} flex items-center justify-between px-2.5 text-xs font-bold transition-all transform hover:scale-[1.01] hover:shadow-md cursor-pointer`}
-                            style={{
-                              left: `${currentStart}%`,
-                              width: `${currentWidth}%`,
-                            }}
-                            title={`${ws.title} (${ws.code})\nState: ${stateConfig.label}\nForecast: ${displayDate(ws.forecastStartDate)} → ${displayDate(ws.forecastTargetDate)} (${hasSlip ? `+${ws.scheduleVarianceDays}d variance` : "On Track"})\nReviewer: ${ws.regulatoryLead.assignedReviewerName || "Unassigned"} (${ws.regulatoryLead.orgCode})`}
-                          >
-                            <span className="truncate text-[10px] font-black drop-shadow-sm">Current: {stateConfig.shortLabel}</span>
-
-                            {hasSlip && (
-                              <span className="shrink-0 rounded bg-black/25 px-1.5 py-0.5 text-[10px] font-mono font-black text-white ml-1">
-                                +{ws.scheduleVarianceDays}d
-                              </span>
-                            )}
-                          </div>
-
-                        </div>
-
-                        {/* Future state / forecast */}
-                        <div className="relative w-full h-5">
-                          <div
-                            className={`absolute h-4 rounded-md border border-dashed ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} opacity-60 flex items-center px-2 text-[9px] font-bold ${futureWidth === 0 ? "hidden" : ""}`}
-                            style={{ left: `${futureStart}%`, width: `${futureWidth}%` }}
-                            title={`Future forecast: ${ws.forecastStartDate} -> ${ws.forecastTargetDate}${hasSlip ? ` (+${ws.scheduleVarianceDays}d variance)` : ""}`}
-                          >
-                            <span className="truncate">Future: {ws.forecastTargetDate}</span>
-                          </div>
-
-                          {/* Forecast Target Marker / Flag */}
-                          <div
-                            className="absolute top-0 text-[9px] font-mono font-black text-slate-800"
-                            style={{ left: `calc(${forecastRight}% + 6px)` }}
-                          >
-                            {ws.forecastTargetDate}
-                          </div>
-                        </div>
+                      {/* Vertical "Today" line marker in header */}
+                      <div
+                        className="absolute top-0 bottom-0 w-0.5 bg-red-600 z-10 pointer-events-none"
+                        style={{ left: `${todayPositionPercent}%` }}
+                      >
+                        <span className="absolute -top-1 -translate-x-1/2 rounded bg-red-600 px-1 py-0.5 text-[9px] font-black uppercase text-white shadow">
+                          Today
+                        </span>
                       </div>
                     </div>
-                  );
-                })}
-
-                {filteredWorkstreams.length === 0 && (
-                  <div className="p-8 text-center text-slate-500">
-                    <p className="font-bold">No workstreams match the selected filter or search query.</p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => { setFilterState("all"); setSearchQuery(""); }}
-                      className="mt-3 text-xs font-bold"
-                    >
-                      Reset Filters
-                    </Button>
                   </div>
-                )}
+
+                  {/* Workstream Gantt Rows */}
+                  <div className="divide-y divide-slate-100">
+                    {filteredWorkstreams.map((ws) => {
+                      const stateConfig = STATE_COLOR_MAP[ws.operationalState] || STATE_COLOR_MAP.running;
+                      const isHovered = hoveredWorkstreamId === ws.id;
+                      const isExpanded = expandedWorkstreamIds.has(ws.id);
+
+                      // Baseline coordinates
+                      const baselineLeft = getTimelinePosition(ws.baselineStartDate);
+
+                      // Forecast coordinates
+                      const forecastLeft = getTimelinePosition(ws.forecastStartDate);
+                      const forecastRight = getTimelinePosition(ws.forecastTargetDate);
+
+                      const hasSlip = ws.scheduleVarianceDays > 0;
+                      const currentStart = getTimelinePosition(ws.actualStartDate ?? ws.forecastStartDate ?? ws.baselineStartDate);
+                      const currentEnd = ws.operationalState === "complete"
+                        ? getTimelinePosition(ws.actualCompletionDate ?? ws.forecastTargetDate)
+                        : todayPositionPercent;
+                      const pastEnd = Math.min(todayPositionPercent, currentStart);
+                      const futureStart = ws.operationalState === "complete" ? forecastRight : Math.max(todayPositionPercent, forecastLeft);
+                      const pastWidth = Math.max(1.5, pastEnd - baselineLeft);
+                      const currentWidth = Math.max(1.5, currentEnd - currentStart);
+                      const futureWidth = ws.operationalState === "complete" ? 0 : Math.max(1.5, forecastRight - futureStart);
+
+                      return (
+                        <div key={ws.id} className="divide-y divide-slate-50">
+                          {/* Top-Level Workstream Row */}
+                          <div
+                            onMouseEnter={() => setHoveredWorkstreamId(ws.id)}
+                            onMouseLeave={() => setHoveredWorkstreamId(null)}
+                            role="button"
+                            aria-label={`${ws.code}: ${ws.title}. Current stage ${ws.currentStageName || "Not configured"}. Owner ${ws.regulatoryLead.assignedReviewerName || "Unassigned"}.`}
+                            tabIndex={0}
+                            onClick={() => onSelectWorkstream?.(ws.id)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                onSelectWorkstream?.(ws.id);
+                              }
+                            }}
+                            className={`grid grid-cols-12 items-center transition-colors cursor-pointer ${
+                              isHovered ? "bg-slate-50/90" : "hover:bg-slate-50/60"
+                            }`}
+                            title={`Click to open ${ws.title} (${ws.code}) details page`}
+                          >
+                            {/* Left Meta Column */}
+                            <div className="col-span-12 border-b border-slate-200 p-3.5 md:col-span-4 md:border-b-0 md:border-r">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => toggleExpand(ws.id, e)}
+                                    aria-expanded={isExpanded}
+                                    aria-label={isExpanded ? `Collapse ${ws.code} stages and tasks` : `Expand ${ws.code} stages and tasks`}
+                                    className="p-1 rounded text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition"
+                                    title={isExpanded ? "Collapse workflow stages/tasks" : "Expand workflow stages/tasks"}
+                                  >
+                                    {isExpanded ? <ChevronDown className="size-3.5 text-teal-800" /> : <ChevronRight className="size-3.5" />}
+                                  </button>
+                                  <span className="font-mono text-xs font-black text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                                    {ws.code}
+                                  </span>
+                                  {ws.isCriticalPath && (
+                                    <Badge className="bg-purple-100 text-purple-900 border-purple-200 text-[10px] py-0 font-bold flex items-center gap-0.5">
+                                      <Flame className="size-3 text-amber-500 fill-amber-500" /> Critical Path
+                                    </Badge>
+                                  )}
+                                </div>
+
+                                <Badge variant="outline" className="font-bold text-[11px] shrink-0">
+                                  {ws.regulatoryLead.orgCode}
+                                </Badge>
+                              </div>
+
+                              {/* Workstream Title & Link */}
+                              <div className="mt-1 flex items-center justify-between group">
+                                <Link
+                                  href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}`}
+                                  onClick={(e) => {
+                                    if (onSelectWorkstream) {
+                                      e.preventDefault();
+                                      onSelectWorkstream(ws.id);
+                                    }
+                                  }}
+                                  className="font-bold text-slate-900 text-sm group-hover:text-teal-800 transition line-clamp-1"
+                                >
+                                  {ws.title}
+                                </Link>
+                                <ExternalLink className="size-3 text-slate-400 group-hover:text-teal-700 shrink-0 ml-1 opacity-0 group-hover:opacity-100 transition" />
+                              </div>
+
+                              {/* Current Stage & State Badge */}
+                              <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap text-xs">
+                                <Link
+                                  href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}#phase-${encodeURIComponent(ws.currentStageName || "phase")}`}
+                                  onClick={(e) => {
+                                    if (onSelectWorkstream) {
+                                      e.preventDefault();
+                                      onSelectWorkstream(ws.id);
+                                    }
+                                  }}
+                                  className="text-slate-500 truncate max-w-[200px] hover:text-teal-800 hover:underline"
+                                  title="Open stage anchor"
+                                >
+                                  {ws.currentStageName || "Technical Review"}
+                                </Link>
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${stateConfig.badgeBg} ${stateConfig.badgeText}`}>
+                                  <span className={`size-1.5 rounded-full ${stateConfig.dotColor}`} />
+                                  {stateConfig.shortLabel}
+                                </span>
+                              </div>
+                              <p className="mt-1 truncate text-[11px] text-slate-500" title={`Current owner: ${ws.regulatoryLead.assignedReviewerName}`}>
+                                Owner: {ws.regulatoryLead.assignedReviewerName || "Unassigned"} · {ws.regulatoryLead.orgCode}
+                              </p>
+                            </div>
+
+                            {/* Right Timeline Column with Traditional Bars */}
+                            <div className="col-span-12 relative flex h-[112px] flex-col justify-center overflow-hidden border-t border-slate-100 p-3 md:col-span-8 md:border-t-0">
+                              {/* Background monthly grid lines */}
+                              <div className="absolute inset-0 grid pointer-events-none opacity-20" style={{ gridTemplateColumns: monthGridTemplate }}>
+                                {months.map((m) => (
+                                  <div key={m.label} className="border-r border-slate-300 h-full last:border-0" />
+                                ))}
+                              </div>
+
+                              {/* Vertical "Today" line marker across row */}
+                              <div
+                                className="absolute top-0 bottom-0 w-0.5 bg-red-500/80 z-10 pointer-events-none"
+                                style={{ left: `${todayPositionPercent}%` }}
+                              />
+
+                              {/* Past / baseline history */}
+                              <div className="relative w-full h-5 mb-1">
+                                <div
+                                  className="absolute h-3.5 rounded border border-dashed border-slate-400 bg-slate-100/90 flex items-center px-1.5 text-[9px] font-mono text-slate-600 truncate transition-all"
+                                  style={{
+                                    left: `${baselineLeft}%`,
+                                    width: `${pastWidth}%`,
+                                  }}
+                                  title={`Baseline schedule: ${displayDate(ws.baselineStartDate)} → ${displayDate(ws.baselineTargetDate)}`}
+                                >
+                                  <span className="truncate opacity-80">Baseline: {displayDate(ws.baselineStartDate)}</span>
+                                </div>
+                              </div>
+
+                              {/* Current state / actual execution */}
+                              <div className="relative w-full h-6 mb-1">
+                                <div
+                                  className={`absolute h-6 rounded-md shadow-sm border ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} flex items-center justify-between px-2.5 text-xs font-bold transition-all transform hover:scale-[1.01] hover:shadow-md cursor-pointer`}
+                                  style={{
+                                    left: `${currentStart}%`,
+                                    width: `${currentWidth}%`,
+                                  }}
+                                  title={`${ws.title} (${ws.code})\nState: ${stateConfig.label}\nForecast: ${displayDate(ws.forecastStartDate)} → ${displayDate(ws.forecastTargetDate)} (${hasSlip ? `+${ws.scheduleVarianceDays}d variance` : "On Track"})\nReviewer: ${ws.regulatoryLead.assignedReviewerName || "Unassigned"} (${ws.regulatoryLead.orgCode})`}
+                                >
+                                  <span className="truncate text-[10px] font-black drop-shadow-sm">Current: {stateConfig.shortLabel}</span>
+
+                                  {hasSlip && (
+                                    <span className="shrink-0 rounded bg-black/25 px-1.5 py-0.5 text-[10px] font-mono font-black text-white ml-1">
+                                      +{ws.scheduleVarianceDays}d
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Future state / forecast */}
+                              <div className="relative w-full h-5">
+                                <div
+                                  className={`absolute h-4 rounded-md border border-dashed ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} opacity-60 flex items-center px-2 text-[9px] font-bold ${futureWidth === 0 ? "hidden" : ""}`}
+                                  style={{ left: `${futureStart}%`, width: `${futureWidth}%` }}
+                                  title={`Future forecast: ${ws.forecastStartDate} -> ${ws.forecastTargetDate}${hasSlip ? ` (+${ws.scheduleVarianceDays}d variance)` : ""}`}
+                                >
+                                  <span className="truncate">Future: {ws.forecastTargetDate}</span>
+                                </div>
+
+                                {/* Forecast Target Marker / Flag */}
+                                <div
+                                  className="absolute top-0 text-[9px] font-mono font-black text-slate-800"
+                                  style={{ left: `calc(${forecastRight}% + 6px)` }}
+                                >
+                                  {ws.forecastTargetDate}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Expanded Stages and Tasks Sub-Rows */}
+                          {isExpanded && ws.tasks && ws.tasks.length > 0 && (
+                            <div className="bg-slate-50/70 divide-y divide-slate-100 border-l-4 border-teal-600">
+                              {ws.tasks.map((task: TaskRecord) => {
+                                const hasDates = Boolean(task.baselineStartDate || task.baselineDueDate || task.forecastStartDate || task.forecastDueDate || task.actualCompletionDate);
+                                const isTaskComplete = task.status === "completed";
+                                const taskBarColor = isTaskComplete
+                                  ? "bg-teal-500 border-teal-600 text-white"
+                                  : task.status === "blocked"
+                                    ? "bg-rose-500 border-rose-600 text-white"
+                                    : task.status === "in_progress"
+                                      ? "bg-emerald-500 border-emerald-600 text-white"
+                                      : task.status === "waiting"
+                                        ? "bg-amber-500 border-amber-600 text-slate-900"
+                                        : "bg-slate-300 border-slate-400 text-slate-800";
+
+                                const taskBaselineLeft = task.baselineStartDate ? getTimelinePosition(task.baselineStartDate) : undefined;
+                                const taskBaselineRight = task.baselineDueDate ? getTimelinePosition(task.baselineDueDate) : undefined;
+                                const taskForecastLeft = task.forecastStartDate ? getTimelinePosition(task.forecastStartDate) : undefined;
+                                const taskForecastRight = task.forecastDueDate ? getTimelinePosition(task.forecastDueDate) : undefined;
+                                const taskActualRight = task.actualCompletionDate ? getTimelinePosition(task.actualCompletionDate) : undefined;
+
+                                const taskBarLeft = taskForecastLeft ?? taskBaselineLeft ?? 0;
+                                const taskBarEnd = taskActualRight ?? taskForecastRight ?? taskBaselineRight ?? (taskBarLeft + 3);
+                                const taskBarWidth = Math.max(1.5, taskBarEnd - taskBarLeft);
+
+                                return (
+                                  <div
+                                    key={task.id}
+                                    className="grid grid-cols-12 items-center hover:bg-slate-100/70 transition-colors"
+                                  >
+                                    {/* Sub-row left metadata */}
+                                    <div className="col-span-12 p-3 pl-8 md:col-span-4 border-r border-slate-200">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <Link
+                                          href={`/work/task/${encodeURIComponent(task.id)}`}
+                                          onClick={(e) => {
+                                            if (onSelectTask) {
+                                              e.preventDefault();
+                                              onSelectTask(task.id);
+                                            }
+                                          }}
+                                          className="text-xs font-bold text-slate-900 hover:text-teal-800 hover:underline flex items-center gap-1"
+                                        >
+                                          <Layers className="size-3 text-slate-400" />
+                                          <span>{task.title}</span>
+                                          <ExternalLink className="size-2.5 text-slate-400" />
+                                        </Link>
+                                      </div>
+                                      <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-500 flex-wrap">
+                                        <Badge variant="outline" className="text-[9px] py-0">{task.assignedOrgCode || "Gov"}</Badge>
+                                        <span className="font-semibold uppercase">{task.status.replace("_", " ")}</span>
+                                        {task.isCriticalPath && (
+                                          <span className="text-purple-700 font-bold">Critical</span>
+                                        )}
+                                        {task.predecessorTaskIds?.length === 0 && (
+                                          <span className="text-sky-700 font-bold">Parallel start</span>
+                                        )}
+                                      </div>
+                                      <div className="mt-0.5 text-[10px] text-slate-500">
+                                        {hasDates ? (
+                                          <span>Due: {displayDate(task.forecastDueDate || task.baselineDueDate)}</span>
+                                        ) : (
+                                          <span>Schedule: <span className="italic text-slate-400">Not scheduled</span> <Link href={`/admin/workflows?template=${ws.permitTypeId || "all"}`} className="text-teal-700 hover:underline font-bold">Configure</Link></span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Sub-row right timeline bar */}
+                                    <div className="col-span-12 relative flex h-10 flex-col justify-center overflow-hidden border-t border-slate-100 p-2 md:col-span-8 md:border-t-0">
+                                      {/* Background monthly grid lines */}
+                                      <div className="absolute inset-0 grid pointer-events-none opacity-15" style={{ gridTemplateColumns: monthGridTemplate }}>
+                                        {months.map((m) => (
+                                          <div key={m.label} className="border-r border-slate-300 h-full last:border-0" />
+                                        ))}
+                                      </div>
+
+                                      {/* Today line */}
+                                      <div
+                                        className="absolute top-0 bottom-0 w-0.5 bg-red-500/80 z-10 pointer-events-none"
+                                        style={{ left: `${todayPositionPercent}%` }}
+                                      />
+
+                                      {hasDates ? (
+                                        <div className="relative w-full h-5">
+                                          <Link
+                                            href={`/work/task/${encodeURIComponent(task.id)}`}
+                                            onClick={(e) => {
+                                              if (onSelectTask) {
+                                                e.preventDefault();
+                                                onSelectTask(task.id);
+                                              }
+                                            }}
+                                            className={`absolute h-4 rounded border text-[9px] font-bold px-1.5 flex items-center truncate ${taskBarColor} shadow-xs hover:shadow-sm cursor-pointer`}
+                                            style={{
+                                              left: `${taskBarLeft}%`,
+                                              width: `${taskBarWidth}%`,
+                                            }}
+                                            title={`Task: ${task.title}\nStatus: ${task.status}\nAssigned: ${task.assignedUserName || task.assignedOrgCode || "Gov"}`}
+                                          >
+                                            <span className="truncate">{task.title}</span>
+                                          </Link>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2 text-[11px] text-slate-400 italic px-2">
+                                          <span>Not scheduled</span>
+                                          <Link href={`/admin/workflows?template=${ws.permitTypeId || "all"}`} className="text-teal-700 hover:underline text-[10px] not-italic font-bold">
+                                            Configure schedule
+                                          </Link>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {filteredWorkstreams.length === 0 && (
+                      <div className="p-8 text-center text-slate-500">
+                        <p className="font-bold">No workstreams match the selected filter or search query.</p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => { setFilterState("all"); setSearchQuery(""); }}
+                          className="mt-3 text-xs font-bold"
+                        >
+                          Reset Filters
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
-          )}
 
           {/* ================================================================ */}
           {/* 12-COLUMN WORKSTREAM DAG & BASELINE COMPARISON TABLE             */}
@@ -811,122 +1177,154 @@ export function WorkstreamGraphGantt({
       )}
 
       {/* ==================================================================== */}
-      {/* TAB: INTERACTIVE SCHEDULE SIMULATOR (GOVERNMENT)                    */}
+      {/* TAB: ADVANCED ANALYSIS (SIMULATOR, DELAYS, ACCELERATION)             */}
       {/* ==================================================================== */}
-      {!customerSafe && activeTab === "simulator" && (
-        <InteractiveScheduleSimulator />
-      )}
+      {!customerSafe && activeTab === "advanced" && (
+        <div className="space-y-6">
+          {/* Advanced Sub-Tabs */}
+          <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+            <Button
+              type="button"
+              variant={advancedSection === "simulator" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setAdvancedSection("simulator")}
+              className="text-xs font-bold"
+            >
+              <Zap className="size-3.5" /> What-If Simulator
+            </Button>
+            <Button
+              type="button"
+              variant={advancedSection === "delays" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setAdvancedSection("delays")}
+              className="text-xs font-bold"
+            >
+              <Clock3 className="size-3.5" /> Delay Taxonomy Attribution
+            </Button>
+            <Button
+              type="button"
+              variant={advancedSection === "acceleration" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setAdvancedSection("acceleration")}
+              className="text-xs font-bold"
+            >
+              <Sparkles className="size-3.5" /> Parallel Acceleration ({schedule.accelerationOpportunities.length})
+            </Button>
+          </div>
 
-      {/* ==================================================================== */}
-      {/* TAB: DELAY TAXONOMY ATTRIBUTION (GOVERNMENT)                         */}
-      {/* ==================================================================== */}
-      {!customerSafe && activeTab === "delays" && (
-        <Card className="border-slate-200 bg-white">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold text-slate-900">
-              Schedule Variance Taxonomy Attribution
-            </CardTitle>
-            <CardDescription className="text-xs text-slate-600">
-              Statutory, legal, and operational breakdown explaining why schedule movement occurred. Defensible project controls record.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-                <div className="flex justify-between items-center text-xs font-bold">
-                  <span className="text-slate-700">Interagency Coordination Dependencies</span>
-                  <span className="font-mono text-slate-600">Impact not calculated</span>
-                </div>
-                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                  <div className="bg-slate-300 h-full w-full" />
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  No recorded dependency impact is available for this project view.
-                </p>
-              </div>
+          {/* Sub-view: Simulator */}
+          {advancedSection === "simulator" && (
+            <InteractiveScheduleSimulator />
+          )}
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-                <div className="flex justify-between items-center text-xs font-bold">
-                  <span className="text-slate-700">Statutory Minimum Notice Periods</span>
-                  <span className="font-mono text-slate-600">Impact not calculated</span>
-                </div>
-                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                  <div className="bg-slate-300 h-full w-full" />
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Statutory 30-day federal Section 404 public comment publication alignment.
-                </p>
-              </div>
+          {/* Sub-view: Delay Taxonomy */}
+          {advancedSection === "delays" && (
+            <Card className="border-slate-200 bg-white">
+              <CardHeader>
+                <CardTitle className="text-lg font-bold text-slate-900">
+                  Schedule Variance Taxonomy Attribution
+                </CardTitle>
+                <CardDescription className="text-xs text-slate-600">
+                  Statutory, legal, and operational breakdown explaining why schedule movement occurred. Defensible project controls record.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                    <div className="flex justify-between items-center text-xs font-bold">
+                      <span className="text-slate-700">Interagency Coordination Dependencies</span>
+                      <span className="font-mono text-slate-600">Impact not calculated</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                      <div className="bg-slate-300 h-full w-full" />
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      No recorded dependency impact is available for this project view.
+                    </p>
+                  </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-                <div className="flex justify-between items-center text-xs font-bold">
-                  <span className="text-slate-700">Public Hearing Comment Response</span>
-                  <span className="font-mono text-slate-600">Impact not calculated</span>
-                </div>
-                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                  <div className="bg-slate-300 h-full w-full" />
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  LDEQ deluge retention basin 15-day post-hearing public comment resolution window.
-                </p>
-              </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                    <div className="flex justify-between items-center text-xs font-bold">
+                      <span className="text-slate-700">Statutory Minimum Notice Periods</span>
+                      <span className="font-mono text-slate-600">Impact not calculated</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                      <div className="bg-slate-300 h-full w-full" />
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Statutory 30-day federal Section 404 public comment publication alignment.
+                    </p>
+                  </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-                <div className="flex justify-between items-center text-xs font-bold">
-                  <span className="text-slate-700">Engineering Revisions & Drawing Packages</span>
-                  <span className="font-mono text-slate-600">No recorded impact</span>
-                </div>
-                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                  <div className="bg-slate-300 h-full w-full" />
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  SpaceX engineering turnaround completed within float buffer without critical-path slip.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                    <div className="flex justify-between items-center text-xs font-bold">
+                      <span className="text-slate-700">Public Hearing Comment Response</span>
+                      <span className="font-mono text-slate-600">Impact not calculated</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                      <div className="bg-slate-300 h-full w-full" />
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      LDEQ deluge retention basin 15-day post-hearing public comment resolution window.
+                    </p>
+                  </div>
 
-      {/* ==================================================================== */}
-      {/* TAB: PARALLEL ACCELERATION OPPORTUNITIES (GOVERNMENT)                */}
-      {/* ==================================================================== */}
-      {!customerSafe && activeTab === "acceleration" && (
-        <Card className="border-emerald-200 bg-emerald-50/30">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">
-                AI Schedule Optimization
-              </Badge>
-            </div>
-            <CardTitle className="text-lg font-bold text-slate-900 mt-1">
-              Parallel Review Acceleration Opportunities
-            </CardTitle>
-            <CardDescription className="text-xs text-slate-600">
-              Steps traditionally performed sequentially that legally and technically can proceed concurrently.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {schedule.accelerationOpportunities.map((opp) => (
-              <div key={opp.workstreamId} className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-slate-900">{opp.title}</h3>
-                  <Badge className="bg-emerald-600 text-white font-bold text-xs">
-                    Save up to {opp.potentialDaysSaved} Days
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                    <div className="flex justify-between items-center text-xs font-bold">
+                      <span className="text-slate-700">Engineering Revisions & Drawing Packages</span>
+                      <span className="font-mono text-slate-600">No recorded impact</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                      <div className="bg-slate-300 h-full w-full" />
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      SpaceX engineering turnaround completed within float buffer without critical-path slip.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Sub-view: Acceleration Opportunities */}
+          {advancedSection === "acceleration" && (
+            <Card className="border-emerald-200 bg-emerald-50/30">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">
+                    AI Schedule Optimization
                   </Badge>
                 </div>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  {opp.explanation}
-                </p>
-                <div className="pt-2 flex justify-end">
-                  <Button type="button" size="sm" disabled title="Concurrent review authorization is recorded through the governed project workflow." className="bg-slate-300 text-slate-600 text-xs font-bold shadow-none">
-                    Authorize Concurrent Review Track
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+                <CardTitle className="text-lg font-bold text-slate-900 mt-1">
+                  Parallel Review Acceleration Opportunities
+                </CardTitle>
+                <CardDescription className="text-xs text-slate-600">
+                  Steps traditionally performed sequentially that legally and technically can proceed concurrently.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {schedule.accelerationOpportunities.map((opp) => (
+                  <div key={opp.workstreamId} className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-slate-900">{opp.title}</h3>
+                      <Badge className="bg-emerald-600 text-white font-bold text-xs">
+                        Save up to {opp.potentialDaysSaved} Days
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      {opp.explanation}
+                    </p>
+                    <div className="pt-2 flex justify-end">
+                      <Button type="button" size="sm" disabled title="Concurrent review authorization is recorded through the governed project workflow." className="bg-slate-300 text-slate-600 text-xs font-bold shadow-none">
+                        Authorize Concurrent Review Track
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
     </div>
   );
