@@ -276,8 +276,16 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
               <Workflow className="size-4" />
             </span>
             <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="rounded-full bg-slate-100 border border-slate-300 px-2 py-0.5 text-[10px] font-black uppercase text-slate-800 tracking-wider">
+                  This work item
+                </span>
+                <span className="text-[11px] text-slate-500 font-mono">
+                  {workstream?.workflowVersionId ? `Pinned to ${workstream.workflowVersionId}` : "Instance view"}
+                </span>
+              </div>
               <CardTitle className="text-base font-black text-[#00284d] flex items-center gap-2">
-                 {canEditWorkflow ? "Ticket Workflow & Stage DAG" : "Ticket Assignment & Routing"}
+                This work item: {canEditWorkflow ? "Workflow & Stage DAG" : "Assignment & Routing"}
                 <span className="rounded-full bg-teal-100 border border-teal-300 px-2 py-0.5 text-[11px] font-bold text-teal-900 font-mono">
                   {stages.length} Stages
                 </span>
@@ -296,11 +304,11 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
                 )}
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                 {isAdmin
-                   ? "Administrator Mode: edit the published workflow in Administration, then review its pinned version here."
-                   : isAuthorized
-                   ? "Operational view: assignment changes are available here; workflow design is managed in Administration."
-                   : "Read-only mode: you can inspect the pinned workflow and current assignment."}
+                {isAdmin
+                  ? "This work item instance view. Process template authoring and version definitions are managed under Administration > Workflows."
+                  : isAuthorized
+                  ? "This work item instance view: assignment changes are available here; workflow templates are managed in Administration."
+                  : "This work item instance view: you can inspect the pinned workflow and current assignment."}
               </CardDescription>
             </div>
           </div>

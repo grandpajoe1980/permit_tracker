@@ -441,6 +441,12 @@ export interface WorkflowStageRecord {
   isMilestoneGate: boolean;
   externalFilingUrl?: string;
   legalAuthorityCitation?: string;
+  defaultAssignmentGroupId?: string;
+  defaultAssigneeId?: string;
+  rfiBehavior?: "pauses_clock" | "continuous_clock" | "customer_hold";
+  holdBehavior?: "statutory_hold" | "applicant_hold" | "standard_running";
+  dependencies?: string[];
+  tasks?: Array<{ id: string; title: string; required: boolean; defaultDays?: number }>;
 }
 
 export interface WorkflowVersionRecord {

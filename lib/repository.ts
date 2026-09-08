@@ -57,7 +57,7 @@ import {
 } from "./spacex-megaproject-fixture";
 import { initialExternalFilings, projectParticipants, projectProfiles } from "./customer-portal";
 import { createAuditEvent } from "./engines/audit-engine";
-import { validateStageTransition } from "./engines/workflow-engine";
+import { validateStageTransition, validateWorkflowDraft } from "./engines/workflow-engine";
 import {
   fetchAssignmentGroups,
   fetchAssignmentGroupMemberships,
@@ -117,7 +117,7 @@ import {
   mutateCompleteTask,
 } from "./supabase/mutations";
 import { mutateReviewDocumentVersion, mutateUploadDocumentVersion } from "./supabase/storage";
-import { isSupabaseConfigured } from "./supabase/client";
+import { getSupabaseBrowser, isSupabaseConfigured } from "./supabase/client";
 import { allowsFixtureData } from "./data-mode";
 
 type MutableTicket = {
@@ -463,6 +463,252 @@ class ProjectDeliveryRepository {
 
   getWorkflowTemplates(): WorkflowTemplateRecord[] {
     return this.workflowTemplates;
+  }
+
+  getWorkflowDraft(templateId: string): WorkflowVersionRecord | null {
+    const template = this.workflowTemplates.find((t) => t.id === templateId);
+    return template?.versions.find((v) => v.status === "draft") ?? null;
+  }
+
+  async createWorkflowDraftPersisted(params: {
+    templateId: string;
+    changeSummary?: string;
+    actorName?: string;
+    actorUserId?: string;
+  }): Promise<{ data: { draftVersionId: string; versionNumber: number } | null; error: Error | null }> {
+    const template = this.workflowTemplates.find((t) => t.id === params.templateId);
+    if (!template) return { data: null, error: new Error(`Workflow template not found: ${params.templateId}`) };
+
+    const activeVersion = template.versions.find((v) => v.status === "published") ?? template.versions[0];
+    if (!activeVersion) return { data: null, error: new Error("No source version available to draft from.") };
+
+    const client = getSupabaseBrowser();
+    if (client) {
+      const { data, error } = await client.rpc("rpc_create_workflow_draft", {
+        p_source_version_id: activeVersion.id,
+        p_change_summary: params.changeSummary ?? `Draft revision of ${template.name}`,
+      });
+      if (!error && data) {
+        await this.hydrateFromSupabase();
+        const draftId = String((data as { id?: string }).id ?? data);
+        const verNum = Number((data as { versionNumber?: number }).versionNumber ?? (activeVersion.versionNumber + 1));
+        return { data: { draftVersionId: draftId, versionNumber: verNum }, error: null };
+      }
+      if (!allowsFixtureData()) {
+        return { data: null, error: error ? new Error(error.message) : new Error("Draft creation failed.") };
+      }
+    }
+
+    const nextVersionNumber = Math.max(...template.versions.map((v) => v.versionNumber), 0) + 1;
+    const draftId = `wv-${template.id}-draft-v${nextVersionNumber}`;
+    const clonedStages: WorkflowStageRecord[] = activeVersion.stages.map((stage, idx) => ({
+      ...stage,
+      id: `${draftId}-stg-${idx + 1}`,
+      workflowVersionId: draftId,
+      sequenceOrder: idx + 1,
+    }));
+
+    const draftVersion: WorkflowVersionRecord = {
+      id: draftId,
+      templateId: template.id,
+      versionNumber: nextVersionNumber,
+      status: "draft",
+      changeSummary: params.changeSummary ?? `Draft revision v${nextVersionNumber}.0 of ${template.name}`,
+      stages: clonedStages,
+    };
+
+    template.versions = [draftVersion, ...template.versions.filter((v) => v.status !== "draft")];
+
+    this.auditEvents.unshift(
+      createAuditEvent({
+        entityType: "workflow_version",
+        entityId: draftId,
+        actorName: params.actorName ?? "PATH administrator",
+        actorOrgName: "State Project Office",
+        actionType: "workflow_draft_created",
+        newValue: draftId,
+        reason: params.changeSummary ?? `Created draft version v${nextVersionNumber}.0`,
+      })
+    );
+
+    return { data: { draftVersionId: draftId, versionNumber: nextVersionNumber }, error: null };
+  }
+
+  async updateWorkflowDraftStagePersisted(params: {
+    templateId: string;
+    draftVersionId: string;
+    stage: WorkflowStageRecord;
+    actorName?: string;
+    actorUserId?: string;
+  }): Promise<{ data: WorkflowStageRecord | null; error: Error | null }> {
+    const template = this.workflowTemplates.find((t) => t.id === params.templateId);
+    if (!template) return { data: null, error: new Error("Workflow template not found.") };
+    const draft = template.versions.find((v) => v.id === params.draftVersionId);
+    if (!draft || draft.status !== "draft") return { data: null, error: new Error("Draft version not found.") };
+
+    const client = getSupabaseBrowser();
+    if (client) {
+      const { error } = await client.rpc("rpc_update_workflow_draft_stage", {
+        p_version_id: params.draftVersionId,
+        p_stage_key: params.stage.stageKey,
+        p_label: params.stage.name,
+        p_customer_visibility_label: params.stage.customerVisibilityLabel,
+        p_responsible_org_code: params.stage.responsibleOrgCode,
+        p_target_duration_days: params.stage.targetDurationDays,
+        p_minimum_statutory_days: params.stage.minimumStatutoryDays,
+        p_required_inputs: params.stage.requiredInputs,
+        p_completion_requirements: params.stage.completionRequirements,
+        p_permitted_transitions: params.stage.permittedTransitions,
+        p_can_run_in_parallel: params.stage.canRunInParallel,
+        p_is_milestone_gate: params.stage.isMilestoneGate,
+      });
+      if (error && !allowsFixtureData()) {
+        return { data: null, error: new Error(error.message) };
+      }
+    }
+
+    draft.stages = draft.stages.map((s) => (s.stageKey === params.stage.stageKey ? { ...params.stage, workflowVersionId: draft.id } : s));
+    return { data: params.stage, error: null };
+  }
+
+  async addWorkflowDraftStagePersisted(params: {
+    templateId: string;
+    draftVersionId: string;
+    stage: WorkflowStageRecord;
+  }): Promise<{ data: WorkflowStageRecord | null; error: Error | null }> {
+    const template = this.workflowTemplates.find((t) => t.id === params.templateId);
+    if (!template) return { data: null, error: new Error("Workflow template not found.") };
+    const draft = template.versions.find((v) => v.id === params.draftVersionId);
+    if (!draft || draft.status !== "draft") return { data: null, error: new Error("Draft version not found.") };
+
+    const newStage: WorkflowStageRecord = {
+      ...params.stage,
+      workflowVersionId: draft.id,
+      sequenceOrder: draft.stages.length + 1,
+      id: `${draft.id}-stg-${params.stage.stageKey}`,
+    };
+    draft.stages.push(newStage);
+    return { data: newStage, error: null };
+  }
+
+  async removeWorkflowDraftStagePersisted(params: {
+    templateId: string;
+    draftVersionId: string;
+    stageKey: string;
+  }): Promise<{ success: boolean; error: Error | null }> {
+    const template = this.workflowTemplates.find((t) => t.id === params.templateId);
+    if (!template) return { success: false, error: new Error("Workflow template not found.") };
+    const draft = template.versions.find((v) => v.id === params.draftVersionId);
+    if (!draft || draft.status !== "draft") return { success: false, error: new Error("Draft version not found.") };
+    if (draft.stages.length <= 1) return { success: false, error: new Error("A workflow requires at least one stage.") };
+
+    draft.stages = draft.stages
+      .filter((s) => s.stageKey !== params.stageKey)
+      .map((s, idx) => ({ ...s, sequenceOrder: idx + 1 }));
+    return { success: true, error: null };
+  }
+
+  async reorderWorkflowDraftStagesPersisted(params: {
+    templateId: string;
+    draftVersionId: string;
+    stageKeys: string[];
+  }): Promise<{ success: boolean; error: Error | null }> {
+    const template = this.workflowTemplates.find((t) => t.id === params.templateId);
+    if (!template) return { success: false, error: new Error("Workflow template not found.") };
+    const draft = template.versions.find((v) => v.id === params.draftVersionId);
+    if (!draft || draft.status !== "draft") return { success: false, error: new Error("Draft version not found.") };
+
+    const reordered: WorkflowStageRecord[] = [];
+    params.stageKeys.forEach((key, idx) => {
+      const stage = draft.stages.find((s) => s.stageKey === key);
+      if (stage) reordered.push({ ...stage, sequenceOrder: idx + 1 });
+    });
+    draft.stages.forEach((s) => {
+      if (!params.stageKeys.includes(s.stageKey)) {
+        reordered.push({ ...s, sequenceOrder: reordered.length + 1 });
+      }
+    });
+    draft.stages = reordered;
+    return { success: true, error: null };
+  }
+
+  async validateWorkflowDraftPersisted(params: {
+    templateId: string;
+    draftVersionId: string;
+  }): Promise<{ valid: boolean; errors: string[]; warnings: string[] }> {
+    const template = this.workflowTemplates.find((t) => t.id === params.templateId);
+    if (!template) return { valid: false, errors: ["Workflow template not found."], warnings: [] };
+    const draft = template.versions.find((v) => v.id === params.draftVersionId);
+    if (!draft || draft.status !== "draft") return { valid: false, errors: ["Draft version not found."], warnings: [] };
+
+    return validateWorkflowDraft({
+      stages: draft.stages,
+      organizations: this.organizations,
+      assignmentGroups: this.assignmentGroups,
+    });
+  }
+
+  async publishWorkflowVersionPersisted(params: {
+    templateId: string;
+    draftVersionId: string;
+    actorName?: string;
+    actorUserId?: string;
+  }): Promise<{ data: WorkflowVersionRecord | null; error: Error | null }> {
+    const template = this.workflowTemplates.find((t) => t.id === params.templateId);
+    if (!template) return { data: null, error: new Error("Workflow template not found.") };
+    const draft = template.versions.find((v) => v.id === params.draftVersionId);
+    if (!draft || draft.status !== "draft") return { data: null, error: new Error("Draft version not found.") };
+
+    const validation = validateWorkflowDraft({
+      stages: draft.stages,
+      organizations: this.organizations,
+      assignmentGroups: this.assignmentGroups,
+    });
+    if (!validation.valid) {
+      return { data: null, error: new Error(`Validation failed: ${validation.errors.join("; ")}`) };
+    }
+
+    const client = getSupabaseBrowser();
+    if (client) {
+      const valRes = await client.rpc("rpc_validate_workflow_draft", { p_version_id: params.draftVersionId });
+      if (valRes.error && !allowsFixtureData()) {
+        return { data: null, error: new Error(valRes.error.message) };
+      }
+      const pubRes = await client.rpc("rpc_publish_workflow_version", { p_version_id: params.draftVersionId });
+      if (pubRes.error && !allowsFixtureData()) {
+        return { data: null, error: new Error(pubRes.error.message) };
+      }
+      if (!pubRes.error) {
+        await this.hydrateFromSupabase();
+        return { data: draft, error: null };
+      }
+    }
+
+    const now = new Date().toISOString();
+    template.versions.forEach((v) => {
+      if (v.status === "published" && v.id !== draft.id) {
+        v.status = "retired";
+      }
+    });
+
+    draft.status = "published";
+    draft.publishedAt = now;
+    draft.publishedByName = params.actorName ?? "PATH administrator";
+    template.activeVersionNumber = draft.versionNumber;
+
+    this.auditEvents.unshift(
+      createAuditEvent({
+        entityType: "workflow_version",
+        entityId: draft.id,
+        actorName: params.actorName ?? "PATH administrator",
+        actorOrgName: "State Project Office",
+        actionType: "workflow_published",
+        newValue: draft.id,
+        reason: `Published version v${draft.versionNumber}.0 of ${template.name}. Existing workstreams remain pinned to prior versions.`,
+      })
+    );
+
+    return { data: draft, error: null };
   }
 
   getAuditEvents(): AuditEventRecord[] {
@@ -866,9 +1112,71 @@ class ProjectDeliveryRepository {
     workflowVersionId?: string;
   }): Promise<{ data: { requestId: string; workstreamId: string; workstreamCode: string; workflowVersionId?: string } | null; error: Error | null }> {
     if (!isSupabaseConfigured()) {
-      return allowsFixtureData()
-        ? { data: null, error: new Error("Workstream triage requires a configured Supabase administrator session.") }
-        : { data: null, error: new Error("Supabase is required in production mode.") };
+      if (allowsFixtureData()) {
+        const template = this.workflowTemplates.find((t) => t.id === params.permitTypeId || t.permitTypeId === params.permitTypeId) ?? this.workflowTemplates[0];
+        const activeVer = template?.versions.find((v) => v.status === "published") ?? template?.versions[0];
+        const versionId = params.workflowVersionId ?? activeVer?.id ?? "wf-ver-1";
+        const newWs: WorkstreamRecord = {
+          id: `ws-${params.code.toLowerCase()}`,
+          code: params.code,
+          title: params.title,
+          category: params.category,
+          permitTypeId: params.permitTypeId,
+          workflowVersionId: versionId,
+          currentStageName: activeVer?.stages[0]?.name ?? "Intake",
+          currentStageId: activeVer?.stages[0]?.id,
+          operationalState: "running",
+          operationalStateLabel: "Running",
+          ragStatus: "green",
+          ragLabel: "On Track",
+          isCriticalPath: false,
+          regulatoryLead: {
+            orgId: params.leadOrgCode ?? "DOTD",
+            orgCode: params.leadOrgCode ?? "DOTD",
+            orgName: params.leadOrgName ?? "Department of Transportation and Development",
+            assignedReviewerName: "Reviewer",
+            assignedReviewerEmail: "reviewer@state.gov",
+          },
+          governmentConcierge: {
+            name: "Concierge",
+            email: "concierge@state.gov",
+            phone: "555-0100",
+          },
+          baselineTargetDate: "2026-12-31",
+          forecastTargetDate: "2026-12-31",
+          scheduleVarianceDays: 0,
+          remainingFloatDays: 10,
+          currentActionSummary: "Under technical review",
+          nextExpectedEvent: "Technical review milestone",
+          itsmState: "in_progress",
+          priority: "P2",
+          clockStatus: "active",
+          activeBlockers: [],
+          tasks: [],
+        };
+        this.workstreams.unshift(newWs);
+        this.auditEvents.unshift(
+          createAuditEvent({
+            entityType: "workstream",
+            entityId: newWs.id,
+            actorName: "PATH administrator",
+            actorOrgName: "State Project Office",
+            actionType: "workstream_created",
+            newValue: newWs.id,
+            reason: `Workstream created pinned to workflow version ${versionId}`,
+          })
+        );
+        return {
+          data: {
+            requestId: params.requestId,
+            workstreamId: newWs.id,
+            workstreamCode: newWs.code,
+            workflowVersionId: versionId,
+          },
+          error: null,
+        };
+      }
+      return { data: null, error: new Error("Supabase is required in production mode.") };
     }
     const result = await mutateCreateWorkstreamFromRequest(params);
     if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Workstream creation was not confirmed by the database.") };
