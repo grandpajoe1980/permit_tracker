@@ -1861,7 +1861,13 @@ export default function Home() {
   const canTriage = activePersona.workspace === "state_office";
   const unreadNotificationCount = repository.getNotifications().filter((notification) => !notification.isRead).length;
   const primaryNav: Array<{ id: Route; label: string; icon: ReactNode; count?: number }> = activePersona.isCustomer
-    ? [{ id: "customer-home", label: navigationLabel("customer-home", "Home"), icon: <LayoutList className="size-4" /> }, { id: "my-work", label: "My actions", icon: <LayoutList className="size-4" />, count: actionableCount }, { id: "requests", label: navigationLabel("requests", "My requests"), icon: <FilePlus2 className="size-4" /> }, { id: "project", label: navigationLabel("project", "Project Overview"), icon: <Building2 className="size-4" /> }, { id: "catalog", label: navigationLabel("catalog", "Services & Permits"), icon: <Landmark className="size-4" /> }, { id: "documents", label: navigationLabel("documents", "Documents"), icon: <FileCheck2 className="size-4" /> }, { id: "schedule", label: navigationLabel("schedule", "Schedule"), icon: <CalendarClock className="size-4" /> }, { id: "help", label: navigationLabel("help", "Help & escalation"), icon: <ShieldAlert className="size-4" /> }, { id: "notifications", label: navigationLabel("notifications", "Notifications"), icon: <Bell className="size-4" />, count: unreadNotificationCount }]
+    ? [
+        { id: "customer-home", label: navigationLabel("customer-home", "Home"), icon: <LayoutList className="size-4" /> },
+        { id: "my-work", label: "My actions", icon: <CheckCircle2 className="size-4" />, count: actionableCount },
+        { id: "requests", label: navigationLabel("requests", "My Requests"), icon: <FilePlus2 className="size-4" /> },
+        { id: "project", label: navigationLabel("project", "Projects"), icon: <Building2 className="size-4" /> },
+        { id: "catalog", label: navigationLabel("catalog", "Services & Permits"), icon: <Landmark className="size-4" /> },
+      ]
     : [
         { id: "my-work", label: navigationLabel("my-work", "My Work"), icon: <LayoutList className="size-4" />, count: actionableCount },
         { id: "agency-queue", label: "Team Work", icon: <Building2 className="size-4" /> },
@@ -1925,7 +1931,7 @@ export default function Home() {
       <div className="mt-4 flex flex-col items-stretch gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="min-w-0 flex-1 text-xs text-slate-600"><strong className="text-slate-800">Removes from your queue:</strong> {item.removesFromQueue}</p>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
-          <Button type="button" onClick={() => openItem(item)} className="w-full bg-[#00284d] text-xs font-bold hover:bg-[#003c70] sm:w-auto">
+          <Button type="button" onClick={() => openItem(item)} aria-label="Open Work" className="w-full bg-[#00284d] text-xs font-bold hover:bg-[#003c70] sm:w-auto">
             Open <ArrowRight className="size-3.5" aria-hidden="true" />
           </Button>
           {compactActions.map((action) => {
@@ -2032,16 +2038,268 @@ export default function Home() {
   function renderCustomerOverview() {
     const filings = repository.getExternalFilings();
     const catalog = repository.getCatalog();
-    return <CustomerHome projectName={PROJECT_DISPLAY_NAME} onSubmitRequest={() => openRequestCenter()} onViewRequests={() => navigate("requests")}>
-      {lastSubmittedRequest && <Card className={`${pendingFilingRecovery ? "border-amber-300 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}><CardHeader><CardTitle className={`text-lg font-black ${pendingFilingRecovery ? "text-amber-950" : "text-emerald-950"}`}>{pendingFilingRecovery ? "Request saved — filing tracking pending" : "Request submitted"}</CardTitle><p className={`text-sm ${pendingFilingRecovery ? "text-amber-900" : "text-emerald-900"}`}>Receipt: {lastSubmittedRequest.confirmationNumber}</p></CardHeader><CardContent className="flex flex-wrap items-center justify-between gap-3"><div><p className={`font-bold ${pendingFilingRecovery ? "text-amber-950" : "text-emerald-950"}`}>{lastSubmittedRequest.title}</p><p className={`mt-1 text-sm ${pendingFilingRecovery ? "text-amber-900" : "text-emerald-900"}`}>{pendingFilingRecovery ? "The PATH request and any attachment are saved. Only the external filing tracker still needs to be recorded." : `The State Project Office will review and route this request. Current assignment: ${lastSubmittedRequest.assignmentGroupName ?? "Pending assignment"}.`}</p></div><div className="flex flex-wrap gap-2">{pendingFilingRecovery && <Button type="button" onClick={() => void retryPendingExternalFiling()} disabled={isSubmittingRequest} className="bg-amber-700 font-bold hover:bg-amber-800">{isSubmittingRequest ? "Retrying…" : "Retry filing tracking"}</Button>}<Button type="button" onClick={() => openCustomerRequest(lastSubmittedRequest)} className="bg-[#00284d] font-bold">Open request</Button></div></CardContent></Card>}
-      <section className="rounded-2xl border border-teal-300 bg-white p-6 shadow-md sm:p-8"><div className="flex flex-wrap items-start justify-between gap-5"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-teal-800">Customer project command center</p><button type="button" onClick={() => openProject()} className="mt-2 text-left group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 rounded-lg" title="Open project page"><h1 className="max-w-4xl text-3xl font-black tracking-tight text-[#00284d] group-hover:text-teal-900 group-hover:underline sm:text-4xl">{PROJECT_DISPLAY_NAME}</h1></button><p className="mt-2 text-sm font-semibold text-slate-600">{projectRecord.code} · {projectRecord.locationDescription}</p></div><div className="flex items-center gap-2"><span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-black uppercase text-amber-900">Overall health · {projectOverview.healthLabel}</span><Button type="button" size="sm" onClick={() => openProject()} className="bg-[#00284d] hover:bg-[#003c70] text-xs font-bold gap-1.5"><Building2 className="size-3.5" /> Project Page</Button></div></div><div className="mt-7 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2 lg:grid-cols-5"><div><p className="text-[11px] font-black uppercase text-slate-500">Project stage</p><p className="mt-1 text-sm font-black text-[#00284d]">{projectOverview.stage}</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Baseline launch</p><p className="mt-1 text-sm font-black text-[#00284d]">{formatDate(projectOverview.baseline)}</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Current forecast</p><p className="mt-1 text-sm font-black text-[#00284d]">{formatDate(projectOverview.forecast)}</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Variance</p><p className="mt-1 text-sm font-black text-rose-700">+{projectOverview.varianceDays} days</p></div><div><p className="text-[11px] font-black uppercase text-slate-500">Location</p><p className="mt-1 text-sm font-black text-[#00284d]">{projectRecord.parish}, Louisiana</p></div></div></section>
-      <SubmitRequestLauncher open={requestLauncherOpen} onToggle={() => setRequestLauncherOpen((value) => !value)} onSelect={openRequestCenter} />
-      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-base font-black text-[#00284d]"><Gauge className="size-4 text-teal-700" /> Schedule summary</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">{projectOverview.criticalPathCount} critical-path workstreams · {projectOverview.blockedWorkstreamCount} waiting or blocked</p><p className="mt-3 text-sm font-black text-[#00284d]">Next milestone: {projectOverview.nextMilestone.title}</p><p className="mt-1 text-xs text-slate-500">{formatDate(projectOverview.nextMilestone.date)} · {projectOverview.nextMilestone.owner}</p><Button type="button" onClick={() => navigate("schedule")} className="mt-4 w-full bg-[#00284d] text-xs font-bold">Open Schedule <ArrowRight className="size-3.5" /></Button></CardContent></Card>{projectOverview.customerActions.map((action) => <Card key={action.label}><CardHeader><CardTitle className="text-base font-black text-[#00284d]">{action.label}</CardTitle></CardHeader><CardContent><p className="text-3xl font-black text-teal-800">{action.count}</p><p className="mt-1 text-xs text-slate-500">{action.detail}</p><Button type="button" variant="outline" onClick={() => navigate(action.label.includes("Documents") ? "documents" : "requests")} className="mt-4 w-full text-xs font-bold">View details</Button></CardContent></Card>)}</section>
-      <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Building2 className="size-5 text-teal-700" /> Government workstreams</CardTitle><p className="text-sm text-slate-600">Customer-visible stage, next milestone, owner, and whether SpaceX action is required.</p></CardHeader><CardContent className="space-y-3">{projectOverview.governmentActions.map((action) => <button key={action.title} type="button" onClick={() => openProject(action.id)} className="w-full rounded-xl border border-slate-200 p-4 text-left transition hover:border-teal-500 hover:bg-teal-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 group cursor-pointer"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-black text-[#00284d] group-hover:text-teal-900">{action.title}</p><p className="mt-1 text-xs font-semibold text-slate-500">{action.agency} · {action.stage}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${action.customerAction.toLowerCase() !== "none" ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"}`}>{action.customerAction.toLowerCase() !== "none" ? "SpaceX action" : "Government-led"}</span></div><div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600"><span>Target {formatDate(action.targetDate)}</span><span>Next: {action.stage}</span><span className="ml-auto font-bold text-teal-800 group-hover:underline">View in project →</span></div></button>)}</CardContent></Card><div className="space-y-5"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-amber-700" /> Critical path and blockers</CardTitle></CardHeader><CardContent className="space-y-3">{projectOverview.blockers.length > 0 ? projectOverview.blockers.map((blocker) => <div key={blocker.title} className="rounded-lg border border-amber-200 bg-amber-50 p-3"><p className="text-sm font-black text-amber-950">{blocker.title}</p><p className="mt-1 text-xs text-amber-900">Responsible: {blocker.owner} · {blocker.impact}</p><p className="mt-1 text-xs text-amber-800">Expected resolution: {blocker.expectedResolution}</p></div>) : <p className="text-sm text-slate-600">No active blockers are reported.</p>}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><CalendarDays className="size-5 text-teal-700" /> Upcoming events and decisions</CardTitle></CardHeader><CardContent className="space-y-3">{projectOverview.upcomingEvents.length > 0 ? projectOverview.upcomingEvents.map((event) => <div key={`${event.type}-${event.title}`} className="flex gap-3 border-b border-slate-100 pb-3 last:border-0"><div className="rounded-lg bg-teal-50 p-2 text-center text-[10px] font-black uppercase text-teal-800">{formatDate(event.date)}</div><div><p className="text-sm font-black text-[#00284d]">{event.title}</p><p className="mt-1 text-xs text-slate-500">{event.type} · {event.detail}</p></div></div>) : <p className="text-sm text-slate-600">No upcoming events have been published.</p>}</CardContent></Card></div></div>
-      <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><FileText className="size-5 text-teal-700" /> Permit and authorization portfolio</CardTitle><p className="text-sm text-slate-600">PATH workflow status and authoritative external filing status are shown separately.</p></CardHeader><CardContent className="space-y-3">{catalog.map((permit) => { const filing = filings.find((entry) => entry.permitTypeId === permit.id); const request = userPermits.find((entry) => entry.leadAgencyCode.includes(permit.responsibleOrgCode)); return <div key={permit.id} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-black text-[#00284d]">{permit.name}</p><p className="mt-1 text-xs font-semibold text-slate-500">{permit.responsibleOrgCode} · {request?.title ?? "Catalog authorization"} · {filingModeLabel(permit.filingMode)}</p></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase text-slate-700">PATH: {request?.statusLabel ?? "Not started"}</span></div><div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-4"><span>External ref: <strong>{filing?.externalReferenceNumber ?? "Not recorded"}</strong></span><span>External status: <strong>{filing?.externalStatus?.replaceAll("_", " ") ?? "Not filed"}</strong></span><span>Submitted: <strong>{formatDate(filing?.submittedAt)}</strong></span><span>Decision target: <strong>{formatDate(request?.targetDate)}</strong></span></div><div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs"><p className="font-black uppercase tracking-wider text-slate-500">Verified resources</p><div className="mt-2 flex flex-wrap gap-2">{(permit.resources ?? []).slice(0, 3).map((resource) => <a key={resource.id} href={resource.url} target="_blank" rel="noreferrer" className="font-bold text-teal-800 underline-offset-2 hover:underline">{resource.resourceName} · {resource.versionTag}</a>)}</div></div><div className="mt-3 flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={() => { setSelectedCatalogPermitId(permit.id); setRequestCenterMode("permit"); navigate("requests"); }} className="text-xs font-bold">Open permit details</Button>{permit.officialFilingUrl && <a href={permit.officialFilingUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Official filing site <ExternalLink className="size-3.5" /></a>}</div></div>; })}</CardContent></Card>
-      <Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">My PATH requests</CardTitle><p className="text-sm text-slate-600">See who has each request, its current status, and the next update.</p></CardHeader><CardContent><CustomerRequestList requests={repository.getCustomerRequests()} onOpenRequest={openCustomerRequest} /></CardContent></Card>
-      <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserRound className="size-5 text-teal-700" /> Project contacts</CardTitle></CardHeader><CardContent className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-600">Your State concierge, lead agencies, SpaceX team, and customer-visible reviewers are in one directory.</p><Button type="button" onClick={() => navigate("contacts")} className="bg-[#00284d] text-xs font-bold">Open Contact Directory</Button></CardContent></Card>
-    </CustomerHome>;
+    const customerActionItems = queueGroups.find((g) => g.id === "needs_action")?.items ?? [];
+
+    return (
+      <CustomerHome projectName={PROJECT_DISPLAY_NAME} onSubmitRequest={() => openRequestCenter()} onViewRequests={() => navigate("requests")}>
+        {lastSubmittedRequest && (
+          <Card className={`${pendingFilingRecovery ? "border-amber-300 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+            <CardHeader>
+              <CardTitle className={`text-lg font-black ${pendingFilingRecovery ? "text-amber-950" : "text-emerald-950"}`}>
+                {pendingFilingRecovery ? "Request saved — filing tracking pending" : "Request submitted"}
+              </CardTitle>
+              <p className={`text-sm ${pendingFilingRecovery ? "text-amber-900" : "text-emerald-900"}`}>Receipt: {lastSubmittedRequest.confirmationNumber}</p>
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className={`font-bold ${pendingFilingRecovery ? "text-amber-950" : "text-emerald-950"}`}>{lastSubmittedRequest.title}</p>
+                <p className={`mt-1 text-sm ${pendingFilingRecovery ? "text-amber-900" : "text-emerald-900"}`}>
+                  {pendingFilingRecovery ? "The PATH request and any attachment are saved. Only the external filing tracker still needs to be recorded." : `The State Project Office will review and route this request. Current assignment: ${lastSubmittedRequest.assignmentGroupName ?? "Pending assignment"}.`}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {pendingFilingRecovery && (
+                  <Button type="button" onClick={() => void retryPendingExternalFiling()} disabled={isSubmittingRequest} className="bg-amber-700 font-bold hover:bg-amber-800">
+                    {isSubmittingRequest ? "Retrying…" : "Retry filing tracking"}
+                  </Button>
+                )}
+                <Button type="button" onClick={() => openCustomerRequest(lastSubmittedRequest)} className="bg-[#00284d] font-bold">Open request</Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 1. Actions needing customer response (first) */}
+        <section aria-label="Actions needing customer response">
+          <Card className={customerActionItems.length > 0 ? "border-amber-300 bg-amber-50/40 shadow-sm" : "border-slate-200 bg-white"}>
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]">
+                    <AlertOctagon className={`size-5 ${customerActionItems.length > 0 ? "text-amber-600" : "text-teal-600"}`} />
+                    Actions needing your response
+                  </CardTitle>
+                  <p className="mt-1 text-xs text-slate-600">
+                    {customerActionItems.length > 0
+                      ? "Outstanding RFIs and clarification requests from government reviewers that require SpaceX action."
+                      : "All caught up! No actions or responses are currently required from SpaceX."}
+                  </p>
+                </div>
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-black ${customerActionItems.length > 0 ? "bg-amber-200 text-amber-900" : "bg-emerald-100 text-emerald-800"}`}>
+                  {customerActionItems.length} {customerActionItems.length === 1 ? "action required" : "actions required"}
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {customerActionItems.length > 0 ? (
+                <div className="space-y-3">
+                  {customerActionItems.map((item) => (
+                    <div key={item.id} className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-white p-4 transition sm:flex-row sm:items-center sm:justify-between hover:border-amber-400">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-black uppercase text-amber-900">{item.kind.toUpperCase()}</span>
+                          <span className="text-xs font-bold text-slate-500">{item.workstreamTitle}</span>
+                        </div>
+                        <p className="mt-1 text-sm font-black text-[#00284d]">{item.title}</p>
+                        <p className="mt-1 text-xs text-slate-600">{item.whatToDo}</p>
+                        {item.dueDate && <p className="mt-1 text-xs font-semibold text-amber-800">Due: {formatDate(item.dueDate)}</p>}
+                      </div>
+                      <Button type="button" onClick={() => openItem(item)} aria-label="Open Work" className="shrink-0 bg-[#00284d] hover:bg-[#003c70] text-xs font-bold">
+                        Respond <ArrowRight className="size-3.5 ml-1" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="py-2 text-xs text-slate-500">Government review teams are advancing active workstreams. When an agency requests information or clarification, it will appear here.</p>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* 2. Recent request updates (second) */}
+        <section aria-label="Recent request updates">
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-lg font-black text-[#00284d]">My PATH requests</CardTitle>
+                  <p className="text-sm text-slate-600">See receiving team, current status, and next steps for your submitted requests.</p>
+                </div>
+                <Button type="button" onClick={() => openRequestCenter()} className="bg-[#00284d] hover:bg-[#003c70] text-xs font-bold gap-1.5">
+                  <FilePlus2 className="size-3.5" /> Submit a Request
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CustomerRequestList requests={repository.getCustomerRequests()} onOpenRequest={openCustomerRequest} />
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Submit request launcher */}
+        <SubmitRequestLauncher open={requestLauncherOpen} onToggle={() => setRequestLauncherOpen((value) => !value)} onSelect={openRequestCenter} />
+
+        {/* 3. Project summary (third) */}
+        <section className="rounded-2xl border border-teal-300 bg-white p-6 shadow-md sm:p-8" aria-label="Project command center">
+          <div className="flex flex-wrap items-start justify-between gap-5">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-800">Customer project command center</p>
+              <button type="button" onClick={() => openProject()} className="mt-2 text-left group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 rounded-lg" title="Open project page">
+                <h1 className="max-w-4xl text-3xl font-black tracking-tight text-[#00284d] group-hover:text-teal-900 group-hover:underline sm:text-4xl">{PROJECT_DISPLAY_NAME}</h1>
+              </button>
+              <p className="mt-2 text-sm font-semibold text-slate-600">{projectRecord.code} · {projectRecord.locationDescription}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-black uppercase text-amber-900">Overall health · {projectOverview.healthLabel}</span>
+              <Button type="button" size="sm" onClick={() => openProject()} className="bg-[#00284d] hover:bg-[#003c70] text-xs font-bold gap-1.5">
+                <Building2 className="size-3.5" /> Project Page
+              </Button>
+            </div>
+          </div>
+          <div className="mt-7 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2 lg:grid-cols-5">
+            <div><p className="text-[11px] font-black uppercase text-slate-500">Project stage</p><p className="mt-1 text-sm font-black text-[#00284d]">{projectOverview.stage}</p></div>
+            <div><p className="text-[11px] font-black uppercase text-slate-500">Baseline launch</p><p className="mt-1 text-sm font-black text-[#00284d]">{formatDate(projectOverview.baseline)}</p></div>
+            <div><p className="text-[11px] font-black uppercase text-slate-500">Current forecast</p><p className="mt-1 text-sm font-black text-[#00284d]">{formatDate(projectOverview.forecast)}</p></div>
+            <div><p className="text-[11px] font-black uppercase text-slate-500">Variance</p><p className="mt-1 text-sm font-black text-rose-700">+{projectOverview.varianceDays} days</p></div>
+            <div><p className="text-[11px] font-black uppercase text-slate-500">Location</p><p className="mt-1 text-sm font-black text-[#00284d]">{projectRecord.parish}, Louisiana</p></div>
+          </div>
+        </section>
+
+        {/* Schedule & customer action metrics */}
+        <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2 text-base font-black text-[#00284d]"><Gauge className="size-4 text-teal-700" /> Schedule summary</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-sm text-slate-600">{projectOverview.criticalPathCount} critical-path workstreams · {projectOverview.blockedWorkstreamCount} waiting or blocked</p>
+              <p className="mt-3 text-sm font-black text-[#00284d]">Next milestone: {projectOverview.nextMilestone.title}</p>
+              <p className="mt-1 text-xs text-slate-500">{formatDate(projectOverview.nextMilestone.date)} · {projectOverview.nextMilestone.owner}</p>
+              <Button type="button" onClick={() => navigate("schedule")} className="mt-4 w-full bg-[#00284d] text-xs font-bold">Open Schedule <ArrowRight className="size-3.5 ml-1" /></Button>
+            </CardContent>
+          </Card>
+          {projectOverview.customerActions.map((action) => (
+            <Card key={action.label}>
+              <CardHeader><CardTitle className="text-base font-black text-[#00284d]">{action.label}</CardTitle></CardHeader>
+              <CardContent>
+                <p className="text-3xl font-black text-teal-800">{action.count}</p>
+                <p className="mt-1 text-xs text-slate-500">{action.detail}</p>
+                <Button type="button" variant="outline" onClick={() => navigate(action.label.includes("Documents") ? "documents" : action.label.includes("External") ? "catalog" : "my-work")} className="mt-4 w-full text-xs font-bold">View details</Button>
+              </CardContent>
+            </Card>
+          ))}
+        </section>
+
+        {/* 4. Broader workstream detail (fourth) */}
+        <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Building2 className="size-5 text-teal-700" /> Government workstreams</CardTitle>
+              <p className="text-sm text-slate-600">Customer-visible stage, next milestone, owner, and whether SpaceX action is required.</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {projectOverview.governmentActions.map((action) => (
+                <button key={action.title} type="button" onClick={() => openProject(action.id)} className="w-full rounded-xl border border-slate-200 p-4 text-left transition hover:border-teal-500 hover:bg-teal-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 group cursor-pointer">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-black text-[#00284d] group-hover:text-teal-900">{action.title}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">{action.agency} · {action.stage}</p>
+                    </div>
+                    <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${action.hasCustomerAction ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"}`}>
+                      {action.hasCustomerAction ? "SpaceX action" : "Government-led"}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
+                    <span>Target {formatDate(action.targetDate)}</span>
+                    <span>Next: {action.nextMilestone ?? action.stage}</span>
+                    <span className="ml-auto font-bold text-teal-800 group-hover:underline">View in project →</span>
+                  </div>
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+          <div className="space-y-5">
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-amber-700" /> Critical path and blockers</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {projectOverview.blockers.length > 0 ? projectOverview.blockers.map((blocker) => (
+                  <div key={blocker.title} className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <p className="text-sm font-black text-amber-950">{blocker.title}</p>
+                    <p className="mt-1 text-xs text-amber-900">Responsible: {blocker.owner} · {blocker.impact}</p>
+                    <p className="mt-1 text-xs text-amber-800">Expected resolution: {blocker.expectedResolution}</p>
+                  </div>
+                )) : <p className="text-sm text-slate-600">No active blockers are reported.</p>}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><CalendarDays className="size-5 text-teal-700" /> Upcoming events and decisions</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {projectOverview.upcomingEvents.length > 0 ? projectOverview.upcomingEvents.map((event) => (
+                  <div key={`${event.type}-${event.title}`} className="flex gap-3 border-b border-slate-100 pb-3 last:border-0">
+                    <div className="rounded-lg bg-teal-50 p-2 text-center text-[10px] font-black uppercase text-teal-800">{formatDate(event.date)}</div>
+                    <div>
+                      <p className="text-sm font-black text-[#00284d]">{event.title}</p>
+                      <p className="mt-1 text-xs text-slate-500">{event.type} · {event.detail}</p>
+                    </div>
+                  </div>
+                )) : <p className="text-sm text-slate-600">No upcoming events have been published.</p>}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><FileText className="size-5 text-teal-700" /> Permit and authorization portfolio</CardTitle>
+            <p className="text-sm text-slate-600">PATH workflow status and authoritative external filing status are shown separately.</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {catalog.map((permit) => {
+              const filing = filings.find((entry) => entry.permitTypeId === permit.id);
+              const request = userPermits.find((entry) => entry.leadAgencyCode.includes(permit.responsibleOrgCode));
+              return (
+                <div key={permit.id} className="rounded-xl border border-slate-200 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black text-[#00284d]">{permit.name}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">{permit.responsibleOrgCode} · {request?.title ?? "Catalog authorization"} · {filingModeLabel(permit.filingMode)}</p>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase text-slate-700">PATH: {request?.statusLabel ?? "Not started"}</span>
+                  </div>
+                  <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-4">
+                    <span>External ref: <strong>{filing?.externalReferenceNumber ?? "Not recorded"}</strong></span>
+                    <span>External status: <strong>{filing?.externalStatus?.replaceAll("_", " ") ?? "Not filed"}</strong></span>
+                    <span>Submitted: <strong>{formatDate(filing?.submittedAt)}</strong></span>
+                    <span>Decision target: <strong>{formatDate(request?.targetDate)}</strong></span>
+                  </div>
+                  <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs">
+                    <p className="font-black uppercase tracking-wider text-slate-500">Verified resources</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {(permit.resources ?? []).slice(0, 3).map((resource) => (
+                        <a key={resource.id} href={resource.url} target="_blank" rel="noreferrer" className="font-bold text-teal-800 underline-offset-2 hover:underline">{resource.resourceName} · {resource.versionTag}</a>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" onClick={() => { setSelectedCatalogPermitId(permit.id); setRequestCenterMode("permit"); navigate("requests"); }} className="text-xs font-bold">Open permit details</Button>
+                    {permit.officialFilingUrl && (
+                      <a href={permit.officialFilingUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Official filing site <ExternalLink className="size-3.5" /></a>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserRound className="size-5 text-teal-700" /> Project contacts</CardTitle></CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-slate-600">Your State concierge, lead agencies, SpaceX team, and customer-visible reviewers are in one directory.</p>
+            <Button type="button" onClick={() => navigate("contacts")} className="bg-[#00284d] text-xs font-bold">Open Contact Directory</Button>
+          </CardContent>
+        </Card>
+      </CustomerHome>
+    );
   }
 
   function renderCustomerRequestCenter() {
@@ -2051,7 +2309,7 @@ export default function Home() {
     // auth ids are UUIDs while demo personas use stable fixture ids.
     const recent = repository.getCustomerRequests();
     const choice = (label: string, detail: string, icon: ReactNode, onClick: () => void) => <button type="button" onClick={onClick} className="rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-teal-400 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><span className="flex size-10 items-center justify-center rounded-lg bg-teal-50 text-teal-800">{icon}</span><span className="mt-4 block text-base font-black text-[#00284d]">{label}</span><span className="mt-1 block text-sm leading-6 text-slate-600">{detail}</span></button>;
-    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer intake</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Requests & permits</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Start with the outcome you need. PATH creates a trackable request, routes it to the State Project Office, and keeps authoritative agency filings clearly identified.</p></div>{requestCenterMode === "menu" && <><div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{choice("Submit / track a permit or authorization", "Select an authorization, review prerequisites and official resources, then create a PATH tracking record.", <FilePlus2 className="size-5" />, () => setRequestCenterMode("permit"))}{choice("Request government help / service", "Tell the project office the service or outcome you need, including date and schedule impact.", <HelpCircle className="size-5" />, () => { setRequestTitle("Government service request"); setRequestCenterMode("service"); })}{choice("Ask a project question", "Send a structured question to the project office with the context needed for a useful answer.", <MessageSquare className="size-5" />, () => { setRequestTitle("Project question"); setRequestCenterMode("service"); })}{choice("Report a blocker / coordination problem", "Identify what is blocked, who may need to act, and the date that matters.", <AlertOctagon className="size-5" />, () => { setRequestTitle("Project blocker or coordination problem"); setRequestBlocksWork(true); setRequestCenterMode("service"); })}{choice("Request escalation", "Ask for assistance when a critical-path risk or delayed dependency needs project-office attention.", <ShieldAlert className="size-5" />, () => setRequestCenterMode("escalation"))}{choice("I'm not sure what I need", "Use the PATH concierge to describe the situation in plain English and receive a suggested route.", <Sparkles className="size-5" />, () => { setRequestCenterMode("service"); setRequestTitle("Concierge help"); })}</div><Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Track my PATH requests</CardTitle></CardHeader><CardContent className="space-y-3">{recent.length > 0 ? recent.map((request) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-slate-500">{request.status.replaceAll("_", " ")} · {request.description}</p></div><span className="text-xs font-bold text-teal-800">{formatDate(request.updatedAt)}</span></div>) : <p className="text-sm text-slate-600">No requests submitted from this profile yet.</p>}</CardContent></Card></>}{requestCenterMode === "permit" && permit && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">Permit / authorization submission wizard</CardTitle><p className="mt-1 text-sm text-slate-600">Step 2 of 6 · Choose the authorization from the verified catalog.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent className="space-y-5"><div><Label htmlFor="permit-catalog">Authorization or permit</Label><select id="permit-catalog" value={permit.id} onChange={(event) => setSelectedCatalogPermitId(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm">{catalog.map((entry) => <option key={entry.id} value={entry.id}>{entry.name} · {entry.responsibleOrgCode}</option>)}</select></div><div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2"><div><p className="text-xs font-black uppercase text-slate-500">What triggers it</p><p className="mt-1 text-slate-700">{permit.triggerExplanation}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Expected duration</p><p className="mt-1 text-slate-700">{permit.expectedLeadTimeDays} days · statutory minimum {permit.minimumStatutoryDays} days</p></div><div><p className="text-xs font-black uppercase text-slate-500">Prerequisites</p><p className="mt-1 text-slate-700">{permit.prerequisites.join(" · ")}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Agency contact</p><p className="mt-1 text-slate-700">{permit.agencyContactName ?? permit.responsibleOrgCode} · {permit.agencyContactEmail ?? "Contact through official portal"}</p></div></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-black text-amber-950">Filing method: {filingModeLabel(permit.filingMode)}</p><p className="mt-1 text-sm leading-6 text-amber-900">{permit.filingMode === "EXTERNAL_PORTAL" ? `This application is submitted in the authoritative ${permit.responsibleOrgCode} system. PATH will track it as part of the SpaceX project.` : "PATH will show the next supported submission step before filing."}</p>{permit.officialFilingUrl && <a href={permit.officialFilingUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#00284d] px-3 py-2 text-xs font-bold text-white">Open official filing site <ExternalLink className="size-3.5" /></a>}</div><form onSubmit={(event) => submitCustomerRequest(event, "permit_authorization")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="permit-request-title">PATH tracking title</Label><Input id="permit-request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder={permit.name} required /></div><div><Label htmlFor="permit-submission-date">Submission date</Label><Input id="permit-submission-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="permit-request-description">Supporting context and requested outcome</Label><textarea id="permit-request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe the project scope, filing intent, and any known prerequisites." /></div>{permit.filingMode === "EXTERNAL_PORTAL" && <div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="external-reference">External case / application number</Label><Input id="external-reference" value={externalReference} onChange={(event) => setExternalReference(event.target.value)} placeholder="Enter after filing" /></div><div><Label htmlFor="external-record-url">External record URL</Label><Input id="external-record-url" type="url" value={externalRecordUrl} onChange={(event) => setExternalRecordUrl(event.target.value)} placeholder="https://..." /></div><div><Label htmlFor="external-status">Authoritative external status</Label><select id="external-status" value={externalStatus} onChange={(event) => setExternalStatus(event.target.value)} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="submitted">Submitted</option><option value="under_review">Under review</option><option value="additional_information">Additional information requested</option></select></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">PATH does not scrape or synchronize this system. Status is manually verified by a project participant.</div></div>}<Button type="submit" disabled={isSubmittingRequest} className="bg-[#00284d] font-bold">{isSubmittingRequest ? "Saving request…" : "Create PATH tracking record"} <Send className="size-4" /></Button></form></CardContent></Card>}{(requestCenterMode === "service" || requestCenterMode === "escalation") && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">{requestCenterMode === "escalation" ? "Request escalation / assistance" : "Project help request"}</CardTitle><p className="mt-1 text-sm text-slate-600">Complete the structured intake so the right team can respond without a follow-up round trip.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent><form onSubmit={(event) => submitCustomerRequest(event, requestCenterMode === "escalation" ? "escalation" : "government_help")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="request-title">Request title</Label><Input id="request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder="What do you need?" required /></div><div><Label htmlFor="request-agency">Known agency (optional)</Label><Input id="request-agency" value={requestAgency} onChange={(event) => setRequestAgency(event.target.value)} placeholder="DOTD, CPRA, LDEQ..." /></div><div><Label htmlFor="request-outcome">Requested outcome</Label><Input id="request-outcome" value={requestOutcome} onChange={(event) => setRequestOutcome(event.target.value)} placeholder="A decision, meeting, review, or referral" /></div><div><Label htmlFor="request-date">Desired date</Label><Input id="request-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="request-area">Location / affected area</Label><Input id="request-area" value={requestArea} onChange={(event) => setRequestArea(event.target.value)} /></div><div><Label htmlFor="request-description">Describe the situation</Label><textarea id="request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={5} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder={requestCenterMode === "escalation" ? "Describe the critical-path risk, delayed dependency, or assistance needed." : "Include the context the project office needs to respond."} /></div><label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3"><input type="checkbox" checked={requestBlocksWork} onChange={(event) => setRequestBlocksWork(event.target.checked)} className="mt-1 size-4 accent-teal-700" /><span><span className="block text-sm font-bold text-[#00284d]">This blocks active project work</span><span className="block text-xs text-slate-500">Use this to help triage urgency; PATH will not infer a legal determination.</span></span></label><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={saveCustomerDraft}>Save draft</Button><Button type="submit" disabled={isSubmittingRequest} className="bg-[#00284d] font-bold">{isSubmittingRequest ? "Saving request…" : "Submit request"} <Send className="size-4" /></Button></div></form></CardContent></Card>}</div>;
+    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer intake</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Requests & permits</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Start with the outcome you need. PATH creates a trackable request, routes it to the State Project Office, and keeps authoritative agency filings clearly identified.</p></div>{requestCenterMode === "menu" && <><div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{choice("Submit / track a permit or authorization", "Select an authorization, review prerequisites and official resources, then create a PATH tracking record.", <FilePlus2 className="size-5" />, () => setRequestCenterMode("permit"))}{choice("Request government help / service", "Tell the project office the service or outcome you need, including date and schedule impact.", <HelpCircle className="size-5" />, () => { setRequestTitle("Government service request"); setRequestCenterMode("service"); })}{choice("Ask a project question", "Send a structured question to the project office with the context needed for a useful answer.", <MessageSquare className="size-5" />, () => { setRequestTitle("Project question"); setRequestCenterMode("service"); })}{choice("Report a blocker / coordination problem", "Identify what is blocked, who may need to act, and the date that matters.", <AlertOctagon className="size-5" />, () => { setRequestTitle("Project blocker or coordination problem"); setRequestBlocksWork(true); setRequestCenterMode("service"); })}{choice("Request escalation", "Ask for assistance when a critical-path risk or delayed dependency needs project-office attention.", <ShieldAlert className="size-5" />, () => setRequestCenterMode("escalation"))}{choice("I'm not sure what I need", "Use the PATH concierge to describe the situation in plain English and receive a suggested route.", <Sparkles className="size-5" />, () => { setRequestCenterMode("service"); setRequestTitle("Concierge help"); })}</div><Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Track my PATH requests</CardTitle></CardHeader><CardContent className="space-y-3">{recent.length > 0 ? recent.map((request) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-slate-500">{request.status.replaceAll("_", " ")} · {request.description}</p></div><span className="text-xs font-bold text-teal-800">{formatDate(request.updatedAt)}</span></div>) : <p className="text-sm text-slate-600">No requests submitted from this profile yet.</p>}</CardContent></Card></>}{requestCenterMode === "permit" && permit && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">Permit / authorization submission wizard</CardTitle><p className="mt-1 text-sm text-slate-600">Step 2 of 6 · Choose the authorization from the verified catalog.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent className="space-y-5"><div><Label htmlFor="permit-catalog">Authorization or permit</Label><select id="permit-catalog" value={permit.id} onChange={(event) => setSelectedCatalogPermitId(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm">{catalog.map((entry) => <option key={entry.id} value={entry.id}>{entry.name} · {entry.responsibleOrgCode}</option>)}</select></div><div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2"><div><p className="text-xs font-black uppercase text-slate-500">What triggers it</p><p className="mt-1 text-slate-700">{permit.triggerExplanation}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Expected duration</p><p className="mt-1 text-slate-700">{permit.expectedLeadTimeDays} days · statutory minimum {permit.minimumStatutoryDays} days</p></div><div><p className="text-xs font-black uppercase text-slate-500">Prerequisites</p><p className="mt-1 text-slate-700">{permit.prerequisites.join(" · ")}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Agency contact</p><p className="mt-1 text-slate-700">{permit.agencyContactName ?? permit.responsibleOrgCode} · {permit.agencyContactEmail ?? "Contact through official portal"}</p></div></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-black text-amber-950">Filing method: {filingModeLabel(permit.filingMode)}</p><p className="mt-1 text-sm leading-6 text-amber-900">{permit.filingMode === "EXTERNAL_PORTAL" ? `This application is submitted in the authoritative ${permit.responsibleOrgCode} system. PATH will track it as part of the SpaceX project.` : "PATH will show the next supported submission step before filing."}</p>{permit.officialFilingUrl && <a href={permit.officialFilingUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#00284d] px-3 py-2 text-xs font-bold text-white">Open official filing site <ExternalLink className="size-3.5" /></a>}</div><form onSubmit={(event) => submitCustomerRequest(event, "permit_authorization")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="permit-request-title">PATH tracking title</Label><Input id="permit-request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder={permit.name} required /></div><div><Label htmlFor="permit-submission-date">Submission date</Label><Input id="permit-submission-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="permit-request-description">Supporting context and requested outcome</Label><textarea id="permit-request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe the project scope, filing intent, and any known prerequisites." /></div>{permit.filingMode === "EXTERNAL_PORTAL" && <div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="external-reference">External case / application number</Label><Input id="external-reference" value={externalReference} onChange={(event) => setExternalReference(event.target.value)} placeholder="Enter after filing" /></div><div><Label htmlFor="external-record-url">External record URL</Label><Input id="external-record-url" type="url" value={externalRecordUrl} onChange={(event) => setExternalRecordUrl(event.target.value)} placeholder="https://..." /></div><div><Label htmlFor="external-status">Authoritative external status</Label><select id="external-status" value={externalStatus} onChange={(event) => setExternalStatus(event.target.value)} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="submitted">Submitted</option><option value="under_review">Under review</option><option value="additional_information">Additional information requested</option></select></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">PATH does not scrape or synchronize this system. Status is manually verified by a project participant.</div></div>}<div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 space-y-2 text-xs text-slate-700"><p className="font-black text-[#00284d] uppercase tracking-wider text-[11px]">Intake details &amp; routing preview</p><div className="grid gap-2 sm:grid-cols-2"><p><strong className="text-slate-800">Receiving team:</strong> {permit.responsibleOrgCode} · {permit.agencyContactName ?? "Designated Regulatory Authority"}</p><p><strong className="text-slate-800">Filing authority:</strong> Official Agency Jurisdiction: {permit.responsibleOrgCode}</p></div><p><strong className="text-slate-800">Expected process:</strong> Review lead time ~{permit.expectedLeadTimeDays} days (statutory minimum: {permit.minimumStatutoryDays} days). PATH tracks milestones against the SpaceX project schedule.</p><p><strong className="text-slate-800">After submission:</strong> A tracking record is created in PATH. If filing mode is external portal, ensure official agency reference is added once filed.</p></div><Button type="submit" disabled={isSubmittingRequest} className="bg-[#00284d] font-bold">{isSubmittingRequest ? "Saving request…" : "Create PATH tracking record"} <Send className="size-4" /></Button></form></CardContent></Card>}{(requestCenterMode === "service" || requestCenterMode === "escalation") && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">{requestCenterMode === "escalation" ? "Request escalation / assistance" : "Project help request"}</CardTitle><p className="mt-1 text-sm text-slate-600">Complete the structured intake so the right team can respond without a follow-up round trip.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent><form onSubmit={(event) => submitCustomerRequest(event, requestCenterMode === "escalation" ? "escalation" : "government_help")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="request-title">Request title</Label><Input id="request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder="What do you need?" required /></div><div><Label htmlFor="request-agency">Known agency (optional)</Label><Input id="request-agency" value={requestAgency} onChange={(event) => setRequestAgency(event.target.value)} placeholder="DOTD, CPRA, LDEQ..." /></div><div><Label htmlFor="request-outcome">Requested outcome</Label><Input id="request-outcome" value={requestOutcome} onChange={(event) => setRequestOutcome(event.target.value)} placeholder="A decision, meeting, review, or referral" /></div><div><Label htmlFor="request-date">Desired date</Label><Input id="request-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="request-area">Location / affected area</Label><Input id="request-area" value={requestArea} onChange={(event) => setRequestArea(event.target.value)} /></div><div><Label htmlFor="request-description">Describe the situation</Label><textarea id="request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={5} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder={requestCenterMode === "escalation" ? "Describe the critical-path risk, delayed dependency, or assistance needed." : "Include the context the project office needs to respond."} /></div><label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3"><input type="checkbox" checked={requestBlocksWork} onChange={(event) => setRequestBlocksWork(event.target.checked)} className="mt-1 size-4 accent-teal-700" /><span><span className="block text-sm font-bold text-[#00284d]">This blocks active project work</span><span className="block text-xs text-slate-500">Use this to help triage urgency; PATH will not infer a legal determination.</span></span></label><div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 space-y-2 text-xs text-slate-700"><p className="font-black text-[#00284d] uppercase tracking-wider text-[11px]">Intake details &amp; routing preview</p><div className="grid gap-2 sm:grid-cols-2"><p><strong className="text-slate-800">Receiving team:</strong> {requestAgency.trim() ? `${requestAgency.trim()} review team (via State Project Office)` : requestCenterMode === "escalation" ? "State Project Office · Governor's Office of Major Projects & Delivery" : "State Project Office · Triage & Inter-Agency Coordination"}</p><p><strong className="text-slate-800">Filing authority:</strong> Louisiana Project Delivery Office (PATH coordination framework)</p></div><p><strong className="text-slate-800">Expected process:</strong> State Project Office conducts intake review (1 business day), verifies completeness, and routes to the designated agency team. If clarification is needed, you will receive an action notification.</p><p><strong className="text-slate-800">After submission:</strong> A confirmation receipt (PATH-YYYY-XXXX) is issued immediately. You can track status, upload additional versions, and answer clarifications from &ldquo;My Requests&rdquo;.</p></div><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={saveCustomerDraft}>Save draft</Button><Button type="submit" disabled={isSubmittingRequest} className="bg-[#00284d] font-bold">{isSubmittingRequest ? "Saving request…" : "Submit request"} <Send className="size-4" /></Button></div></form></CardContent></Card>}</div>;
   }
 
   function renderCustomerDocuments() {

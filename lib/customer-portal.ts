@@ -223,7 +223,16 @@ export type ProjectOverview = {
   nextMilestone: { title: string; date: string; owner: string };
   scheduleDrivers: string[];
   customerActions: Array<{ label: string; detail: string; count: number }>;
-  governmentActions: Array<{ id: string; title: string; agency: string; stage: string; targetDate: string; customerAction: string }>;
+  governmentActions: Array<{
+    id: string;
+    title: string;
+    agency: string;
+    stage: string;
+    targetDate: string;
+    customerAction: string;
+    hasCustomerAction?: boolean;
+    nextMilestone?: string;
+  }>;
   blockers: Array<{ title: string; owner: string; impact: string; expectedResolution: string }>;
   upcomingEvents: Array<{ title: string; date: string; type: string; detail: string }>;
 };
@@ -250,7 +259,7 @@ export function getProjectOverview(project: ProjectRecord, workstreams: Workstre
       {
         label: "Requests needing your response",
         detail: "RFIs and customer submissions awaiting response",
-        count: customerRequests.filter((request) => request.status === "pending_customer" || request.status === "draft" || request.itsmState === "pending_customer").length
+        count: customerRequests.filter((request) => request.status === "pending_customer" || request.itsmState === "pending_customer").length
           + project.workstreams.flatMap((ws) => ws.rfis ?? []).filter((r) => !["accepted", "closed", "rejected", "withdrawn"].includes(r.status) && (!r.responses || !r.responses.some((resp) => !resp.reviewDecision))).length,
       },
       { label: "External filings being tracked", detail: "Manual status updates from agency systems", count: filingsInProgress },
@@ -258,11 +267,12 @@ export function getProjectOverview(project: ProjectRecord, workstreams: Workstre
     ],
     governmentActions: active.slice(0, 6).map((workstream) => {
       const activeRfi = (workstream.rfis ?? []).find((r) => !["accepted", "closed", "rejected", "withdrawn"].includes(r.status) && (!r.responses || !r.responses.some((resp) => !resp.reviewDecision)));
+      const hasCustomerAction = Boolean(activeRfi || (workstream.operationalState === "waiting_applicant" && workstream.waitingReason));
       const customerAction = activeRfi
         ? `Submit response for ${activeRfi.code}`
         : workstream.operationalState === "waiting_applicant" && workstream.waitingReason
         ? workstream.waitingReason
-        : "No customer action required — with reviewing agency";
+        : "None";
       return {
         id: workstream.id,
         title: workstream.title,
@@ -270,6 +280,8 @@ export function getProjectOverview(project: ProjectRecord, workstreams: Workstre
         stage: workstream.currentStageName ?? workstream.operationalStateLabel,
         targetDate: workstream.forecastTargetDate,
         customerAction,
+        hasCustomerAction,
+        nextMilestone: workstream.nextExpectedEvent,
       };
     }),
     blockers: blockers.slice(0, 5).map((workstream) => ({ title: workstream.waitingReason ?? workstream.currentActionSummary, owner: workstream.waitingOnEntity ?? workstream.regulatoryLead.orgName, impact: workstream.isCriticalPath ? "Critical path impact" : `${workstream.scheduleVarianceDays} day schedule variance`, expectedResolution: workstream.nextExpectedEvent })),
