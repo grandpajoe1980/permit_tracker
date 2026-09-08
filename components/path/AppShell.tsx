@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, type ReactNode } from "react";
-import { Zap, Bell, LogOut, Menu, User, ArrowRight, Settings2, X } from "lucide-react";
+import { Zap, Bell, LogOut, Menu, User, ArrowRight, Settings2, X, HelpCircle } from "lucide-react";
 import type { OperationalPersona } from "@/lib/operational-ux";
 import type { AppRoute } from "@/lib/navigation";
 import { Button } from "@/components/ui/button";
+import { FirstUseGuide } from "./FirstUseGuide";
 
 export interface NavItem {
   id: AppRoute;
@@ -43,9 +44,10 @@ export function AppShell({
   footer,
 }: AppShellProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#f3f6f7] text-[#172033] flex flex-col justify-between">
+    <div className="min-h-screen bg-[#f3f6f7] text-[#172033] flex flex-col justify-between overflow-x-hidden">
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <div className="road-stripe" />
 
@@ -58,7 +60,7 @@ export function AppShell({
             variant="ghost"
             size="icon"
             onClick={() => setMobileNavOpen((prev) => !prev)}
-            className="text-white hover:bg-white/10 lg:hidden"
+            className="text-white hover:bg-white/10 lg:hidden min-h-[44px] min-w-[44px]"
             aria-label="Toggle navigation"
             aria-expanded={mobileNavOpen}
           >
@@ -71,12 +73,12 @@ export function AppShell({
           </span>
 
           {/* Brand and current context */}
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-xs font-black text-white sm:text-sm tracking-wide">PATH</p>
             <button
               type="button"
               onClick={onOpenProject}
-              className="block max-w-[42vw] truncate text-left text-[11px] font-semibold text-slate-300 hover:text-white hover:underline transition-colors sm:max-w-none cursor-pointer"
+              className="block max-w-[130px] sm:max-w-xs md:max-w-none truncate text-left text-[11px] font-semibold text-slate-300 hover:text-white hover:underline transition-colors cursor-pointer"
               title="Go to project overview"
             >
               {projectName}
@@ -84,14 +86,15 @@ export function AppShell({
           </div>
 
           {/* User identity button (Clickable per step 7) */}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <button
               type="button"
+              id="persona-selector"
               onClick={() => {
                 onNavigate("profile");
                 setMobileNavOpen(false);
               }}
-              className="group flex items-center gap-2 rounded-full border border-white/20 px-3 py-1.5 text-xs text-slate-200 hover:border-white/40 hover:bg-white/10 transition cursor-pointer"
+              className="group flex items-center gap-1.5 sm:gap-2 rounded-full border border-white/20 px-2.5 sm:px-3 py-1.5 text-xs text-slate-200 hover:border-white/40 hover:bg-white/10 transition cursor-pointer min-h-[44px] shrink-0"
               aria-label="Open profile"
               title="View your profile and responsibilities"
             >
@@ -102,6 +105,22 @@ export function AppShell({
               </span>
             </button>
 
+            {/* First-use Guide Trigger */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setGuideOpen(true);
+                setMobileNavOpen(false);
+              }}
+              className="relative shrink-0 text-white hover:bg-white/10 min-h-[44px] min-w-[44px]"
+              aria-label="First-use guide"
+              title="Open first-use guide"
+            >
+              <HelpCircle className="size-5" />
+            </Button>
+
             {/* Notifications */}
             <Button
               type="button"
@@ -111,7 +130,7 @@ export function AppShell({
                 onNavigate("notifications");
                 setMobileNavOpen(false);
               }}
-              className="relative shrink-0 text-white hover:bg-white/10"
+              className="relative shrink-0 text-white hover:bg-white/10 min-h-[44px] min-w-[44px]"
               aria-label="Open notifications"
             >
               <Bell className="size-5" />
@@ -126,7 +145,7 @@ export function AppShell({
               variant="ghost"
               size="sm"
               onClick={onSignOut}
-              className="shrink-0 px-2 text-white hover:bg-white/10 sm:px-3"
+              className="shrink-0 px-2 text-white hover:bg-white/10 sm:px-3 min-h-[44px] flex items-center"
               aria-label="Sign out"
             >
               <LogOut className="size-4" aria-hidden="true" />
@@ -138,9 +157,21 @@ export function AppShell({
 
       {/* Main shell layout: Fixed rail + independently scrolling pane */}
       <div className="mx-auto flex max-w-[1600px] items-start flex-1 w-full">
+        {/* Mobile drawer backdrop */}
+        {mobileNavOpen && (
+          <div
+            className="fixed inset-0 z-20 bg-slate-900/50 backdrop-blur-xs lg:hidden"
+            onClick={() => setMobileNavOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
         {/* Navigation rail */}
         <aside
           id="mobile-navigation"
+          role={mobileNavOpen ? "dialog" : undefined}
+          aria-modal={mobileNavOpen ? "true" : undefined}
+          aria-label="Navigation drawer"
           className={`${
             mobileNavOpen ? "block" : "hidden"
           } fixed inset-x-0 top-[61px] z-20 max-h-[calc(100vh-61px)] overflow-y-auto border-b border-slate-200 bg-white p-4 shadow-xl lg:sticky lg:top-[61px] lg:block lg:h-[calc(100vh-61px)] lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}
@@ -177,13 +208,15 @@ export function AppShell({
             {primaryNav.map((item) => (
               <button
                 key={item.id}
+                id={`nav-${item.id}`}
+                data-nav={item.id}
                 type="button"
                 onClick={() => {
                   onNavigate(item.id);
                   setMobileNavOpen(false);
                 }}
                 aria-current={currentRoute === item.id ? "page" : undefined}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${
+                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition min-h-[44px] ${
                   currentRoute === item.id
                     ? "bg-[#00284d] text-white shadow-xs"
                     : "text-slate-700 hover:bg-teal-50 hover:text-teal-950"
@@ -210,11 +243,13 @@ export function AppShell({
                 </p>
                 <button
                   type="button"
+                  id="nav-admin"
+                  data-nav="admin"
                   onClick={() => {
                     onNavigate("admin");
                     setMobileNavOpen(false);
                   }}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold ${
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold min-h-[44px] ${
                     currentRoute === "admin" ? "bg-[#00284d] text-white" : "text-slate-700 hover:bg-teal-50"
                   }`}
                 >
@@ -223,11 +258,33 @@ export function AppShell({
                 </button>
               </>
             )}
+
+            <div className="pt-4 mt-6 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setGuideOpen(true);
+                  setMobileNavOpen(false);
+                }}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-teal-50 hover:text-teal-900 transition cursor-pointer min-h-[44px]"
+              >
+                <HelpCircle className="size-4 text-teal-600" aria-hidden="true" />
+                <span>First-use guide</span>
+              </button>
+            </div>
           </nav>
         </aside>
 
         {/* Main Content Pane */}
         <main id="main-content" className="min-w-0 flex-1 px-3 py-5 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
+          <FirstUseGuide
+            isOpen={guideOpen ? true : undefined}
+            onDismiss={() => setGuideOpen(false)}
+            onNavigate={(route) => {
+              onNavigate(route as AppRoute);
+              setGuideOpen(false);
+            }}
+          />
           {children}
         </main>
       </div>

@@ -87,7 +87,7 @@ export function WorkInboxView({
                 : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
             }`}
           >
-            Due soon ({dueSoonGroup.items.length})
+            Due soon ({dueSoonItems.length})
           </button>
           <button
             type="button"
@@ -148,7 +148,7 @@ export function WorkInboxView({
               activeTab === "needs_action" ? "bg-white/20 text-white" : "bg-white text-slate-700"
             }`}
           >
-            {needsActionGroup.items.length}
+            {needsActionItems.length}
           </span>
         </button>
 
@@ -167,7 +167,7 @@ export function WorkInboxView({
               activeTab === "waiting" ? "bg-white/20 text-white" : "bg-white text-slate-700"
             }`}
           >
-            {waitingGroup.items.length}
+            {waitingItems.length}
           </span>
         </button>
 
@@ -186,7 +186,7 @@ export function WorkInboxView({
               activeTab === "recently_completed" ? "bg-white/20 text-white" : "bg-white text-slate-700"
             }`}
           >
-            {completedGroup.items.length}
+            {completedItems.length}
           </span>
         </button>
       </div>
@@ -207,8 +207,19 @@ export function WorkInboxView({
         </div>
 
         {filteredItems.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-slate-500 text-sm">
-            No items in this view.
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-600">
+            <p className="text-sm font-semibold text-slate-800">
+              {activeTab === "needs_action"
+                ? "No items requiring your action."
+                : activeTab === "waiting"
+                ? "No items currently waiting on external response."
+                : "No completed items in recent history."}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {searchQuery.trim() || filterOverdue || filterDueSoon || selectedKind !== "all"
+                ? "Try clearing your search or adjusting filters."
+                : "Your inbox is completely up to date."}
+            </p>
           </div>
         ) : (
           <div className="space-y-2">

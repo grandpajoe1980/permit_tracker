@@ -102,14 +102,14 @@
 
 html {
   max-width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
   background: var(--background);
 }
 
 body {
   min-width: 320px;
   max-width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
@@ -119,6 +119,33 @@ button,
 a,
 input {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Accessible High-Contrast Focus Rings */
+:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+[data-slot="button"]:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #007c7c;
+  outline-offset: 2px;
+}
+
+/* Touch accessibility: 44px minimum touch targets on mobile/touch screens */
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  [data-slot="button"],
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 /* Interactive & Hover Highlighting Rules */

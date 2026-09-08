@@ -1831,7 +1831,8 @@ export default function Home() {
         return;
       }
       setRfiResponseFile(null);
-      notify(`${item.sourceRfi.code} response submitted to the requesting agency${attachedDocumentVersionIds.length ? " with its attached version" : ""}.`);
+      const nextReviewer = item.sourceRfi.requestedByName ? item.sourceRfi.requestedByName.split(" ")[0] : "Jordan";
+      notify(`Response sent — ${nextReviewer} is next.`);
       return;
     }
 
