@@ -57,6 +57,7 @@ export function LoginPage({
       (p.badge && p.badge.toLowerCase().includes(query))
   );
 
+  // Grouped projection from demoPersonas.map
   const featuredIds = ["alex-martin", "jordan-lee", "joe-skaggs"];
   const featured = filteredPersonas.filter((p) => featuredIds.includes(p.id));
 
@@ -125,7 +126,7 @@ export function LoginPage({
             {loginError && <p id="login-error" role="alert" aria-live="assertive" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-900">{loginError}</p>}
             <div className="border-t border-slate-100 pt-4">
               <Button id="demo-login-trigger" type="button" variant="outline" aria-expanded={showDemoPeople} className="w-full justify-between border-teal-300 bg-teal-50 font-bold text-teal-950" onClick={onToggleDemoPeople}><span className="flex items-center gap-2"><Sparkles className="size-4 text-teal-700" aria-hidden="true" /> Quick Demo Sign-In</span><ChevronDown className={`size-4 transition-transform ${showDemoPeople ? "rotate-180" : ""}`} aria-hidden="true" /></Button>
-              {showDemoPeople && <div className="mt-3 max-h-[58vh] space-y-4 overflow-y-auto pr-1" aria-label="Demo personas">
+              {showDemoPeople && <div className="mt-3 max-h-[52vh] space-y-2 overflow-y-auto pr-1" aria-label="Demo personas">
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 size-3.5 text-slate-400" aria-hidden="true" />
                   <Input
