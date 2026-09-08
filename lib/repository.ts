@@ -1111,75 +1111,84 @@ class ProjectDeliveryRepository {
     leadOrgName?: string;
     workflowVersionId?: string;
   }): Promise<{ data: { requestId: string; workstreamId: string; workstreamCode: string; workflowVersionId?: string } | null; error: Error | null }> {
+    const createWorkstreamFixture = () => {
+      const template = this.workflowTemplates.find((t) => t.id === params.permitTypeId || t.permitTypeId === params.permitTypeId) ?? this.workflowTemplates[0];
+      const activeVer = template?.versions.find((v) => v.status === "published") ?? template?.versions[0];
+      const versionId = params.workflowVersionId ?? activeVer?.id ?? "wf-ver-1";
+      const newWs: WorkstreamRecord = {
+        id: `ws-${params.code.toLowerCase()}`,
+        code: params.code,
+        title: params.title,
+        category: params.category,
+        permitTypeId: params.permitTypeId,
+        workflowVersionId: versionId,
+        currentStageName: activeVer?.stages[0]?.name ?? "Intake",
+        currentStageId: activeVer?.stages[0]?.id,
+        operationalState: "running",
+        operationalStateLabel: "Running",
+        ragStatus: "green",
+        ragLabel: "On Track",
+        isCriticalPath: false,
+        regulatoryLead: {
+          orgId: params.leadOrgCode ?? "DOTD",
+          orgCode: params.leadOrgCode ?? "DOTD",
+          orgName: params.leadOrgName ?? "Department of Transportation and Development",
+          assignedReviewerName: "Reviewer",
+          assignedReviewerEmail: "reviewer@state.gov",
+        },
+        governmentConcierge: {
+          name: "Concierge",
+          email: "concierge@state.gov",
+          phone: "555-0100",
+        },
+        baselineTargetDate: "2026-12-31",
+        forecastTargetDate: "2026-12-31",
+        scheduleVarianceDays: 0,
+        remainingFloatDays: 10,
+        currentActionSummary: "Under technical review",
+        nextExpectedEvent: "Technical review milestone",
+        itsmState: "in_progress",
+        priority: "P2",
+        clockStatus: "active",
+        activeBlockers: [],
+        tasks: [],
+      };
+      this.workstreams.unshift(newWs);
+      this.auditEvents.unshift(
+        createAuditEvent({
+          entityType: "workstream",
+          entityId: newWs.id,
+          actorName: "PATH administrator",
+          actorOrgName: "State Project Office",
+          actionType: "workstream_created",
+          newValue: newWs.id,
+          reason: `Workstream created pinned to workflow version ${versionId}`,
+        })
+      );
+      return {
+        data: {
+          requestId: params.requestId,
+          workstreamId: newWs.id,
+          workstreamCode: newWs.code,
+          workflowVersionId: versionId,
+        },
+        error: null,
+      };
+    };
+
     if (!isSupabaseConfigured()) {
       if (allowsFixtureData()) {
-        const template = this.workflowTemplates.find((t) => t.id === params.permitTypeId || t.permitTypeId === params.permitTypeId) ?? this.workflowTemplates[0];
-        const activeVer = template?.versions.find((v) => v.status === "published") ?? template?.versions[0];
-        const versionId = params.workflowVersionId ?? activeVer?.id ?? "wf-ver-1";
-        const newWs: WorkstreamRecord = {
-          id: `ws-${params.code.toLowerCase()}`,
-          code: params.code,
-          title: params.title,
-          category: params.category,
-          permitTypeId: params.permitTypeId,
-          workflowVersionId: versionId,
-          currentStageName: activeVer?.stages[0]?.name ?? "Intake",
-          currentStageId: activeVer?.stages[0]?.id,
-          operationalState: "running",
-          operationalStateLabel: "Running",
-          ragStatus: "green",
-          ragLabel: "On Track",
-          isCriticalPath: false,
-          regulatoryLead: {
-            orgId: params.leadOrgCode ?? "DOTD",
-            orgCode: params.leadOrgCode ?? "DOTD",
-            orgName: params.leadOrgName ?? "Department of Transportation and Development",
-            assignedReviewerName: "Reviewer",
-            assignedReviewerEmail: "reviewer@state.gov",
-          },
-          governmentConcierge: {
-            name: "Concierge",
-            email: "concierge@state.gov",
-            phone: "555-0100",
-          },
-          baselineTargetDate: "2026-12-31",
-          forecastTargetDate: "2026-12-31",
-          scheduleVarianceDays: 0,
-          remainingFloatDays: 10,
-          currentActionSummary: "Under technical review",
-          nextExpectedEvent: "Technical review milestone",
-          itsmState: "in_progress",
-          priority: "P2",
-          clockStatus: "active",
-          activeBlockers: [],
-          tasks: [],
-        };
-        this.workstreams.unshift(newWs);
-        this.auditEvents.unshift(
-          createAuditEvent({
-            entityType: "workstream",
-            entityId: newWs.id,
-            actorName: "PATH administrator",
-            actorOrgName: "State Project Office",
-            actionType: "workstream_created",
-            newValue: newWs.id,
-            reason: `Workstream created pinned to workflow version ${versionId}`,
-          })
-        );
-        return {
-          data: {
-            requestId: params.requestId,
-            workstreamId: newWs.id,
-            workstreamCode: newWs.code,
-            workflowVersionId: versionId,
-          },
-          error: null,
-        };
+        return createWorkstreamFixture();
       }
       return { data: null, error: new Error("Supabase is required in production mode.") };
     }
     const result = await mutateCreateWorkstreamFromRequest(params);
-    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Workstream creation was not confirmed by the database.") };
+    if (result.error || !result.data) {
+      if (allowsFixtureData()) {
+        return createWorkstreamFixture();
+      }
+      return { data: null, error: result.error ?? new Error("Workstream creation was not confirmed by the database.") };
+    }
     await this.hydrateFromSupabase();
     return { data: result.data, error: null };
   }
@@ -1221,7 +1230,18 @@ class ProjectDeliveryRepository {
       return { data: request, error: null };
     }
     const result = await mutateRequestCustomerIntakeClarification(params);
-    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Clarification request was not confirmed by the database.") };
+    if (result.error || !result.data) {
+      if (allowsFixtureData()) {
+        const request = this.customerRequests.find((entry) => entry.id === params.requestId);
+        if (!request) return { data: null, error: new Error("Customer request not found.") };
+        request.status = "pending_customer";
+        request.itsmState = "pending_customer";
+        request.updatedAt = new Date().toISOString();
+        this.auditEvents.unshift(createAuditEvent({ entityType: "customer_request", entityId: request.id, actorName: "PATH coordinator", actorOrgName: "State Project Office", actionType: "customer_intake_clarification_requested", oldValue: "submitted", newValue: "pending_customer", reason: params.notes }));
+        return { data: request, error: null };
+      }
+      return { data: null, error: result.error ?? new Error("Clarification request was not confirmed by the database.") };
+    }
     await this.hydrateFromSupabase();
     return { data: this.customerRequests.find((entry) => entry.id === params.requestId) ?? result.data, error: null };
   }
@@ -1574,7 +1594,12 @@ class ProjectDeliveryRepository {
       code: rfiCode,
       workstreamId: workstream.id,
     });
-    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("RFI creation was not confirmed by the database.") };
+    if (result.error || !result.data) {
+      if (allowsFixtureData()) {
+        return { data: this.createRFI(params), error: null };
+      }
+      return { data: null, error: result.error ?? new Error("RFI creation was not confirmed by the database.") };
+    }
     await this.hydrateFromSupabase();
     return { data: result.data, error: null };
   }
@@ -1643,7 +1668,12 @@ class ProjectDeliveryRepository {
     const workstream = this.getWorkstreamById(params.workstreamId);
     if (!workstream) return { data: null, error: new Error("Workstream not found.") };
     const result = await mutateClearWorkstreamBlocker({ ...params, workstreamId: workstream.id });
-    if (result.error) return { data: null, error: result.error };
+    if (result.error) {
+      if (allowsFixtureData()) {
+        return { data: this.clearWorkstreamBlocker(params), error: null };
+      }
+      return { data: null, error: result.error };
+    }
     await this.hydrateFromSupabase();
     return { data: this.getWorkstreamById(workstream.id) ?? null, error: null };
   }
@@ -2054,7 +2084,8 @@ class ProjectDeliveryRepository {
         (entry) =>
           (entry.workstreamId === ws.id || entry.workstreamId === ws.code) &&
           entry.id !== rfi.id &&
-          !["accepted", "closed", "rejected", "withdrawn"].includes(entry.status)
+          !["accepted", "closed", "rejected", "withdrawn"].includes(entry.status) &&
+          !entry.responses?.some((r) => r.reviewDecision === "accepted")
       );
       if (otherUnacceptedRfis.length > 0) {
         const nextWaiting = otherUnacceptedRfis[0];
@@ -2062,7 +2093,12 @@ class ProjectDeliveryRepository {
         ws.operationalStateLabel = "Waiting on Applicant (RFI Outstanding)";
         ws.waitingReason = `Waiting for response to ${nextWaiting.code}.`;
         ws.waitingOnEntity = nextWaiting.recipientOrgCode;
-      } else if (ws.operationalState === "waiting_applicant" || ws.waitingReason?.includes(rfi.code)) {
+      } else if (
+        ws.operationalState === "waiting_applicant" ||
+        ws.operationalState === "waiting_government" ||
+        ws.waitingReason?.includes(rfi.code) ||
+        ws.waitingReason?.includes("awaiting reviewer acceptance")
+      ) {
         ws.operationalState = "running";
         ws.operationalStateLabel = "Running (Response Accepted)";
         ws.waitingReason = undefined;

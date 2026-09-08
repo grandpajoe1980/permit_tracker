@@ -452,8 +452,10 @@ export function WorkstreamGraphGantt({
               size="sm"
               onClick={() => setActiveTab("advanced")}
               className="w-full justify-start whitespace-normal text-left text-xs font-bold sm:w-auto text-indigo-700 hover:text-indigo-800"
+              title="Advanced Analysis (Delay Taxonomy Attribution, Parallel Acceleration Opportunities)"
             >
               <Zap className="size-3.5" /> Advanced Analysis
+              <span className="sr-only"> (Delay Taxonomy Attribution, Parallel Acceleration Opportunities)</span>
             </Button>
           )}
         </div>

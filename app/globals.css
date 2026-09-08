@@ -102,14 +102,14 @@
 
 html {
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: auto;
   background: var(--background);
 }
 
 body {
   min-width: 320px;
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: auto;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);

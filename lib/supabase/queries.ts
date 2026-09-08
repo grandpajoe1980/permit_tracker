@@ -107,8 +107,8 @@ export async function fetchWorkstreams(projectId: string): Promise<WorkstreamRec
   });
 }
 
-export async function fetchCustomerRequests(projectId: string): Promise<CustomerRequestRecord[]> {
-  const client = getSupabaseBrowser();
+export async function fetchCustomerRequests(projectId: string, queryClient?: QueryClient): Promise<CustomerRequestRecord[]> {
+  const client = queryClient ?? getSupabaseBrowser();
   if (!client) return noClient("fetch customer requests");
   const scope = await resolveProjectScope(client, projectId);
   if (!scope) return [];
@@ -276,7 +276,9 @@ export async function fetchNotifications(userId?: string): Promise<NotificationR
   const client = getSupabaseBrowser();
   if (!client) return noClient("fetch notifications");
   const authResult = userId ? null : await client.auth.getUser();
-  if (authResult?.error) recordQueryFailure("resolve notification user", authResult.error);
+  if (authResult?.error && !authResult.error.message.toLowerCase().includes("session missing")) {
+    recordQueryFailure("resolve notification user", authResult.error);
+  }
   const resolvedUserId = userId ?? authResult?.data.user?.id;
   if (!resolvedUserId) return [];
   const { data, error } = await client

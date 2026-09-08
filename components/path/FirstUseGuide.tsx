@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Check, ArrowRight, ArrowLeft, X, Sparkles, LayoutList, Calendar, Users, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -80,6 +80,14 @@ export function FirstUseGuide({
     }
   });
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [prevControlledIsOpen, setPrevControlledIsOpen] = useState(controlledIsOpen);
+
+  if (controlledIsOpen !== prevControlledIsOpen) {
+    setPrevControlledIsOpen(controlledIsOpen);
+    if (controlledIsOpen) {
+      setCurrentStepIndex(0);
+    }
+  }
 
   const isVisible = controlledIsOpen !== undefined ? controlledIsOpen : !isDismissed;
 
@@ -143,7 +151,7 @@ export function FirstUseGuide({
         <button
           type="button"
           onClick={handleDismiss}
-          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+          className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
           aria-label="Dismiss guide"
         >
           <X className="size-4" aria-hidden="true" />
@@ -159,7 +167,7 @@ export function FirstUseGuide({
               key={step.id}
               type="button"
               onClick={() => setCurrentStepIndex(idx)}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition ${
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition min-h-[36px] cursor-pointer ${
                 isActive
                   ? "bg-[#00284d] text-white shadow-xs"
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"

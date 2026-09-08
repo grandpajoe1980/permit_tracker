@@ -101,9 +101,15 @@ test("Checkpoint 10: AppShell provides 44px touch targets, persona-selector ID, 
 
   // 5. 44px touch target classes in header buttons
   assert.match(html, /min-h-\[44px\]/);
+  assert.match(html, /min-w-\[44px\]/);
+
+  // 6. Keyboard accessibility & Escape key listener
+  const appShellSource = await readFile(new URL("../components/path/AppShell.tsx", import.meta.url), "utf8");
+  assert.match(appShellSource, /Escape/);
+  assert.match(appShellSource, /hamburgerRef/);
 });
 
-test("Checkpoint 10: globals.css enforces reduced motion, coarse pointer 44px targets, visible focus, and mobile overflow-x hidden", async () => {
+test("Checkpoint 10: globals.css enforces reduced motion, coarse pointer 44px targets, visible focus, and mobile viewport constraints", async () => {
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 
   // Reduced motion
@@ -118,9 +124,11 @@ test("Checkpoint 10: globals.css enforces reduced motion, coarse pointer 44px ta
   assert.match(css, /:focus-visible/);
   assert.match(css, /outline:\s*2px solid #007c7c/);
 
-  // Mobile overflow-x hidden on html & body
-  assert.match(css, /html\s*\{[^}]*overflow-x:\s*hidden/);
-  assert.match(css, /body\s*\{[^}]*overflow-x:\s*hidden/);
+  // Mobile viewport constraints on html & body
+  assert.match(css, /html\s*\{[^}]*max-width:\s*100%/);
+  assert.match(css, /html\s*\{[^}]*overflow-x:\s*auto/);
+  assert.match(css, /body\s*\{[^}]*max-width:\s*100%/);
+  assert.match(css, /body\s*\{[^}]*overflow-x:\s*auto/);
 });
 
 test("Checkpoint 10: WorkInboxRow and WorkInboxView render icons with status, calm typography, and safe counts", async () => {

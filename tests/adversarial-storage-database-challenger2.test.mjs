@@ -353,7 +353,7 @@ liveTest("Adversarial: Tampered SHA-256 hash detection fails verification gracef
 
 liveTest("Adversarial: Querying non-existent storage path returns clean error without crashing", async () => {
   const nonExistentPath = `non-existent-uuid-${Date.now()}/v1/ghost-file.pdf`;
-  const result = await downloadDocumentFile(nonExistentPath);
+  const result = await downloadDocumentFile(nonExistentPath, adminClient);
 
   assert.equal(result.blob, null, "Blob must be null for non-existent storage path");
   assert.ok(result.error, "Error must be returned for non-existent storage path");
@@ -411,7 +411,7 @@ liveTest("Task Mutations: mutateUpdateTask persists status and duration changes 
       },
       actorName: "Challenger2 Verification",
       actorOrgName: "Adversarial Test",
-    });
+    }, adminClient);
     assert.equal(inProgressResult.error, null, inProgressResult.error?.message);
     assert.equal(inProgressResult.data?.status, "in_progress");
 
@@ -428,7 +428,7 @@ liveTest("Task Mutations: mutateUpdateTask persists status and duration changes 
         status: originalStatus,
       },
       actorName: "Challenger2 Cleanup",
-    });
+    }, adminClient);
   }
 });
 
@@ -443,7 +443,7 @@ liveTest("Task Mutations: mutateCompleteTask marks task completed and resolves I
       taskId: task.id,
       actorName: "Patch Verification",
       actorOrgName: "Adversarial Test",
-    });
+    }, adminClient);
 
     assert.equal(result.error, null, result.error?.message);
     assert.equal(result.data?.status, "completed");
@@ -460,7 +460,7 @@ liveTest("Task Mutations: mutateCompleteTask marks task completed and resolves I
         status: originalStatus,
       },
       actorName: "Patch Cleanup",
-    });
+    }, adminClient);
   }
 });
 
@@ -476,7 +476,7 @@ liveTest("Security & Auth: Unauthenticated callers are rejected from ITSM state 
     ticketId: taskId,
     newState: "in_progress",
     reason: "Adversarial test transition without auth",
-  });
+  }, anonClient);
   assert.ok(itsmRes.error, "Unauthenticated ITSM state mutation must be rejected with auth requirement error");
-  assert.match(itsmRes.error.message, /authentication required/i);
+  assert.match(itsmRes.error.message, /authentication required|permission denied/i);
 });

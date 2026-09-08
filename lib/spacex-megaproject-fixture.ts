@@ -846,7 +846,7 @@ export const rfisData: RFIRecord[] = [
     responseDeadline: "2026-09-01",
     clockImpact: "clock_paused",
     scheduleImpactDays: 7,
-    status: "submitted_by_applicant",
+    status: "accepted",
     isConsolidatedCycle: false,
     responses: [
       {

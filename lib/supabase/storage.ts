@@ -8,8 +8,9 @@ export { calculateSHA256, uploadDocumentFile, validateDocumentFile } from "./sto
 
 export async function downloadDocumentFile(
   storagePath: string,
+  requestClient?: SupabaseClient,
 ): Promise<{ blob: Blob | null; error: Error | null }> {
-  const client = getSupabaseBrowser();
+  const client = requestClient ?? getSupabaseBrowser();
   if (!client) return { blob: null, error: new Error("Supabase client unavailable") };
 
   const cleanPath = storagePath
@@ -239,8 +240,8 @@ export async function mutateReviewDocumentVersion(params: {
   decision: "approved" | "approved_with_conditions" | "revision_requested";
   actorName: string;
   comments: string;
-}): Promise<{ success: boolean; error: Error | null }> {
-  const client = getSupabaseBrowser();
+}, requestClient?: SupabaseClient): Promise<{ success: boolean; error: Error | null }> {
+  const client = requestClient ?? getSupabaseBrowser();
   if (!client) return { success: false, error: new Error("Supabase client unavailable") };
 
   const rpcPayload = {

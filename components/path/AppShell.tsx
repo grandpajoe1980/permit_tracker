@@ -45,6 +45,19 @@ export function AppShell({
 }: AppShellProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const hamburgerRef = React.useRef<HTMLButtonElement>(null);
+
+  React.useEffect(() => {
+    if (!mobileNavOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMobileNavOpen(false);
+        hamburgerRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mobileNavOpen]);
 
   return (
     <div className="min-h-screen bg-[#f3f6f7] text-[#172033] flex flex-col justify-between overflow-x-hidden">
@@ -56,6 +69,7 @@ export function AppShell({
         <div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6">
           {/* Mobile hamburger */}
           <Button
+            ref={hamburgerRef}
             type="button"
             variant="ghost"
             size="icon"

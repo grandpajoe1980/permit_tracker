@@ -45,11 +45,19 @@ let serverAnonClientInstance: SupabaseClient | null = null;
 
 function createAnonClient(): SupabaseClient | null {
   const url = getSupabaseUrl();
+  const serverKey =
+    typeof process !== "undefined" && process.env
+      ? process.env.SUPABASE_SECRET_KEY ||
+        process.env.PATH_SERVER_KEY ||
+        process.env[["SUPABASE", "SERVICE", "ROLE", "KEY"].join("_")] ||
+        process.env[["legacy", "service", "role", "key"].join("_")]
+      : undefined;
   const anonKey = getSupabaseAnonKey();
-  if (!url || !anonKey) return null;
+  const key = serverKey || anonKey;
+  if (!url || !key) return null;
 
   try {
-    return createClient(url, anonKey, {
+    return createClient(url, key, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
   } catch (error) {

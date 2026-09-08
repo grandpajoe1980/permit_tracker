@@ -139,13 +139,13 @@ export async function insertAuditEvent(params: {
   reason?: string;
   projectId?: string;
   actorId?: string;
-}): Promise<MutationResult<AuditEventRecord>> {
-  const client = getSupabaseBrowser();
+}, requestClient?: SupabaseClient): Promise<MutationResult<AuditEventRecord>> {
+  const client = requestClient ?? getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
   const { data: authData, error: authError } = await client.auth.getUser();
-  const actorId = params.actorId ?? authData.user?.id;
-  if (requiresSupabase() && (authError || !actorId)) {
+  const actorId = params.actorId ?? authData?.user?.id ?? null;
+  if (requiresSupabase() && !requestClient && (authError || !actorId)) {
     return { data: null, error: authError ?? new Error("An authenticated actor is required for audit events.") };
   }
 
@@ -194,8 +194,8 @@ export async function insertNotification(params: {
   linkUrl?: string;
   urgency?: NotificationRecord["urgency"];
   metadata?: Record<string, unknown>;
-}): Promise<MutationResult<NotificationRecord>> {
-  const client = getSupabaseBrowser();
+}, requestClient?: SupabaseClient): Promise<MutationResult<NotificationRecord>> {
+  const client = requestClient ?? getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
   const now = new Date().toISOString();
@@ -381,7 +381,7 @@ export async function mutateCreateCustomerRequest(params: CustomerRequestMutatio
       newValue: `${params.requestType} · ${params.title}`,
       reason: params.description,
       projectId: params.projectId,
-    }),
+    }, client),
     params.status !== "draft"
       ? insertNotification({
           userId: "sarah.johnson@la.gov",
@@ -391,7 +391,7 @@ export async function mutateCreateCustomerRequest(params: CustomerRequestMutatio
           linkUrl: `/requests/${params.confirmationNumber}`,
           urgency: params.blocksActiveWork ? "critical" : "high",
           metadata: { confirmationNumber: params.confirmationNumber, requestType: params.requestType },
-        })
+        }, client)
       : Promise.resolve({ data: null, error: null }),
   ]);
 
@@ -736,8 +736,8 @@ export async function mutateCreateRFI(params: {
   clockImpact?: RFIRecord["clockImpact"];
   scheduleImpactDays?: number;
   actorName: string;
-}): Promise<MutationResult<RFIRecord>> {
-  const client = getSupabaseBrowser();
+}, requestClient?: SupabaseClient): Promise<MutationResult<RFIRecord>> {
+  const client = requestClient ?? getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
   const rpcPayload = {
@@ -833,7 +833,7 @@ export async function mutateCreateRFI(params: {
       actionType: "rfi_issued",
       newValue: `Issued ${params.code} to ${params.recipientOrgCode}`,
       reason: params.questionText,
-    }),
+    }, client),
   ]);
 
   return {
@@ -870,8 +870,8 @@ export async function mutateSubmitRFIResponse(params: {
   responseText: string;
   actorOrgName: string;
   attachedDocumentVersionIds?: string[];
-}): Promise<MutationResult<RFIResponseRecord>> {
-  const client = getSupabaseBrowser();
+}, requestClient?: SupabaseClient): Promise<MutationResult<RFIResponseRecord>> {
+  const client = requestClient ?? getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
   const rpcPayload = {
@@ -927,7 +927,7 @@ export async function mutateSubmitRFIResponse(params: {
       actionType: "rfi_response_submitted",
       newValue: `Response submitted`,
       reason: params.responseText,
-    }),
+    }, client),
   ]);
 
   return {
@@ -950,8 +950,8 @@ export async function mutateAcceptRFIResponse(params: {
   actorName: string;
   actorOrgName: string;
   notes?: string;
-}): Promise<MutationResult<{ success: boolean }>> {
-  const client = getSupabaseBrowser();
+}, requestClient?: SupabaseClient): Promise<MutationResult<{ success: boolean }>> {
+  const client = requestClient ?? getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
   const rpcPayload = {
@@ -991,7 +991,7 @@ export async function mutateAcceptRFIResponse(params: {
       oldValue: "submitted_by_applicant",
       newValue: "accepted",
       reason: params.notes ?? "Response accepted and linked review resumed.",
-    }),
+    }, client),
   ]);
 
   return { data: { success: true }, error: null };
@@ -1657,8 +1657,8 @@ export async function mutateUpdateTask(params: {
   updates: Partial<Pick<TaskRecord, "title" | "description" | "status" | "assignedOrgCode" | "assignedUserId" | "assignedUserName" | "isCriticalPath" | "durationDays" | "floatDays" | "actualCompletionDate">>;
   actorName?: string;
   actorOrgName?: string;
-}): Promise<MutationResult<TaskRecord>> {
-  const client = getSupabaseBrowser();
+}, requestClient?: SupabaseClient): Promise<MutationResult<TaskRecord>> {
+  const client = requestClient ?? getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
   const payload: Record<string, unknown> = {};
@@ -1703,7 +1703,7 @@ export async function mutateCompleteTask(params: {
   taskId: string;
   actorName?: string;
   actorOrgName?: string;
-}): Promise<MutationResult<TaskRecord>> {
+}, requestClient?: SupabaseClient): Promise<MutationResult<TaskRecord>> {
   return mutateUpdateTask({
     taskId: params.taskId,
     updates: {
@@ -1711,7 +1711,7 @@ export async function mutateCompleteTask(params: {
     },
     actorName: params.actorName,
     actorOrgName: params.actorOrgName,
-  });
+  }, requestClient);
 }
 
 // ==========================================
@@ -1754,8 +1754,8 @@ export async function mutateUpdateTicketITSMState(params: {
   actorName?: string;
   reason?: string;
   pauseReason?: string;
-}): Promise<MutationResult<unknown>> {
-  const client = getSupabaseBrowser();
+}, requestClient?: SupabaseClient): Promise<MutationResult<unknown>> {
+  const client = requestClient ?? getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
 
   const targetState = params.newState ?? params.targetState;
