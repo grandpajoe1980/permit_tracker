@@ -97,6 +97,19 @@ test("linked staff intake projects into the workflow stage instead of resolving 
   assert.equal(staffItem.sourceWorkstream?.id, workstream.id);
   assert.ok(ux.getAvailableActions(staffItem, ux.getOperationalPersona(staff)).includes("complete_step"));
 
+  const supervisor = data.demoPersonas.find((persona) => persona.id === "maya-chen");
+  const supervisorItem = ux.getOperationalWorkItems({
+    persona: supervisor,
+    requests: [],
+    workstreams: [workstream],
+    customerRequests: [request],
+    rfis: [],
+    coordinationRequests: [],
+    documents: [],
+    commitments: [],
+  }).items.find((item) => item.sourceId === request.id);
+  assert.equal(supervisorItem?.kind, "workflow");
+
   const customerItem = ux.getOperationalWorkItems({
     persona: customerPersona,
     requests: [],

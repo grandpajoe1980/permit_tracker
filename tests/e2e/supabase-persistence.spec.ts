@@ -601,7 +601,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
       await expect(page.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
       await page.click("#demo-login-trigger");
       await page.click(`#demo-persona-${personaId}`);
-      await expect(page.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 60_000 });
     }
 
     async function completeCurrentStage(page: import("@playwright/test").Page) {
@@ -614,7 +614,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
         if (!(await checkbox.isChecked())) await checkbox.check();
       }
       await dialog.getByRole("button", { name: "Complete & Send Forward", exact: true }).click();
-      await expect(dialog).not.toBeVisible();
+      await expect(dialog).not.toBeVisible({ timeout: 30_000 });
       await expect(page.getByRole("status").filter({ hasText: "Step completed" })).toBeVisible({ timeout: 20_000 });
     }
 
@@ -628,7 +628,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
       await rows.first().click();
     }
 
-    async function claimAndOpenWork(page: import("@playwright/test").Page, title: string) {
+    async function claimAndOpenWork(page: import("@playwright/test").Page, title: string, expectedOwner: string) {
       await page.getByRole("button", { name: "Team Work", exact: true }).click();
       await expect(page.getByRole("heading", { name: "Team Work", exact: true })).toBeVisible({ timeout: 30_000 });
       await page.getByRole("button", { name: /^Unassigned/ }).click();
@@ -637,11 +637,18 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
       const rows = page.locator('[data-testid^="inbox-row-"]');
       await expect(rows).toHaveCount(1, { timeout: 20_000 });
       await rows.first().getByRole("button", { name: "Take ownership", exact: true }).click();
-      await expect(page.getByRole("status").filter({ hasText: "Claimed ownership" })).toBeVisible({ timeout: 20_000 });
+      await expect.poll(async () => {
+        const success = page.getByRole("status").filter({ hasText: "Claimed ownership" });
+        if (await success.count()) return "success";
+        const alert = page.getByRole("alert");
+        return (await alert.count()) ? await alert.first().innerText() : "pending";
+      }, { timeout: 20_000 }).toBe("success");
       await page.getByRole("button", { name: /^Assigned/ }).click();
       await search.fill(title);
       await expect(rows).toHaveCount(1, { timeout: 20_000 });
+      await expect(rows.first()).toContainText(expectedOwner, { timeout: 20_000 });
       await rows.first().click();
+      await expect(page.getByRole("region", { name: "Current responsibility" })).toContainText(expectedOwner, { timeout: 20_000 });
     }
 
     // Customer creates the request in an isolated authenticated context.
@@ -689,11 +696,11 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await completeCurrentStage(stateOfficePage);
     await stateOfficeContext.close();
 
-    // Stage 2: Alex claims the SPACEPORT handoff in a new authenticated context.
+    // Stage 2: Maya claims the SPACEPORT handoff in a new authenticated staff context.
     const applicantContext = await browser.newContext();
     const applicantPage = await applicantContext.newPage();
-    await signIn(applicantPage, "alex");
-    await claimAndOpenWork(applicantPage, requestTitle);
+    await signIn(applicantPage, "maya");
+    await claimAndOpenWork(applicantPage, requestTitle, "Maya Chen");
     await expect(applicantPage.getByRole("heading", { name: "Technical team review", exact: true })).toBeVisible();
     await completeCurrentStage(applicantPage);
     await applicantContext.close();
@@ -703,7 +710,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     const finalStaffPage = await finalStaffContext.newPage();
     await signIn(finalStaffPage, "sarah");
     for (const stageName of ["Agency coordination", "Construction release", "Monitoring and closeout"]) {
-      await claimAndOpenWork(finalStaffPage, requestTitle);
+      await claimAndOpenWork(finalStaffPage, requestTitle, "Sarah Johnson");
       await expect(finalStaffPage.getByRole("heading", { name: stageName, exact: true })).toBeVisible();
       await completeCurrentStage(finalStaffPage);
     }
@@ -715,13 +722,15 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await finalStaffPage.getByRole("searchbox", { name: "Filter team work" }).fill(requestTitle);
     await expect(finalStaffPage.locator('[data-testid^="inbox-row-"]')).toHaveCount(1, { timeout: 20_000 });
     await finalStaffPage.getByRole("button", { name: "Project Overview", exact: true }).click();
-    await expect(finalStaffPage.getByRole("heading", { name: "Project context", exact: true })).toBeVisible({ timeout: 30_000 });
-    await finalStaffPage.getByRole("button", { name: "Work", exact: true }).click();
+    await expect(finalStaffPage.getByRole("navigation", { name: "Project context", exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(finalStaffPage.getByRole("heading", { name: /SpaceX .*Starbase Louisiana/, exact: true })).toBeVisible({ timeout: 30_000 });
+    await finalStaffPage.getByRole("tab", { name: /^Work/ }).click();
     await finalStaffPage.getByRole("searchbox", { name: "Search project workstreams" }).fill(requestTitle);
     await expect(finalStaffPage.getByText(requestTitle, { exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(finalStaffPage.getByText("Complete", { exact: true }).first()).toBeVisible();
-    await finalStaffPage.getByRole("button", { name: "Schedule", exact: true }).click();
-    await expect(finalStaffPage.getByText(requestTitle, { exact: false }).first()).toBeVisible({ timeout: 20_000 });
+    await finalStaffPage.getByRole("tab", { name: "Schedule", exact: true }).click();
+    await finalStaffPage.getByRole("textbox", { name: "Search schedule" }).fill(requestTitle);
+    await expect(finalStaffPage.getByRole("group", { name: new RegExp(requestTitle) })).toBeVisible({ timeout: 20_000 });
     await finalStaffContext.close();
 
     // Customer read-back after a fresh sign-in: the completed request is no

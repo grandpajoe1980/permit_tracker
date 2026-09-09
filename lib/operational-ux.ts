@@ -735,7 +735,7 @@ export function getOperationalWorkItems(options: {
   for (const customerRequest of options.customerRequests ?? []) {
     const ws = customerRequest.relatedWorkstreamId ? workstreamById.get(customerRequest.relatedWorkstreamId) : undefined;
     const isTarget = isCustomerTenant
-      ? Boolean(customerRequest.submittedByUserId && personaUserIds.has(customerRequest.submittedByUserId))
+      ? Boolean(customerRequest.submittedByUserId && personaUserIds.has(customerRequest.submittedByUserId)) || (persona.workspace === "supervisor" && Boolean(ws))
       : persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin" || (customerRequest.knownAgencyCode && sameAgency(customerRequest.knownAgencyCode, persona.agencyCode)) || !customerRequest.knownAgencyCode;
     if (isTarget) {
       items.push(customerRequestToWorkItem(customerRequest, persona, ws));
