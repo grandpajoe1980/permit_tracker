@@ -831,7 +831,10 @@ export function WorkstreamGraphGantt({
                             onMouseLeave={() => setHoveredWorkstreamId(null)}
                             role="group"
                             aria-label={`${ws.code}: ${ws.title}. Current stage ${ws.currentStageName || "Not configured"}. Owner ${ws.regulatoryLead.assignedReviewerName || "Unassigned"}.`}
-                            onClick={() => openWorkstream(ws)}
+                            onClick={(event) => {
+                              if ((event.target as HTMLElement).closest("a,button")) return;
+                              openWorkstream(ws);
+                            }}
                             onKeyDown={(event) => {
                               if (event.key === "Enter" || event.key === " ") {
                                 event.preventDefault();

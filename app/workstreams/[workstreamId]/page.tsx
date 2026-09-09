@@ -13,7 +13,11 @@ export default async function GlobalWorkstreamRoute({ params, searchParams }: { 
   const client = await createRequestSupabaseClient();
   if (!client) return <main className="mx-auto max-w-4xl p-8"><h1 className="text-2xl font-bold">Supabase is not configured</h1></main>;
   const { data: user } = await client.auth.getUser();
-  if (!user.user) return <main className="mx-auto max-w-4xl space-y-4 p-8"><h1 className="text-2xl font-bold">Sign in required</h1><p className="text-slate-600">Sign in to view this authorized workstream. After signing in, return to this URL to continue.</p><Link href={`/?view=project&workstream=${encodeURIComponent(workstreamId)}`} className="inline-flex text-sm font-bold text-teal-800 hover:underline">Open PATH sign-in</Link></main>;
+  if (!user.user) {
+    const phaseQuery = phase ? `&tool=schedule&phase=${encodeURIComponent(phase)}` : "";
+    const phaseHash = phase ? `#phase-${encodeURIComponent(phase)}` : "";
+    return <main className="mx-auto max-w-4xl space-y-4 p-8"><h1 className="text-2xl font-bold">Sign in required</h1><p className="text-slate-600">Sign in to view this authorized workstream. After signing in, return to this URL to continue.</p><Link href={`/?view=project&workstream=${encodeURIComponent(workstreamId)}${phaseQuery}${phaseHash}`} className="inline-flex text-sm font-bold text-teal-800 hover:underline">Open PATH sign-in</Link></main>;
+  }
 
   const workstream = await resolveWorkstreamRoute(client, undefined, workstreamId);
 
