@@ -201,7 +201,16 @@ function makeAuthenticatedPersona(email: string, name: string, userId?: string):
       organization: profile?.organizationName,
     };
   }
-  return getPersonaFromEmail(email) ?? {
+  const knownPersona = getPersonaFromEmail(email);
+  if (knownPersona) {
+    return {
+      ...knownPersona,
+      id: userId ?? knownPersona.id,
+      name: profile?.fullName ?? knownPersona.name,
+      email,
+    };
+  }
+  return {
     id: userId ?? "authenticated-user",
     name,
     role: "Project Participant",
@@ -976,6 +985,9 @@ export default function Home() {
         await repository.hydrateFromSupabase();
         const loaded = await loadRequestsForUser();
         const hydratedPermits = loaded.permits.length > 0 || !allowsFixtureData() ? loaded.permits : pecanIslandRequests;
+        const authenticatedPersona = makeAuthenticatedPersona(user.email ?? persona.email, String(user.user_metadata?.full_name ?? persona.name), user.id);
+        setCurrentPersona(authenticatedPersona);
+        setProfileDraft(profileDraftForPersona(authenticatedPersona));
         setUserPermits(hydratedPermits);
         setCurrentUser((current) => current ? { ...current, applicationIds: hydratedPermits.map((item) => item.id) } : current);
         setMutationVersion((value) => value + 1);

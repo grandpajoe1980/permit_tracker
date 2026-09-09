@@ -119,4 +119,80 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(pageReviewerAgain.getByText("Accepted", { exact: true }).first()).toBeVisible({ timeout: 15_000 });
     await contextReviewerAgain.close();
   });
+
+  test("Scenario 3: Staff clarification preserves submitter and records the authenticated actor", async ({ browser }) => {
+    const contextCustomer = await browser.newContext();
+    const pageCustomer = await contextCustomer.newPage();
+    const requestTitle = `E2E Staff Operator Identity ${Date.now()}`;
+    const clarificationText = "Please confirm the affected location and the requested decision date.";
+    const customerResponse = "The affected location is the east construction access, and the decision is needed before mobilization.";
+
+    await pageCustomer.goto("/");
+    await expect(pageCustomer.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
+    await pageCustomer.click("#demo-login-trigger");
+    await pageCustomer.click("#demo-persona-alex");
+    await pageCustomer.getByRole("button", { name: "My requests", exact: true }).click();
+    await expect(pageCustomer.getByRole("heading", { name: "Requests & permits", exact: true })).toBeVisible();
+    await pageCustomer.getByText("Request government help / service", { exact: true }).click();
+    await pageCustomer.fill("#request-title", requestTitle);
+    await pageCustomer.fill("#request-description", "Fresh staff-operator identity acceptance scenario.");
+    await pageCustomer.getByRole("button", { name: "Submit request", exact: true }).click();
+    await pageCustomer.getByRole("button", { name: "Back to request choices", exact: true }).click();
+    await expect(pageCustomer.getByText(requestTitle, { exact: false }).first()).toBeVisible();
+    await contextCustomer.close();
+
+    const contextStaff = await browser.newContext();
+    const pageStaff = await contextStaff.newPage();
+    await pageStaff.goto("/");
+    await expect(pageStaff.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
+    await pageStaff.click("#demo-login-trigger");
+    await pageStaff.click("#demo-persona-sarah");
+    await pageStaff.getByRole("button", { name: "Administration", exact: true }).click();
+    await expect(pageStaff.getByRole("heading", { name: "Customer intake queue", exact: true })).toBeVisible();
+    await pageStaff.getByRole("textbox", { name: "Search intake requests" }).fill(requestTitle);
+    const intakeRow = pageStaff.getByText(requestTitle, { exact: false }).first().locator("..").locator("..");
+    await expect(intakeRow.getByRole("button", { name: "Review and route", exact: true })).toBeVisible();
+    await intakeRow.getByRole("button", { name: "Review and route", exact: true }).click();
+    const triageDialog = pageStaff.getByRole("dialog");
+    await triageDialog.getByRole("tab", { name: "Ask for clarification", exact: true }).click();
+    await triageDialog.locator("textarea").fill(clarificationText);
+    await triageDialog.getByRole("button", { name: "Ask customer for clarification", exact: true }).click();
+    await expect(triageDialog).not.toBeVisible();
+    await contextStaff.close();
+
+    const contextResponse = await browser.newContext();
+    const pageResponse = await contextResponse.newPage();
+    await pageResponse.goto("/");
+    await expect(pageResponse.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
+    await pageResponse.click("#demo-login-trigger");
+    await pageResponse.click("#demo-persona-alex");
+    await expect(pageResponse.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 15_000 });
+    await pageResponse.getByRole("button", { name: /^My actions/ }).click();
+    await pageResponse.getByRole("searchbox", { name: "Search work inbox" }).fill(requestTitle);
+    const responseRow = pageResponse.locator('[data-testid^="inbox-row-"]').first();
+    await expect(responseRow).toBeVisible({ timeout: 15_000 });
+    await responseRow.click();
+    await expect(pageResponse.getByText("Response needed", { exact: true })).toBeVisible();
+    await expect(pageResponse.getByText(clarificationText, { exact: false }).first()).toBeVisible();
+    await pageResponse.getByRole("button", { name: "Respond", exact: true }).click();
+    await pageResponse.getByRole("dialog").locator("#action-note").fill(customerResponse);
+    await pageResponse.getByRole("dialog").getByRole("button", { name: "Respond", exact: true }).click();
+    await expect(pageResponse.getByRole("dialog")).not.toBeVisible();
+    await contextResponse.close();
+
+    // Refresh in a clean customer context to prove the response was persisted,
+    // not merely reflected by the submitting page's local state.
+    const contextReadBack = await browser.newContext();
+    const pageReadBack = await contextReadBack.newPage();
+    await pageReadBack.goto("/");
+    await expect(pageReadBack.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
+    await pageReadBack.click("#demo-login-trigger");
+    await pageReadBack.click("#demo-persona-alex");
+    await pageReadBack.getByRole("button", { name: "My requests", exact: true }).click();
+    await expect(pageReadBack.getByRole("heading", { name: "Requests & permits", exact: true })).toBeVisible({ timeout: 15_000 });
+    await pageReadBack.getByRole("searchbox", { name: "Search my requests" }).fill(requestTitle);
+    await pageReadBack.getByRole("button", { name: new RegExp(requestTitle) }).click();
+    await expect(pageReadBack.getByText(customerResponse, { exact: false }).first()).toBeVisible();
+    await contextReadBack.close();
+  });
 });
