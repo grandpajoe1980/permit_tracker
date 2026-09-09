@@ -1916,6 +1916,7 @@ class ProjectDeliveryRepository {
     actorName?: string;
     actorOrgName?: string;
     reason?: string;
+    adminCorrection?: boolean;
   }): TaskRecord | null {
     for (const ws of this.workstreams) {
       const task = ws.tasks?.find((t) => t.id === params.taskId);
@@ -1946,6 +1947,7 @@ class ProjectDeliveryRepository {
     actorName?: string;
     actorOrgName?: string;
     reason?: string;
+    adminCorrection?: boolean;
   }): Promise<{ data: TaskRecord | null; error: Error | null }> {
     if (!isSupabaseConfigured()) {
       if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };

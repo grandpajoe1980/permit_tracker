@@ -480,4 +480,64 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(page.getByRole("status").filter({ hasText: "response recorded" })).toBeVisible({ timeout: 15_000 });
     await context.close();
   });
+
+  test("Scenario 9: Administrative task corrections require a reason and persist", async ({ browser }) => {
+    test.setTimeout(90_000);
+    const nonAdminContext = await browser.newContext();
+    const nonAdminPage = await nonAdminContext.newPage();
+    await nonAdminPage.goto("/");
+    await expect(nonAdminPage.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
+    await nonAdminPage.click("#demo-login-trigger");
+    await nonAdminPage.click("#demo-persona-sarah");
+    await expect(nonAdminPage.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 30_000 });
+    await nonAdminPage.goto("/?view=admin");
+    await expect(nonAdminPage.getByRole("alert").filter({ hasText: "Administrator access required" })).toBeVisible({ timeout: 30_000 });
+    await expect(nonAdminPage.getByRole("heading", { name: "Customer intake queue", exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(nonAdminPage.getByRole("button", { name: "Apply Audited Correction", exact: true })).toHaveCount(0);
+    await nonAdminContext.close();
+
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    const taskCode = "PATH-DEMO-T-COAST-001";
+    const firstReason = `E2E CP8 correction reason ${Date.now()}`;
+    const restoreReason = `E2E CP8 restoration reason ${Date.now()}`;
+
+    await page.goto("/");
+    await expect(page.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
+    await page.click("#demo-login-trigger");
+    await page.click("#demo-persona-joe-skaggs");
+    await expect(page.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("button", { name: "Administration", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Administration & Governance", exact: true })).toBeVisible({ timeout: 30_000 });
+
+    const openTaskEditor = async () => {
+      await page.getByLabel("Record type").selectOption("tasks");
+      await expect(page.getByText(/accessible records/).first()).toBeVisible({ timeout: 30_000 });
+      await page.getByLabel("Search this page").fill(taskCode);
+      const row = page.locator("tr").filter({ hasText: taskCode }).first();
+      await expect(row).toBeVisible({ timeout: 15_000 });
+      await row.getByRole("button", { name: "Edit", exact: true }).click();
+      return page.getByRole("dialog");
+    };
+
+    const correctionDialog = await openTaskEditor();
+    await expect(correctionDialog.getByText("Correction Reason", { exact: false })).toBeVisible();
+    const applyButton = correctionDialog.getByRole("button", { name: "Apply Audited Correction", exact: true });
+    await expect(applyButton).toBeDisabled();
+    await correctionDialog.locator("select").selectOption("in_progress");
+    await correctionDialog.locator("textarea").fill(firstReason);
+    await expect(applyButton).toBeEnabled();
+    await applyButton.click();
+    await expect(page.getByText(/Task correction saved:/, { exact: false })).toBeVisible({ timeout: 15_000 });
+
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Administration & Governance", exact: true })).toBeVisible({ timeout: 30_000 });
+    const readBackDialog = await openTaskEditor();
+    await expect(readBackDialog.locator("select")).toHaveValue("in_progress");
+    await readBackDialog.locator("select").selectOption("blocked");
+    await readBackDialog.locator("textarea").fill(restoreReason);
+    await readBackDialog.getByRole("button", { name: "Apply Audited Correction", exact: true }).click();
+    await expect(page.getByText(/Task correction saved:/, { exact: false })).toBeVisible({ timeout: 15_000 });
+    await context.close();
+  });
 });

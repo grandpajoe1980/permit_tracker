@@ -140,6 +140,7 @@ export function AdminExplorer({
             actorName: "PATH Administrator",
             actorOrgName: "State Project Office",
             reason: editReason.trim(),
+            adminCorrection: true,
         });
         if (result.error || !result.data) {
           throw result.error ?? new Error("Task correction was not confirmed by the database.");

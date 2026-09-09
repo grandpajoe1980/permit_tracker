@@ -1658,9 +1658,25 @@ export async function mutateUpdateTask(params: {
   actorName?: string;
   actorOrgName?: string;
   reason?: string;
+  adminCorrection?: boolean;
 }, requestClient?: SupabaseClient): Promise<MutationResult<TaskRecord>> {
   const client = requestClient ?? getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+
+  if (params.adminCorrection) {
+    const { data, error } = await client.rpc("rpc_admin_update_task", {
+      p_task_id: params.taskId,
+      p_status: params.updates.status ?? null,
+      p_title: params.updates.title ?? null,
+      p_reason: params.reason ?? null,
+      p_actor_name: params.actorName ?? null,
+      p_actor_org_name: params.actorOrgName ?? null,
+    });
+    if (error || !data) return { data: null, error: new Error(error?.message ?? "Administrative task correction was not confirmed by the database.") };
+    const result = data as Record<string, unknown>;
+    const task = result.task && typeof result.task === "object" ? result.task : result;
+    return { data: taskRowToDomain(task as Record<string, unknown>), error: null };
+  }
 
   const payload: Record<string, unknown> = {};
   if (params.updates.title !== undefined) payload.title = params.updates.title;
