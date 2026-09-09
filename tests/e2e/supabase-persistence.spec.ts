@@ -428,8 +428,8 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
 
     await page.goto("/");
     await expect(page.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
-    await page.fill("#username", "sarah.johnson@la.gov");
-    await page.fill("#password", "PATH-MVP-2026!");
+    await page.fill("#username", "sarah.johnson@demo.permit.local");
+    await page.fill("#password", "PATH-Demo-2026!");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 30_000 });
     await page.goto("/?view=coordination");
