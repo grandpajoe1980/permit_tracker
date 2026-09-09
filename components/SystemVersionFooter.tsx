@@ -1,11 +1,31 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { BUILD_INFO } from "@/lib/version";
 import { PRODUCT_NAME, PROGRAM_SUBTITLE } from "@/lib/product-copy";
 import { GitCommit, Clock3, ShieldCheck, ExternalLink } from "lucide-react";
 
 export function SystemVersionFooter() {
+  const [runtimeCommit, setRuntimeCommit] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/health", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() as Promise<{ commitFull?: string }> : null)
+      .then((payload) => {
+        if (active && payload?.commitFull) setRuntimeCommit(payload.commitFull);
+      })
+      .catch(() => {
+        // The footer remains useful with build-time metadata when health is unavailable.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const commitHash = runtimeCommit || BUILD_INFO.commitHash;
+  const commitShort = commitHash === "unknown" ? "unknown" : commitHash.slice(0, 7);
+
   return (
     <footer
       aria-label="System version and build status"
@@ -24,15 +44,15 @@ export function SystemVersionFooter() {
           <div className="flex items-center gap-1.5 font-mono text-slate-600">
             <GitCommit className="size-3.5 text-slate-400" />
             <span>Commit:</span>
-            {BUILD_INFO.commitHash && BUILD_INFO.commitHash !== "unknown" ? (
+            {commitHash && commitHash !== "unknown" ? (
               <a
-                href={`${BUILD_INFO.repositoryUrl}/commit/${BUILD_INFO.commitHash}`}
+                href={`${BUILD_INFO.repositoryUrl}/commit/${commitHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-bold text-teal-800 underline-offset-2 hover:underline hover:text-teal-950 inline-flex items-center gap-0.5"
                 title="View git commit on GitHub"
               >
-                {BUILD_INFO.commitShort}
+                {commitShort}
                 <ExternalLink className="size-2.5 opacity-70" />
               </a>
             ) : (

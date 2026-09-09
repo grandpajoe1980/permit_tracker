@@ -22,8 +22,10 @@ const baselineReport = await readFile(
 test("SystemVersionFooter handles unavailable build identity safely", () => {
   // Footer must guard against unknown commit hash and render 'Build identity unavailable'
   assert.match(footerSource, /Build identity unavailable/);
-  assert.match(footerSource, /BUILD_INFO\.commitHash !== "unknown"/);
-  assert.match(footerSource, /BUILD_INFO\.commitHash && BUILD_INFO\.commitHash !== "unknown"\s*\?\s*\(/);
+  assert.match(footerSource, /commitHash !== "unknown"/);
+  assert.match(footerSource, /commitHash && commitHash !== "unknown"\s*\?\s*\(/);
+  assert.match(footerSource, /fetch\("\/api\/health", \{ cache: "no-store" \}\)/);
+  assert.match(footerSource, /payload\?\.commitFull/);
 });
 
 test("vite.config.ts resolves git commit metadata dynamically when env vars are missing", () => {
