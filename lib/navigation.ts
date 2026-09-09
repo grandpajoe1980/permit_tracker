@@ -266,12 +266,13 @@ export function parseShellPath(url: URL): { route: AppRoute; workstreamId?: stri
     route: knownRoute,
     workstreamId: url.searchParams.get("workstream") ?? undefined,
     tool: url.searchParams.get("tool") ?? undefined,
-    phase: url.searchParams.get("phase") ?? undefined,
     workKind: workKind && workKinds.has(workKind) ? workKind : undefined,
     workItemId,
     requestId: url.searchParams.get("request")?.trim() || undefined,
     returnTo: url.searchParams.get("returnTo") ?? undefined,
   };
+  const phase = url.searchParams.get("phase")?.trim();
+  if (phase) res.phase = phase;
   const u = url.searchParams.get("userId") || url.searchParams.get("user");
   if (u) res.userId = u;
   const o = url.searchParams.get("orgId") || url.searchParams.get("org");
