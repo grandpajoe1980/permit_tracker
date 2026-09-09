@@ -40,7 +40,7 @@ export function WorkInboxRow({ item, onOpen, onClaim, canClaim = false }: WorkIn
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="font-mono text-slate-400">{item.id}</span>
+          <span className="min-w-0 max-w-full break-all font-mono text-slate-400">{item.id}</span>
           <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold capitalize text-slate-600">{item.kind.replace("_", " ")}</span>
           {item.isCriticalPath && (
             <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-800">Critical path</span>

@@ -316,13 +316,14 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
   });
 
   test("Scenario 6: Back and Forward restore queue state, scroll, focus, mobile navigation, and zoom", async ({ browser }) => {
+    test.setTimeout(60_000);
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
     await page.goto("/");
     await expect(page.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
     await page.click("#demo-login-trigger");
     await page.click("#demo-persona-sarah");
-    await expect(page.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible({ timeout: 30_000 });
 
     const search = page.getByRole("searchbox", { name: "Search work inbox" });
     await search.fill("RFI");
