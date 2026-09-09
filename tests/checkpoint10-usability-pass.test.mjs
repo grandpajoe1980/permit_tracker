@@ -18,32 +18,12 @@ after(async () => {
   await vite.close();
 });
 
-test("Checkpoint 10: FirstUseGuide points to real controls with calm, non-gamified copy and dismiss/replay support", async () => {
-  const { FirstUseGuide, FIRST_USE_GUIDE_STORAGE_KEY } = await vite.ssrLoadModule("/components/path/FirstUseGuide.tsx");
-  assert.equal(FIRST_USE_GUIDE_STORAGE_KEY, "path_first_use_guide_dismissed");
-
-  // Render open guide
-  const html = renderToStaticMarkup(React.createElement(FirstUseGuide, { isOpen: true }));
-
-  // Asserts real controls are referenced
-  assert.match(html, /My Work &amp; Queues|My Work & Queues/);
-  assert.match(html, /Authoritative Schedule/);
-  assert.match(html, /Team Inbox &amp; RFIs|Team Inbox & RFIs/);
-  assert.match(html, /Identity &amp; Role Switcher|Identity & Role Switcher/);
-
-  // Asserts calm regulatory tone without points or gamification
-  assert.doesNotMatch(html, /\bpoints\b|\bscore\b|\blevel up\b|\bbadges\b|\bstreak\b/i);
-
-  // Asserts dismiss and navigation triggers
-  assert.match(html, /Dismiss guide|Got it/);
-  assert.match(html, /data-testid="first-use-guide"/);
-
-  // Render dismissed guide
-  const dismissedHtml = renderToStaticMarkup(React.createElement(FirstUseGuide, { isOpen: false }));
-  assert.equal(dismissedHtml, "");
+test("Checkpoint 10: the superseded first-use guide is absent", async () => {
+  const shellSource = await readFile(new URL("../components/path/AppShell.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(shellSource, /FirstUseGuide|Welcome to PATH|Key Controls Guide|First-use guide/);
 });
 
-test("Checkpoint 10: AppShell provides 44px touch targets, persona-selector ID, drawer backdrop, and guide triggers", async () => {
+test("Checkpoint 10: AppShell provides 44px touch targets and persona-selector ID", async () => {
   const { AppShell } = await vite.ssrLoadModule("/components/path/AppShell.tsx");
 
   const mockPersona = {
@@ -90,20 +70,17 @@ test("Checkpoint 10: AppShell provides 44px touch targets, persona-selector ID, 
   assert.match(html, /aria-label="Open profile"/);
   assert.match(html, /Jordan Lee/);
 
-  // 3. First-use guide trigger button in header
-  assert.match(html, /aria-label="First-use guide"/);
-
-  // 4. Nav rail IDs matching guide targets
+  // 3. Nav rail IDs remain addressable
   assert.match(html, /id="nav-my-work"/);
   assert.match(html, /id="nav-team-work"/);
   assert.match(html, /id="nav-schedule"/);
   assert.match(html, /id="nav-admin"/);
 
-  // 5. 44px touch target classes in header buttons
+  // 4. 44px touch target classes in header buttons
   assert.match(html, /min-h-\[44px\]/);
   assert.match(html, /min-w-\[44px\]/);
 
-  // 6. Keyboard accessibility & Escape key listener
+  // 5. Keyboard accessibility & Escape key listener
   const appShellSource = await readFile(new URL("../components/path/AppShell.tsx", import.meta.url), "utf8");
   assert.match(appShellSource, /Escape/);
   assert.match(appShellSource, /hamburgerRef/);
@@ -127,9 +104,9 @@ test("Checkpoint 10: globals.css enforces reduced motion, coarse pointer 44px ta
 
   // Mobile viewport constraints on html & body
   assert.match(css, /html\s*\{[^}]*max-width:\s*100%/);
-  assert.match(css, /html\s*\{[^}]*overflow-x:\s*auto/);
+  assert.match(css, /html\s*\{[^}]*overflow:\s*hidden/);
   assert.match(css, /body\s*\{[^}]*max-width:\s*100%/);
-  assert.match(css, /body\s*\{[^}]*overflow-x:\s*auto/);
+  assert.match(css, /body\s*\{[^}]*overflow:\s*hidden/);
 });
 
 test("Checkpoint 10: WorkInboxRow and WorkInboxView render icons with status, calm typography, and safe counts", async () => {

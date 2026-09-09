@@ -20,6 +20,7 @@ import type {
   RequirementResourceRecord,
   RFIRecord,
   RFIResponseRecord,
+  StageRunRecord,
   TaskRecord,
   UserProfileRecord,
   WorkflowStageRecord,
@@ -48,6 +49,9 @@ export function assignmentGroupMembershipRowToDomain(row: Row): AssignmentGroupM
     assignmentGroupId: str(row.assignment_group_id),
     userId: str(row.user_id),
     role: (str(row.role, "member") as "member" | "lead" | "backup"),
+    userName: str(row.user_name || row.full_name) || undefined,
+    userEmail: str(row.user_email || row.email) || undefined,
+    userTitle: str(row.user_title || row.title) || undefined,
     createdAt: str(row.created_at),
     updatedAt: str(row.updated_at),
   };
@@ -158,6 +162,20 @@ export function workflowStageRowToDomain(row: Row): WorkflowStageRecord {
   };
 }
 
+export function stageRunRowToDomain(row: Row): StageRunRecord {
+  return {
+    id: str(row.id),
+    workstreamId: str(row.workstream_id),
+    workflowVersionId: str(row.workflow_version_id) || undefined,
+    stageId: str(row.stage_id) || undefined,
+    stageKey: str(row.stage_key) || undefined,
+    status: str(row.status),
+    startedAt: str(row.started_at) || undefined,
+    completedAt: str(row.completed_at) || undefined,
+    completionNotes: str(row.completion_notes) || undefined,
+  };
+}
+
 // ====================================================================
 // 1. WORKSTREAMS
 // ====================================================================
@@ -166,6 +184,7 @@ export function workstreamRowToDomain(
   row: Row,
   options?: {
     tasks?: TaskRecord[];
+    stageRuns?: StageRunRecord[];
     rfis?: RFIRecord[];
     commitments?: CommitmentRecord[];
     coordinationRequests?: CoordinationRequestRecord[];
@@ -241,6 +260,7 @@ export function workstreamRowToDomain(
     clockTotalPausedSeconds: num(row.clock_total_paused_seconds, 0),
 
     tasks: options?.tasks ?? [],
+    stageRuns: options?.stageRuns ?? [],
     commitments: options?.commitments ?? [],
     coordinationRequests: options?.coordinationRequests ?? [],
     rfis: options?.rfis ?? [],

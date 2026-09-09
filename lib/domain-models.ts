@@ -727,6 +727,18 @@ export interface NotificationRecord {
   isRead: boolean;
 }
 
+export interface StageRunRecord {
+  id: string;
+  workstreamId: string;
+  workflowVersionId?: string;
+  stageId?: string;
+  stageKey?: string;
+  status: string;
+  startedAt?: string;
+  completedAt?: string;
+  completionNotes?: string;
+}
+
 export interface WorkstreamRecord {
   id: string;
   projectId: string;
@@ -791,6 +803,7 @@ export interface WorkstreamRecord {
   
   // Nested execution data
   tasks: TaskRecord[];
+  stageRuns?: StageRunRecord[];
   commitments: CommitmentRecord[];
   coordinationRequests: CoordinationRequestRecord[];
   rfis: RFIRecord[];

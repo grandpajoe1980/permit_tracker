@@ -468,7 +468,7 @@ test("Cockpit 3 [Workstream Graph & Gantt]: Parallel Review Acceleration Actions
   const html = renderToStaticMarkup(React.createElement(WorkstreamGraphGantt));
 
   assert.match(html, /Critical Path Execution Graph &amp; Intelligence|Critical Path Execution Graph & Intelligence/);
-  assert.match(html, /Project Delivery Schedule &amp; Variance Engine|Project Delivery Schedule & Variance Engine/);
+  assert.match(html, /Project Delivery Schedule &amp; Schedule analysis|Project Delivery Schedule & Schedule analysis/);
   assert.match(html, /Immutable Baseline/);
   assert.match(html, /Dec 15, 2026/);
   assert.match(html, /Current Forecast/);
@@ -481,7 +481,7 @@ test("Cockpit 3 [Workstream Graph & Gantt]: Parallel Review Acceleration Actions
   assert.match(html, /Parallel Acceleration Opportunities/);
 
   // 12-column header titles
-  assert.match(html, /Workstream \/ DAG Node/);
+  assert.match(html, /Workstream \/ Dependencies/);
   assert.match(html, /Lead Agency/);
   assert.match(html, /Baseline Target/);
   assert.match(html, /Current Forecast/);

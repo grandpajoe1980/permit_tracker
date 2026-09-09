@@ -7,7 +7,7 @@ import {
   documentRowToDomain, documentVersionRowToDomain, externalFilingRowToDomain,
   meetingRowToDomain, notificationRowToDomain, organizationRowToDomain, permitTypeRowToDomain, workflowStageRowToDomain,
   projectParticipantRowToDomain, requirementResourceRowToDomain, rfiResponseRowToDomain,
-  rfiRowToDomain, taskRowToDomain, userProfileRowToDomain, workstreamRowToDomain, organizationMembershipRowToDomain,
+  rfiRowToDomain, stageRunRowToDomain, taskRowToDomain, userProfileRowToDomain, workstreamRowToDomain, organizationMembershipRowToDomain,
 } from "./mappings";
 import type {
   AssignmentGroupRecord,
@@ -81,7 +81,7 @@ export async function fetchWorkstreams(projectId: string): Promise<WorkstreamRec
     return [];
   }
   const workstreamIds = wsRes.data.map((row) => String(row.id));
-  const [taskRes, rfiRes, respRes] = await Promise.all([
+  const [taskRes, rfiRes, respRes, stageRunRes] = await Promise.all([
     workstreamIds.length
       ? client.from("tasks").select("*").in("workstream_id", workstreamIds).order("task_code", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
@@ -89,13 +89,18 @@ export async function fetchWorkstreams(projectId: string): Promise<WorkstreamRec
       ? client.from("rfis").select("*").in("workstream_id", workstreamIds).order("created_at", { ascending: false })
       : Promise.resolve({ data: [], error: null }),
     client.from("rfi_responses").select("*").order("submitted_date", { ascending: true }),
+    workstreamIds.length
+      ? client.from("stage_runs").select("*").in("workstream_id", workstreamIds).order("created_at", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (taskRes.error) recordQueryFailure("fetch tasks", taskRes.error);
   if (rfiRes.error) recordQueryFailure("fetch rfis", rfiRes.error);
   if (respRes.error) recordQueryFailure("fetch rfi responses", respRes.error);
+  if (stageRunRes.error) recordQueryFailure("fetch stage runs", stageRunRes.error);
 
   const tasks = (taskRes.data ?? []).map(taskRowToDomain);
   const responses = (respRes.data ?? []).map(rfiResponseRowToDomain);
+  const stageRuns = (stageRunRes.data ?? []).map(stageRunRowToDomain);
   const rfis = (rfiRes.data ?? []).map((row) =>
     rfiRowToDomain(row, responses.filter((response) => response.rfiId === row.id || response.rfiId === row.code))
   );
@@ -103,7 +108,8 @@ export async function fetchWorkstreams(projectId: string): Promise<WorkstreamRec
   return wsRes.data.map((row) => {
     const wsTasks = tasks.filter((task) => task.workstreamId === String(row.id) || task.workstreamId === String(row.code));
     const wsRfis = rfis.filter((rfi) => rfi.workstreamId === String(row.id) || rfi.workstreamId === String(row.code));
-    return workstreamRowToDomain(row, { tasks: wsTasks, rfis: wsRfis });
+    const wsStageRuns = stageRuns.filter((stageRun) => stageRun.workstreamId === String(row.id) || stageRun.workstreamId === String(row.code));
+    return workstreamRowToDomain(row, { tasks: wsTasks, stageRuns: wsStageRuns, rfis: wsRfis });
   });
 }
 

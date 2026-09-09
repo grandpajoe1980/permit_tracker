@@ -29,7 +29,8 @@ export function WorkInboxRow({ item, onOpen, onClaim, canClaim = false }: WorkIn
   }[item.statusTone] ?? null;
 
   const assigneeDisplay = item.ownerName || (item.assignmentGroupName ? `Unassigned (${item.assignmentGroupName})` : "Unassigned");
-  const showClaim = canClaim && (!item.assignedUserId || item.ownerName === "Unassigned");
+  const claimableKind = item.kind === "workflow" || item.kind === "task" || item.kind === "customer_request";
+  const showClaim = canClaim && claimableKind && (!item.assignedUserId || item.ownerName === "Unassigned");
 
   return (
     <div

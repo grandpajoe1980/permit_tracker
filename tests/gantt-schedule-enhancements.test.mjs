@@ -18,7 +18,7 @@ after(async () => {
   await vite.close();
 });
 
-test("Gantt Schedule Bars [Feature]: Renders Traditional Schedule Timeline Bars with State Colors & Legend", async () => {
+test("Gantt Schedule Bars [Feature]: Renders readable project and stage schedule bars", async () => {
   const { WorkstreamGraphGantt, STATE_COLOR_MAP } = await vite.ssrLoadModule("/components/cockpits/WorkstreamGraphGantt.tsx");
 
   // 1. Verify STATE_COLOR_MAP contains all standard operational states
@@ -46,7 +46,7 @@ test("Gantt Schedule Bars [Feature]: Renders Traditional Schedule Timeline Bars 
   const html = renderToStaticMarkup(React.createElement(WorkstreamGraphGantt));
 
   // 3. Verify Gantt Header and Title
-  assert.match(html, /Project Delivery Schedule &amp; Variance Engine|Project Delivery Schedule & Variance Engine/);
+  assert.match(html, /Project Delivery Schedule &amp; Schedule analysis|Project Delivery Schedule & Schedule analysis/);
   assert.match(html, /Gantt Schedule Bar State Legend &amp; Visual Code|Gantt Schedule Bar State Legend & Visual Code/);
 
   // 4. Verify Legend contains operational states
@@ -67,7 +67,7 @@ test("Gantt Schedule Bars [Feature]: Renders Traditional Schedule Timeline Bars 
   assert.match(html, /Nov 2026/);
   assert.match(html, /Dec 2026/);
 
-  // 6. Verify Workstreams and Traditional Bars Rendered
+  // 6. Verify workstreams and the stage-view schedule render
   assert.match(html, /WS-LA82-HEAVYHAUL/);
   assert.match(html, /LA-82 Heavy-Haul Access &amp; Bridge Reinforcement|LA-82 Heavy-Haul Access & Bridge Reinforcement/);
   assert.match(html, /WS-WETLANDS-PAD-A/);
@@ -85,13 +85,12 @@ test("Gantt Schedule Bars [Feature]: Renders Traditional Schedule Timeline Bars 
   assert.match(html, /USACE/);
   assert.match(html, /LDEQ/);
 
-  // 8. Verify Baseline Sub-Bars and Forecast Bars are Present
-  assert.match(html, /Baseline:/);
-  assert.match(html, /\+7d/);
-  assert.match(html, /\+13d/);
+  // 8. Verify stage blocks use persisted schedule semantics and no inner Gantt scrollbar
+  assert.match(html, /Not scheduled|Request intake|Technical team review/);
+  assert.doesNotMatch(html, /overflow-x-auto/);
 
   // 9. Verify 12-Column Table Headers
-  assert.match(html, /Workstream \/ DAG Node/);
+  assert.match(html, /Workstream \/ Dependencies/);
   assert.match(html, /Lead Agency/);
   assert.match(html, /Baseline Target/);
   assert.match(html, /Current Forecast/);

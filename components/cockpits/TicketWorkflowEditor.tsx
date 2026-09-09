@@ -147,8 +147,8 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
   const [newStageDuration, setNewStageDuration] = useState(5);
   const [newStageGate, setNewStageGate] = useState(false);
   const [nextStageNumber, setNextStageNumber] = useState(1);
-  const [selectedAssignmentGroupId, setSelectedAssignmentGroupId] = useState(workstream?.assignmentGroupId ?? item.assignmentGroupId ?? "");
-  const [selectedAssigneeId, setSelectedAssigneeId] = useState(workstream?.assignedToUserId ?? item.assignedUserId ?? "");
+  const [selectedAssignmentGroupId, setSelectedAssignmentGroupId] = useState(item.assignmentGroupId ?? workstream?.assignmentGroupId ?? "");
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState(item.assignedUserId ?? item.assignedToUserId ?? workstream?.assignedToUserId ?? "");
   const [assignmentStatus, setAssignmentStatus] = useState<string | null>(null);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
 
@@ -238,7 +238,7 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
       return;
     }
     const groupName = assignmentGroups.find((group) => group.id === selectedAssignmentGroupId)?.name ?? "selected group";
-    setAssignmentStatus(`Assignment saved to ${groupName}${selectedAssigneeId ? " and the selected fulfiller" : ""}.`);
+    setAssignmentStatus(`Assignment saved to ${groupName}${selectedAssigneeId ? " and the selected assignee" : ""}.`);
     if (onWorkflowUpdated) onWorkflowUpdated();
   }
 
@@ -344,7 +344,7 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
               <p className="text-xs font-black uppercase tracking-wider text-slate-700">Assignment routing</p>
               <p className="mt-1 text-xs text-slate-500">
                 {isAuthorized
-                  ? "Route this ticket to an authorized agency queue and optional fulfiller."
+                  ? "Route this ticket to an authorized agency queue and optional assignee."
                   : "View current assignment routing (Read-Only: Administrator or Reviewer access required to reassign)."}
               </p>
             </div>
@@ -383,13 +383,13 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
               </select>
             </div>
             <div>
-              <Label htmlFor="ticket-assignee" className="text-xs font-bold">Fulfiller</Label>
+              <Label htmlFor="ticket-assignee" className="text-xs font-bold">Assigned to</Label>
               <select
                 id="ticket-assignee"
                 value={selectedAssigneeId}
                 onChange={(event) => setSelectedAssigneeId(event.target.value)}
                 disabled={!isAuthorized || !selectedAssignmentGroupId}
-                title={isAuthorized ? "Select individual fulfiller" : "Fulfiller assignment modification disabled."}
+                title={isAuthorized ? "Select individual assignee" : "Assignment modification disabled."}
                 className={`mt-1 h-9 w-full rounded-md border text-xs transition-colors ${
                   isAuthorized
                     ? "border-slate-300 bg-white text-slate-900"
@@ -397,7 +397,7 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
                 }`}
               >
                 <option value="">Group queue, no individual</option>
-                {repository.getAssignmentGroupMembers(selectedAssignmentGroupId).map((member) => <option key={member.userId} value={member.userId}>{member.userName ?? member.userEmail ?? member.userId}</option>)}
+                {repository.getAssignmentGroupMembers(selectedAssignmentGroupId).map((member) => <option key={member.userId} value={member.userId}>{member.userName ?? member.userEmail ?? "Name unavailable"}{member.userEmail && member.userName ? ` · ${member.userEmail}` : ""}</option>)}
               </select>
             </div>
           </div>
@@ -620,7 +620,7 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
                       </div>
                     </div>
 
-                    {/* Fulfiller Action Controls */}
+                    {/* Assignment action controls */}
                     <div className="flex items-center gap-1">
                       <Button
                         type="button"

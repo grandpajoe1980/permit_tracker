@@ -4,6 +4,29 @@ Audience: smaller implementation models working one checkpoint at a time.
 Companion evidence: `docs/UX_SIMPLIFICATION_PLAN.md`.  
 Rule: do not restart the architecture. Preserve the domain model, audited mutations, Supabase persistence, private document storage, and versioned workflow concepts.
 
+## Current completion ledger — 2026-09-08
+
+This ledger supplements CP0–CP10 and is the active status record for the PATH UX completion plan. Historical test counts and prior completion notes are not release evidence.
+
+| Repair packet | Status | Evidence required before Verified |
+|---|---|---|
+| R1 — authenticated identity and request updates | Implemented—unverified | Fresh customer → non-admin staff update, submitter preservation, audit actor, spoof/unauthorized negative case |
+| R2 — authoritative assignment and Take Ownership | Implemented—unverified | Two authenticated workers claiming one record, persisted conflict result, assignment/audit/notification/queue read-back |
+| R3 — shell and navigation | Implemented—unverified | Desktop and 390px browser scroll/focus/Back-Forward checks at normal and 200% zoom |
+| R4 — real-stage schedule | Implemented—unverified | Stage-run hydration, alignment/Today/readability checks, canonical destinations, unscheduled/parallel cases, idempotent demo-seed read-back |
+| CP0–CP10 remaining gates | Open | Exercise each gate with authenticated persisted evidence; do not infer completion from source or fixture tests |
+| Supabase migration consistency | Open | Reconcile local files with the genuine remote ledger and dry-run the linked migration state |
+
+### Evidence recorded during the current implementation wave
+
+- Source and focused behavior: the identity-safe claim, staff-operator intake, assignment-label, stage-run hydration, shell, and schedule tests pass. The serial full suite completed with **441 passed, 8 skipped, 0 failed**. Skips remain unaccepted environment-gated cases.
+- Release checks: `npx vinext build`, the focused ESLint command, and `node scripts/scan-build-secrets.mjs` all pass. The build still reports non-blocking large-chunk warnings.
+- Live Supabase: project `zomzacaxwqfwjstkxbpv` contains the claim RPC and staff-operator boundary. Two independently authenticated workers produced one persisted claim and one conflict on the same task; the winner and audit records were read back. A non-admin staff clarification update preserved the customer submitter and attributed the audit to the staff actor; the request state and notification were restored after the probe.
+- Live demo workflow: the tagged demo workstreams retain five distinct stages in the published workflow. `stage_runs` hydration is wired and preserves unavailable history rather than inventing completion dates.
+- Still open: the local and genuine remote migration ledgers contain different timestamped records and require reconciliation plus dry-run proof. Browser visual/action verification is also unverified because the repository's `agent-browser` CLI is unavailable and the fallback browser could not reach the local dev server (`ERR_BLOCKED_BY_CLIENT`/connection refused). No release acceptance claim is made from source, SSR, or live RPC evidence alone.
+
+The guide requirement formerly listed under CP10 is superseded by R3. PATH must not ship a replacement welcome panel or replay control.
+
 ## Working protocol for every implementer
 
 1. Pull `origin/main` with fast-forward only. Read this runbook, the companion plan, relevant tests, and only the files named in the assigned packet.
@@ -313,7 +336,7 @@ Steps:
 3. Add modest feedback: checkmarks for recorded completion, concise receipts such as “Response sent — Jordan is next,” useful empty states, skeletons, and retry states.
 4. Respect reduced motion. Preserve focus visibility, 44px touch targets, readable contrast, and logical heading order.
 5. At 390px verify short shell title, visible identity/profile, navigation drawer, stacked record header/actions, mobile record cards, and schedule list.
-6. Add a dismissible/replayable first-use guide pointing to real controls. Avoid gamification around regulatory decisions.
+6. Do not add a first-use guide or replacement welcome panel. The former guide requirement is superseded by the R3 shell contract; keep controls discoverable through stable navigation, labels, focus states, and record-level next-action copy.
 
 Gate:
 
@@ -328,7 +351,7 @@ Do not release based only on rendered buttons, unit tests, or successful RPC res
 
 1. `node --test --test-concurrency=1 tests/*.test.mjs`
 2. ESLint command above.
-3. `npx vinext build` including the postbuild secret scan.
+3. `npx vinext build`, followed explicitly by `node scripts/scan-build-secrets.mjs`; a direct build does not invoke the npm postbuild lifecycle.
 4. Supabase migration list matches local/remote expectations; dry-run push is clean when migrations changed.
 5. RLS isolation checks when auth, policies, views, RPCs, storage, or user data changed.
 6. Primary staff story: clarification/RFI → customer response → acceptance → resume → complete → project/schedule update.

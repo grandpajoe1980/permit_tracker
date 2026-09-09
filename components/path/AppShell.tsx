@@ -1,11 +1,10 @@
 "use client";
 
 import React, { useState, type ReactNode } from "react";
-import { Zap, Bell, LogOut, Menu, User, ArrowRight, Settings2, X, HelpCircle } from "lucide-react";
+import { Zap, Bell, LogOut, Menu, User, ArrowRight, Settings2, X } from "lucide-react";
 import type { OperationalPersona } from "@/lib/operational-ux";
 import type { AppRoute } from "@/lib/navigation";
 import { Button } from "@/components/ui/button";
-import { FirstUseGuide } from "./FirstUseGuide";
 
 export interface NavItem {
   id: AppRoute;
@@ -44,7 +43,6 @@ export function AppShell({
   footer,
 }: AppShellProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [guideOpen, setGuideOpen] = useState(false);
   const hamburgerRef = React.useRef<HTMLButtonElement>(null);
   const mobileNavRef = React.useRef<HTMLElement>(null);
 
@@ -81,7 +79,7 @@ export function AppShell({
   }, [mobileNavOpen]);
 
   return (
-    <div className="min-h-screen bg-[#f3f6f7] text-[#172033] flex flex-col justify-between overflow-x-hidden">
+    <div className="h-dvh min-h-0 bg-[#f3f6f7] text-[#172033] flex flex-col overflow-hidden">
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <div className="road-stripe" />
 
@@ -141,22 +139,6 @@ export function AppShell({
               </span>
             </button>
 
-            {/* First-use Guide Trigger */}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                setGuideOpen(true);
-                setMobileNavOpen(false);
-              }}
-              className="relative shrink-0 text-white hover:bg-white/10 min-h-[44px] min-w-[44px]"
-              aria-label="First-use guide"
-              title="Open first-use guide"
-            >
-              <HelpCircle className="size-5" />
-            </Button>
-
             {/* Notifications */}
             <Button
               type="button"
@@ -192,7 +174,7 @@ export function AppShell({
       </header>
 
       {/* Main shell layout: Fixed rail + independently scrolling pane */}
-      <div className="mx-auto flex max-w-[1600px] items-start flex-1 w-full">
+      <div className="mx-auto flex max-w-[1600px] min-h-0 items-stretch flex-1 w-full">
         {/* Mobile drawer backdrop */}
         {mobileNavOpen && (
           <div
@@ -211,7 +193,7 @@ export function AppShell({
           aria-label="Navigation drawer"
           className={`${
             mobileNavOpen ? "block" : "hidden"
-          } fixed inset-x-0 top-[61px] z-20 max-h-[calc(100vh-61px)] overflow-y-auto border-b border-slate-200 bg-white p-4 shadow-xl lg:sticky lg:top-[61px] lg:block lg:h-[calc(100vh-61px)] lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}
+          } fixed inset-x-0 top-[61px] z-20 max-h-[calc(100vh-61px)] overflow-y-auto border-b border-slate-200 bg-white p-4 shadow-xl lg:sticky lg:top-0 lg:block lg:h-full lg:max-h-none lg:overflow-hidden lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:shadow-none`}
         >
           {/* Project card */}
           <button
@@ -296,37 +278,15 @@ export function AppShell({
               </>
             )}
 
-            <div className="pt-4 mt-6 border-t border-slate-200">
-              <button
-                type="button"
-                onClick={() => {
-                  setGuideOpen(true);
-                  setMobileNavOpen(false);
-                }}
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-teal-50 hover:text-teal-900 transition cursor-pointer min-h-[44px]"
-              >
-                <HelpCircle className="size-4 text-teal-600" aria-hidden="true" />
-                <span>First-use guide</span>
-              </button>
-            </div>
           </nav>
         </aside>
 
         {/* Main Content Pane */}
-        <main id="main-content" className="min-w-0 flex-1 px-3 py-5 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
-          <FirstUseGuide
-            isOpen={guideOpen ? true : undefined}
-            onDismiss={() => setGuideOpen(false)}
-            onNavigate={(route) => {
-              onNavigate(route as AppRoute);
-              setGuideOpen(false);
-            }}
-          />
+        <main id="main-content" className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-5 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
           {children}
+          {footer}
         </main>
       </div>
-
-      {footer}
     </div>
   );
 }

@@ -24,10 +24,8 @@ test("PATH shell uses plain work language for ordinary navigation", () => {
 
 test("PATH shell constrains its layout to the mobile viewport", () => {
   assert.match(styles, /box-sizing: border-box/);
-  assert.match(styles, /html \{\s+max-width: 100%;\s+overflow-x: auto/s);
-  assert.match(styles, /body \{\s+min-width: 320px;\s+max-width: 100%;\s+overflow-x: auto/s);
-  assert.doesNotMatch(styles, /html \{[^}]*overflow-x: hidden/s);
-  assert.doesNotMatch(styles, /body \{[^}]*overflow-x: hidden/s);
+  assert.match(styles, /html \{\s+max-width: 100%;\s+overflow: hidden/s);
+  assert.match(styles, /body \{\s+min-width: 320px;\s+max-width: 100%;\s+overflow: hidden/s);
   assert.match(styles, /\.site-header > div,\s+\.road-stripe \+ \.site-header \+ div \{\s+width: 100%;\s+min-width: 0;/s);
   assert.match(styles, /#main-content \{\s+width: 100%;/s);
 });

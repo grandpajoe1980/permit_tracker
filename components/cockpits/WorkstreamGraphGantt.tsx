@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -27,6 +27,7 @@ import { repository } from "@/lib/repository";
 import { evaluateProjectSchedule } from "@/lib/engines/schedule-engine";
 import type { OperationalState, ProjectRecord, TaskRecord } from "@/lib/domain-models";
 import { asOfDateTime } from "@/lib/time";
+import { buildWorkflowJourney } from "@/lib/workflow-journey";
 import { InteractiveScheduleSimulator } from "./InteractiveScheduleSimulator";
 
 function displayDate(value?: string) {
@@ -164,6 +165,14 @@ export const STATE_COLOR_MAP: Record<OperationalState, StateStyleConfig> = {
   },
 };
 
+const STAGE_COLOR_CLASSES = [
+  "bg-sky-500 border-sky-700 text-white",
+  "bg-teal-500 border-teal-700 text-white",
+  "bg-violet-500 border-violet-700 text-white",
+  "bg-amber-400 border-amber-600 text-slate-950",
+  "bg-rose-500 border-rose-700 text-white",
+];
+
 export function WorkstreamGraphGantt({
   customerSafe = false,
   onSelectWorkstream,
@@ -190,7 +199,6 @@ export function WorkstreamGraphGantt({
   const [expandedWorkstreamIds, setExpandedWorkstreamIds] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState<"day" | "week" | "month">("week");
   const [fitProject, setFitProject] = useState(false);
-  const timelineScrollRef = useRef<HTMLDivElement>(null);
   const todayDate = useMemo(() => asOfDateTime(asOfDate), [asOfDate]);
 
   const toggleExpand = (wsId: string, e?: React.MouseEvent) => {
@@ -230,14 +238,9 @@ export function WorkstreamGraphGantt({
     return Math.max(0, Math.min(100, (elapsed / totalTimelineDays) * 100));
   }, [todayDate, timelineStart, totalTimelineDays]);
 
-  // Viewport scrolling: on mount and when fitProject is false, place Today ~25% from the left
-  useEffect(() => {
-    if (!fitProject && timelineScrollRef.current) {
-      const container = timelineScrollRef.current;
-      const todayPx = (todayPositionPercent / 100) * container.scrollWidth;
-      container.scrollLeft = Math.max(0, todayPx - container.clientWidth * 0.25);
-    }
-  }, [fitProject, todayPositionPercent, zoom]);
+  // The chart fits its selected range in the available plot. Today is a visual
+  // marker, not an instruction to scroll a hidden internal viewport.
+  const todayDisplayPercent = fitProject ? todayPositionPercent : 30;
 
   // Month segments are derived from the actual persisted schedule range
   const months = useMemo(() => {
@@ -412,7 +415,7 @@ export function WorkstreamGraphGantt({
               )}
             </div>
             <h1 className="mt-2 text-2xl font-black text-slate-900">
-              {customerSafe ? "SpaceX project schedule" : "Project Delivery Schedule & Variance Engine"}
+              {customerSafe ? "SpaceX project schedule" : "Project Delivery Schedule & Schedule analysis"}
             </h1>
             <p className="mt-1 text-sm text-slate-600">
               {customerSafe
@@ -553,9 +556,6 @@ export function WorkstreamGraphGantt({
                   size="sm"
                   onClick={() => {
                     setFitProject(true);
-                    if (timelineScrollRef.current) {
-                      timelineScrollRef.current.scrollLeft = 0;
-                    }
                   }}
                 >
                   Fit project
@@ -566,14 +566,6 @@ export function WorkstreamGraphGantt({
                   size="sm"
                   onClick={() => {
                     setFitProject(false);
-                    if (timelineScrollRef.current) {
-                      const container = timelineScrollRef.current;
-                      const todayPx = (todayPositionPercent / 100) * container.scrollWidth;
-                      container.scrollTo({
-                        left: Math.max(0, todayPx - container.clientWidth * 0.25),
-                        behavior: "smooth",
-                      });
-                    }
                   }}
                 >Today</Button>
               </div>
@@ -737,17 +729,7 @@ export function WorkstreamGraphGantt({
           {/* TRADITIONAL GANTT SCHEDULE TIMELINE CHART                        */}
           {/* ================================================================ */}
           <div className={`rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden ${scheduleViewMode === "bars" ? "hidden md:block" : "hidden"}`}>
-              <div
-                ref={timelineScrollRef}
-                className="overflow-x-auto"
-                tabIndex={0}
-                aria-label="Gantt schedule timeline"
-              >
-                <div
-                  style={{
-                    minWidth: fitProject ? "100%" : zoom === "day" ? "1800px" : zoom === "week" ? "1200px" : "960px",
-                  }}
-                >
+              <div tabIndex={0} aria-label="Gantt schedule timeline">
                   {/* Timeline Header Row */}
                   <div className="grid grid-cols-12 border-b border-slate-200 bg-slate-100/90 text-xs font-bold text-slate-700">
                     {/* Left Column: Workstream Header */}
@@ -757,11 +739,11 @@ export function WorkstreamGraphGantt({
                     </div>
 
                     {/* Right Column: Timeline Months Grid */}
-                    <div className="hidden md:col-span-8 md:grid relative py-2.5" style={{ gridTemplateColumns: monthGridTemplate }}>
+                    <div className="hidden md:col-span-8 md:grid relative py-3" style={{ gridTemplateColumns: monthGridTemplate }}>
                       {months.map((month) => (
                         <div
                           key={month.label}
-                          className={`text-center text-[11px] font-bold uppercase tracking-wider border-r border-slate-200 last:border-0 ${
+                          className={`text-center text-sm font-bold uppercase tracking-wider border-r border-slate-200 last:border-0 ${
                             month.isCurrent ? "text-red-700 bg-red-50/60 font-black" : "text-slate-600"
                           }`}
                         >
@@ -772,7 +754,7 @@ export function WorkstreamGraphGantt({
                       {/* Vertical "Today" line marker in header */}
                       <div
                         className="absolute top-0 bottom-0 w-0.5 bg-red-600 z-10 pointer-events-none"
-                        style={{ left: `${todayPositionPercent}%` }}
+                        style={{ left: `${todayDisplayPercent}%` }}
                       >
                         <span className="absolute -top-1 -translate-x-1/2 rounded bg-red-600 px-1 py-0.5 text-[9px] font-black uppercase text-white shadow">
                           Today
@@ -807,16 +789,18 @@ export function WorkstreamGraphGantt({
                       const currentStart = getTimelinePosition(ws.actualStartDate ?? ws.forecastStartDate ?? ws.baselineStartDate);
                       const currentEnd = ws.operationalState === "complete"
                         ? getTimelinePosition(ws.actualCompletionDate ?? ws.forecastTargetDate)
-                        : todayPositionPercent;
-                      const pastEnd = Math.min(todayPositionPercent, currentStart);
-                      const futureStart = ws.operationalState === "complete" ? forecastRight : Math.max(todayPositionPercent, forecastLeft);
+                        : todayDisplayPercent;
+                      const pastEnd = Math.min(todayDisplayPercent, currentStart);
+                      const futureStart = ws.operationalState === "complete" ? forecastRight : Math.max(todayDisplayPercent, forecastLeft);
                       const pastWidth = Math.max(1.5, pastEnd - baselineLeft);
                       const currentWidth = Math.max(1.5, currentEnd - currentStart);
                       const futureWidth = ws.operationalState === "complete" ? 0 : Math.max(1.5, forecastRight - futureStart);
-                      const workflowStages = ws.workflowVersionId
-                        ? repository.getWorkflowTemplates().flatMap((template) => template.versions).find((version) => version.id === ws.workflowVersionId)?.stages ?? []
-                        : [];
-                      const currentStageIndex = workflowStages.findIndex((stage) => stage.id === ws.currentStageId || stage.name === ws.currentStageName);
+                      const workflowTemplates = repository.getWorkflowTemplates();
+                      const workflowTemplate = workflowTemplates.find((template) => template.permitTypeId === ws.permitTypeId);
+                      const workflowVersion = ws.workflowVersionId
+                        ? workflowTemplates.flatMap((template) => template.versions).find((version) => version.id === ws.workflowVersionId)
+                        : workflowTemplate?.versions.find((version) => version.status === "published") ?? workflowTemplate?.versions[0];
+                      const workflowStages = workflowVersion?.stages ?? [];
 
                       return (
                         <div key={ws.id} className="divide-y divide-slate-50">
@@ -906,7 +890,7 @@ export function WorkstreamGraphGantt({
                               </p>
                             </div>
 
-                            {/* Right Timeline Column with Traditional Bars */}
+                            {/* Right timeline column with one project duration bar and expandable stage blocks */}
                             <div className="col-span-12 relative flex h-[112px] flex-col justify-center overflow-hidden border-t border-slate-100 p-3 md:col-span-8 md:border-t-0">
                               {/* Background monthly grid lines */}
                               <div className="absolute inset-0 grid pointer-events-none opacity-20" style={{ gridTemplateColumns: monthGridTemplate }}>
@@ -918,64 +902,19 @@ export function WorkstreamGraphGantt({
                               {/* Vertical "Today" line marker across row */}
                               <div
                                 className="absolute top-0 bottom-0 w-0.5 bg-red-500/80 z-10 pointer-events-none"
-                                style={{ left: `${todayPositionPercent}%` }}
+                                style={{ left: `${todayDisplayPercent}%` }}
                               />
 
                               {hasScheduleDates ? (
-                                <>
-                                  {/* Past / baseline history */}
-                                  <div className="relative w-full h-5 mb-1">
-                                    <div
-                                      className="absolute h-3.5 rounded border border-dashed border-slate-400 bg-slate-100/90 flex items-center px-1.5 text-[9px] font-mono text-slate-600 truncate transition-all"
-                                      style={{
-                                        left: `${baselineLeft}%`,
-                                        width: `${pastWidth}%`,
-                                      }}
-                                      title={`Baseline schedule: ${displayDate(ws.baselineStartDate)} → ${displayDate(ws.baselineTargetDate)}`}
-                                    >
-                                      <span className="truncate opacity-80">Baseline: {displayDate(ws.baselineStartDate)}</span>
-                                    </div>
+                                <div className="relative flex h-10 w-full items-center">
+                                  <div
+                                    className={`absolute h-9 rounded-none border px-3 text-sm font-bold shadow-sm ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} flex items-center cursor-pointer`}
+                                    style={{ left: `${forecastLeft}%`, width: `${Math.max(1.5, forecastRight - forecastLeft)}%` }}
+                                    title={`${ws.title} (${ws.code})\nState: ${stateConfig.label}\nForecast: ${displayDate(ws.forecastStartDate)} → ${displayDate(ws.forecastTargetDate)}${hasSlip ? `\nSlip: +${ws.scheduleVarianceDays} days` : ""}`}
+                                  >
+                                    <span className="truncate">{stateConfig.shortLabel}</span>
                                   </div>
-
-                                  {/* Current state / actual execution */}
-                                  <div className="relative w-full h-6 mb-1">
-                                    <div
-                                      className={`absolute h-6 rounded-md shadow-sm border ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} flex items-center justify-between px-2.5 text-xs font-bold transition-all transform hover:scale-[1.01] hover:shadow-md cursor-pointer`}
-                                      style={{
-                                        left: `${currentStart}%`,
-                                        width: `${currentWidth}%`,
-                                      }}
-                                      title={`${ws.title} (${ws.code})\nState: ${stateConfig.label}\nForecast: ${displayDate(ws.forecastStartDate)} → ${displayDate(ws.forecastTargetDate)} (${hasSlip ? `+${ws.scheduleVarianceDays}d variance` : "On Track"})\nReviewer: ${ws.regulatoryLead.assignedReviewerName || "Unassigned"} (${ws.regulatoryLead.orgCode})`}
-                                    >
-                                      <span className="truncate text-[10px] font-black drop-shadow-sm">Current: {stateConfig.shortLabel}</span>
-
-                                      {hasSlip && (
-                                        <span className="shrink-0 rounded bg-black/25 px-1.5 py-0.5 text-[10px] font-mono font-black text-white ml-1">
-                                          +{ws.scheduleVarianceDays}d
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* Future state / forecast */}
-                                  <div className="relative w-full h-5">
-                                    <div
-                                      className={`absolute h-4 rounded-md border border-dashed ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} opacity-60 flex items-center px-2 text-[9px] font-bold ${futureWidth === 0 ? "hidden" : ""}`}
-                                      style={{ left: `${futureStart}%`, width: `${futureWidth}%` }}
-                                      title={`Future forecast: ${ws.forecastStartDate} -> ${ws.forecastTargetDate}${hasSlip ? ` (+${ws.scheduleVarianceDays}d variance)` : ""}`}
-                                    >
-                                      <span className="truncate">Future: {ws.forecastTargetDate}</span>
-                                    </div>
-
-                                    {/* Forecast Target Marker / Flag */}
-                                    <div
-                                      className="absolute top-0 text-[9px] font-mono font-black text-slate-800"
-                                      style={{ left: `calc(${forecastRight}% + 6px)` }}
-                                    >
-                                      {ws.forecastTargetDate}
-                                    </div>
-                                  </div>
-                                </>
+                                </div>
                               ) : (
                                 <div className="flex items-center gap-2 text-xs text-slate-500">
                                   <span className="italic">Not scheduled</span>
@@ -991,20 +930,43 @@ export function WorkstreamGraphGantt({
                           {isExpanded && workflowStages.length > 0 && (
                             <div className="bg-white divide-y divide-slate-100 border-l-4 border-sky-500" aria-label={`${ws.code} workflow stages`}>
                               {workflowStages.map((stage, index) => {
-                                const stageState = index < currentStageIndex || ws.operationalState === "complete" ? "Completed" : index === currentStageIndex ? stateConfig.shortLabel : "Upcoming";
+                                const journey = buildWorkflowJourney({ ...ws, stages: workflowStages, tasks: ws.tasks, stageRuns: ws.stageRuns }, repository.getWorkflowTemplates());
+                                const stageJourney = journey.stages.find((candidate) => candidate.id === stage.id);
+                                const stageTasks = ws.tasks.filter((task) => task.stageId === stage.id || task.stageId === stage.stageKey);
+                                const stageStartDates = stageTasks.flatMap((task) => [task.forecastStartDate, task.baselineStartDate].filter(Boolean) as string[]).sort();
+                                const stageEndDates = stageTasks.flatMap((task) => [task.actualCompletionDate, task.forecastDueDate, task.baselineDueDate].filter(Boolean) as string[]).sort();
+                                const stageStart = stageStartDates[0];
+                                const stageEnd = stageEndDates[stageEndDates.length - 1];
+                                const hasStageDates = Boolean(stageStart && stageEnd);
+                                const stageLeft = hasStageDates ? getTimelinePosition(stageStart) : 0;
+                                const stageRight = hasStageDates ? getTimelinePosition(stageEnd) : 0;
+                                const stageWidth = Math.max(1.5, stageRight - stageLeft);
+                                const stageState = stageJourney?.state === "completed" ? "Completed" : stageJourney?.state === "blocked" ? "Blocked" : stageJourney?.state === "waiting" ? "Waiting" : stageJourney?.state === "current" ? "Current" : stageJourney?.state === "not_recorded" ? "Not recorded" : "Upcoming";
                                 return (
                                   <div key={stage.id} id={`phase-${encodeURIComponent(stage.name)}`} className="grid grid-cols-12 items-center bg-sky-50/30">
-                                    <div className="col-span-12 p-2.5 pl-8 md:col-span-4 md:border-r">
+                                    <div className="col-span-12 p-3 pl-8 md:col-span-4 md:border-r">
                                       <Link
                                         href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}#phase-${encodeURIComponent(stage.name)}`}
                                         onClick={(event) => { event.stopPropagation(); if (onSelectWorkstream) { event.preventDefault(); onSelectWorkstream(ws.id); } }}
-                                        className="text-xs font-bold text-slate-800 hover:text-teal-800 hover:underline"
+                                        className="text-sm font-bold text-slate-800 hover:text-teal-800 hover:underline"
                                       >
                                         Step {stage.sequenceOrder}: {customerSafe ? stage.customerVisibilityLabel : stage.name}
                                       </Link>
-                                      <p className="mt-0.5 text-[10px] text-slate-500">{customerSafe ? "Workflow milestone" : `${stage.responsibleOrgCode} · ${stage.targetDurationDays} day target`}</p>
+                                      <p className="mt-0.5 text-xs text-slate-500">{customerSafe ? "Workflow milestone" : `${stage.responsibleOrgCode} · ${stage.targetDurationDays} day target`}</p>
                                     </div>
-                                    <div className="col-span-12 p-2.5 text-right text-[10px] font-black uppercase text-slate-500 md:col-span-8 md:text-left">{stageState}</div>
+                                    <div className="col-span-12 relative flex min-h-[52px] items-center overflow-hidden p-3 md:col-span-8">
+                                      <div className="absolute inset-0 grid pointer-events-none opacity-15" style={{ gridTemplateColumns: monthGridTemplate }}>
+                                        {months.map((month) => <div key={month.label} className="border-r border-slate-300 last:border-0" />)}
+                                      </div>
+                                      {hasStageDates ? (
+                                        <div className={`absolute h-9 rounded-none border px-2 text-sm font-bold shadow-sm ${STAGE_COLOR_CLASSES[index % STAGE_COLOR_CLASSES.length]}`} style={{ left: `${stageLeft}%`, width: `${stageWidth}%` }} title={`${stage.name}: ${displayDate(stageStart)} → ${displayDate(stageEnd)}`}>
+                                          <span className="truncate">{stage.name}</span>
+                                        </div>
+                                      ) : (
+                                        <span className="relative text-sm italic text-slate-500">Not scheduled</span>
+                                      )}
+                                      <span className="relative ml-auto text-xs font-black uppercase tracking-wide text-slate-600">{stageState}</span>
+                                    </div>
                                   </div>
                                 );
                               })}
@@ -1089,7 +1051,7 @@ export function WorkstreamGraphGantt({
                                       {/* Today line */}
                                       <div
                                         className="absolute top-0 bottom-0 w-0.5 bg-red-500/80 z-10 pointer-events-none"
-                                        style={{ left: `${todayPositionPercent}%` }}
+                                        style={{ left: `${todayDisplayPercent}%` }}
                                       />
 
                                       {hasDates ? (
@@ -1146,7 +1108,6 @@ export function WorkstreamGraphGantt({
                     )}
                   </div>
                 </div>
-              </div>
             </div>
 
           {/* ================================================================ */}
@@ -1155,7 +1116,7 @@ export function WorkstreamGraphGantt({
           <div className={`rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm ${scheduleViewMode === "table" ? "" : "hidden"}`}>
             <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
               <div className="hidden grid-cols-12 text-xs font-bold uppercase tracking-wider text-slate-600 md:grid">
-                <div className="col-span-4">{customerSafe ? "Workstream" : "Workstream / DAG Node"}</div>
+                <div className="col-span-4">{customerSafe ? "Workstream" : "Workstream / Dependencies"}</div>
                 <div className="col-span-2 text-center">Lead Agency</div>
                 <div className="col-span-2 text-center">Baseline Target</div>
                 <div className="col-span-2 text-center">Current Forecast</div>

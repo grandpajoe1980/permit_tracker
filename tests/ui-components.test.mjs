@@ -119,7 +119,7 @@ test("renders all 8 specialized delivery cockpits via SSR static markup assertin
   // 3. WorkstreamGraphGantt
   const { WorkstreamGraphGantt } = await vite.ssrLoadModule("/components/cockpits/WorkstreamGraphGantt.tsx");
   const htmlGantt = renderToStaticMarkup(React.createElement(WorkstreamGraphGantt));
-  assert.match(htmlGantt, /Project Delivery Schedule &amp; Variance Engine|Project Delivery Schedule & Variance Engine/);
+  assert.match(htmlGantt, /Project Delivery Schedule &amp; Schedule analysis|Project Delivery Schedule & Schedule analysis/);
   assert.match(htmlGantt, /Critical Path Execution Graph/);
   assert.match(htmlGantt, /\+13 Days/);
   assert.match(htmlGantt, /Dec 15, 2026/);

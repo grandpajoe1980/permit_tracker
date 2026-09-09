@@ -89,6 +89,7 @@ import {
   mutateAcceptRFIResponse,
   mutateAddWorkstreamNote,
   mutateAssignTicket,
+  mutateClaimTicket,
   mutateClearWorkstreamBlocker,
   mutateCompleteWorkstreamStage,
   mutateCreateCommitment,
@@ -236,14 +237,31 @@ class ProjectDeliveryRepository {
 
       const keepFixtures = allowsFixtureData();
       const groupById = new Map(groups.map((group) => [group.id, group]));
+      const profileByUserId = new Map<string, UserProfileRecord>();
+      for (const profile of profs) {
+        profileByUserId.set(profile.userId, profile);
+        if (profile.id) profileByUserId.set(profile.id, profile);
+      }
+      const namedGroupMemberships = groupMemberships.map((membership) => {
+        const profile = profileByUserId.get(membership.userId);
+        return {
+          ...membership,
+          userName: membership.userName ?? profile?.fullName,
+          userEmail: membership.userEmail ?? profile?.workEmail,
+        };
+      });
       const enrichedWorkstreams = ws.map((workstream) => {
         const linkedRfis = rfisList.filter((r) => r.workstreamId === workstream.id || r.workstreamId === workstream.code);
+        const assignedProfile = workstream.assignedToUserId ? profileByUserId.get(workstream.assignedToUserId) : undefined;
         return {
           ...workstream,
           assignmentGroupName: workstream.assignmentGroupName ?? (workstream.assignmentGroupId ? groupById.get(workstream.assignmentGroupId)?.name : undefined),
+          assignedToUserName: workstream.assignedToUserName ?? assignedProfile?.fullName,
           tasks: workstream.tasks.map((task) => ({
             ...task,
             assignmentGroupName: task.assignmentGroupName ?? (task.assignmentGroupId ? groupById.get(task.assignmentGroupId)?.name : undefined),
+            assignedToUserName: task.assignedToUserName ?? (task.assignedToUserId ? profileByUserId.get(task.assignedToUserId)?.fullName : undefined),
+            assignedUserName: task.assignedUserName ?? (task.assignedUserId ? profileByUserId.get(task.assignedUserId)?.fullName : undefined),
           })),
           rfis: workstream.rfis.length > 0 ? workstream.rfis : linkedRfis,
         };
@@ -251,6 +269,7 @@ class ProjectDeliveryRepository {
       const enrichedCustomerRequests = custReqs.map((request) => ({
         ...request,
         assignmentGroupName: request.assignmentGroupName ?? (request.assignmentGroupId ? groupById.get(request.assignmentGroupId)?.name : undefined),
+        assignedToUserName: request.assignedToUserName ?? (request.assignedToUserId ? profileByUserId.get(request.assignedToUserId)?.fullName : undefined),
       }));
       if (!keepFixtures || ws.length > 0) this.workstreams = enrichedWorkstreams;
       if (!keepFixtures || custReqs.length > 0) this.customerRequests = enrichedCustomerRequests;
@@ -270,7 +289,7 @@ class ProjectDeliveryRepository {
       if (!keepFixtures || orgs.length > 0) this.organizations = orgs;
       if (!keepFixtures || workflowTemplates.length > 0) this.workflowTemplates = workflowTemplates;
       if (!keepFixtures || groups.length > 0) this.assignmentGroups = groups;
-      if (!keepFixtures || groupMemberships.length > 0) this.assignmentGroupMemberships = groupMemberships;
+      if (!keepFixtures || namedGroupMemberships.length > 0) this.assignmentGroupMemberships = namedGroupMemberships;
 
       this.isHydratedFromDb = true;
       return true;
@@ -2971,6 +2990,30 @@ class ProjectDeliveryRepository {
     const ticket = this.findTicket(options.ticketType, options.ticketId);
     if (!ticket) return { success: false, error: new Error("Ticket not found."), ticket: null };
 
+    if (isSupabaseConfigured()) {
+      const dbResult = await mutateClaimTicket({
+        ticketType: options.ticketType,
+        ticketId: options.ticketId,
+        expectedAssignmentGroupId: ticket.assignmentGroupId ?? null,
+        expectedAssignedToUserId: options.expectedPreviousUserId ?? ticket.assignedToUserId ?? null,
+        assignmentNotes: "Claimed ownership (Take ownership)",
+      });
+      if (dbResult.error) return { success: false, error: dbResult.error, ticket };
+
+      await this.hydrateFromSupabase();
+      const refreshed = this.findTicket(options.ticketType, options.ticketId) ?? ticket;
+      if (dbResult.data.status === "conflict") {
+        const owner = dbResult.data.assignedToUserName || dbResult.data.assignedToUserId || "another worker";
+        return {
+          success: false,
+          conflict: true,
+          error: new Error(`Claim conflict: item is already assigned to ${owner}.`),
+          ticket: refreshed,
+        };
+      }
+      return { success: true, error: null, ticket: refreshed };
+    }
+
     if (options.expectedPreviousUserId !== undefined) {
       const current = ticket.assignedToUserId ?? null;
       if (current !== options.expectedPreviousUserId) {
@@ -2993,6 +3036,7 @@ class ProjectDeliveryRepository {
     const res = await this.assignTicketPersisted({
       ticketType: options.ticketType,
       ticketId: options.ticketId,
+      assignmentGroupId: ticket.assignmentGroupId,
       assignedToUserId: options.userId,
       actorName: options.actorName,
       reason: "Claimed ownership (Take ownership)",

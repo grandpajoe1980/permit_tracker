@@ -42,10 +42,47 @@ const {
   domainToWorkstreamRow,
   customerRequestRowToDomain,
   domainToCustomerRequestRow,
+  stageRunRowToDomain,
   taskRowToDomain,
 } = await vite.ssrLoadModule("/lib/supabase/mappings.ts");
 
 const schema = await vite.ssrLoadModule("/db/schema.ts");
+const claimMigration = readFileSync(resolve(root, "supabase/migrations/20260908200000_identity_safe_claim_ticket.sql"), "utf8");
+const staffIntakeMigration = readFileSync(resolve(root, "supabase/migrations/20260908250000_allow_staff_intake_operations.sql"), "utf8");
+
+test("Identity-safe claim and staff intake migrations preserve server-owned actors", () => {
+  assert.match(claimMigration, /create or replace function public\.rpc_claim_ticket/i);
+  assert.match(claimMigration, /auth\.uid\(\)/);
+  assert.match(claimMigration, /p_expected_assignment_group_id/);
+  assert.match(claimMigration, /status.*conflict/s);
+  assert.match(claimMigration, /submitted_by_user_id cannot be changed/);
+  assert.match(staffIntakeMigration, /require_project_operator/);
+  assert.doesNotMatch(staffIntakeMigration, /rpc_link_customer_request_workstream/);
+});
+
+test("Stage-run mapping preserves persisted workflow history without inventing dates", () => {
+  assert.deepEqual(stageRunRowToDomain({
+    id: "run-1",
+    workstream_id: "WS-1",
+    workflow_version_id: "workflow-v1",
+    stage_id: "stage-review",
+    stage_key: "review",
+    status: "completed",
+    started_at: "2026-09-01T00:00:00Z",
+    completed_at: "2026-09-03T00:00:00Z",
+    completion_notes: "Evidence accepted",
+  }), {
+    id: "run-1",
+    workstreamId: "WS-1",
+    workflowVersionId: "workflow-v1",
+    stageId: "stage-review",
+    stageKey: "review",
+    status: "completed",
+    startedAt: "2026-09-01T00:00:00Z",
+    completedAt: "2026-09-03T00:00:00Z",
+    completionNotes: "Evidence accepted",
+  });
+});
 
 test("ITSM Assignment Groups: 15 multi-agency queues spanning 8 distinct organizations", () => {
   repository.resetE2EDemo();
@@ -510,6 +547,33 @@ function setupRpcSpy() {
     },
   };
 }
+
+rpcTest("Supabase RPC Payloads: mutateClaimTicket derives the claimant and sends only the stale-state snapshot", async () => {
+  const spy = setupRpcSpy();
+  try {
+    const result = await mutations.mutateClaimTicket({
+      ticketType: "task",
+      ticketId: "TASK-CLAIM-01",
+      expectedAssignmentGroupId: "group-1",
+      expectedAssignedToUserId: null,
+      assignmentNotes: "Take ownership",
+    });
+    assert.equal(result.error, null);
+    const call = spy.getLastCall();
+    assert.equal(call.fnName, "rpc_claim_ticket");
+    assert.deepEqual(Object.keys(call.payload).sort(), [
+      "p_assignment_notes",
+      "p_expected_assigned_to_user_id",
+      "p_expected_assignment_group_id",
+      "p_ticket_id",
+      "p_ticket_type",
+    ].sort());
+    assert.equal("p_assigned_to_user_id" in call.payload, false);
+    assert.equal("p_actor_user_id" in call.payload, false);
+  } finally {
+    spy.restore();
+  }
+});
 
 rpcTest("Supabase RPC Payloads: mutateAssignTicket constructs valid PostgreSQL parameter payload", async () => {
   const spy = setupRpcSpy();

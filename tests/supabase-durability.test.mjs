@@ -29,6 +29,15 @@ const env = { ...readEnvFile(), ...process.env };
 const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
 const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY || env.LEGACY_SERVICE_ROLE_KEY || env.legacy_service_role_key;
 
+// This test harness uses the already-authorized service key only inside the
+// Node process. The application client still resolves publishable credentials
+// only; setting PATH_TEST_ANON_KEY here lets SSR repository hydration exercise
+// the configured live project instead of silently falling back to fixtures.
+if (supabaseUrl && supabaseKey) {
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||= supabaseUrl;
+  process.env.PATH_TEST_ANON_KEY ||= supabaseKey;
+}
+
 const root = fileURLToPath(new URL("..", import.meta.url));
 const vite = await createServer({
   appType: "custom",

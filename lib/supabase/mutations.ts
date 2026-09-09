@@ -1745,6 +1745,41 @@ export async function mutateAssignTicket(params: {
   return { data, error: null };
 }
 
+export type TicketClaimResult = {
+  status: "claimed" | "already_owned" | "conflict";
+  ticketId: string;
+  ticketType: "workstream" | "customer_request" | "task";
+  assignmentGroupId?: string | null;
+  assignmentGroupName?: string | null;
+  assignedToUserId?: string | null;
+  assignedToUserName?: string | null;
+  updatedAt?: string;
+};
+
+export async function mutateClaimTicket(params: {
+  ticketType: "workstream" | "customer_request" | "task";
+  ticketId: string;
+  expectedAssignmentGroupId?: string | null;
+  expectedAssignedToUserId?: string | null;
+  assignmentNotes?: string;
+}): Promise<MutationResult<TicketClaimResult>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+
+  const { data, error } = await client.rpc("rpc_claim_ticket", {
+    p_ticket_id: params.ticketId,
+    p_ticket_type: params.ticketType,
+    p_expected_assignment_group_id: params.expectedAssignmentGroupId ?? null,
+    p_expected_assigned_to_user_id: params.expectedAssignedToUserId ?? null,
+    p_assignment_notes: params.assignmentNotes ?? "Claimed ownership (Take ownership)",
+  });
+
+  if (error || !data) {
+    return { data: null, error: new Error(error?.message ?? "Ticket ownership was not confirmed by the database.") };
+  }
+  return { data: data as TicketClaimResult, error: null };
+}
+
 export async function mutateUpdateTicketITSMState(params: {
   ticketType: "workstream" | "customer_request" | "task";
   ticketId: string;
