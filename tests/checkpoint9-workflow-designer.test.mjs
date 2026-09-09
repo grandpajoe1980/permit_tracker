@@ -71,6 +71,24 @@ test("Checkpoint 9: published workflow instances have an authenticated triage bo
   assert.match(migration, /grant execute on function public\.rpc_create_workstream_from_request.*authenticated/s);
 });
 
+test("Checkpoint 9: server validation rejects inactive workflow owners and groups", async () => {
+  const migration = await readFile(new URL("../supabase/migrations/20260909150000_validate_workflow_owner_contract.sql", import.meta.url), "utf8");
+  assert.match(migration, /unknown or inactive owner organization/);
+  assert.match(migration, /missing or inactive assignment group/);
+  assert.match(migration, /from public\.organizations o/);
+  assert.match(migration, /from public\.assignment_groups g/);
+  assert.match(migration, /normalized_code/);
+  assert.match(migration, /else 'STATEPO' end/);
+});
+
+test("Checkpoint 9: baseline seeding uses real owners without rewriting published stages", async () => {
+  const seed = await readFile(new URL("../scripts/seed-spacex-demo.mjs", import.meta.url), "utf8");
+  assert.match(seed, /responsibleOrgCode/);
+  assert.match(seed, /: "STATEPO"/);
+  assert.match(seed, /ignoreDuplicates:\s*true/);
+  assert.match(seed, /Published workflow rows are immutable/);
+});
+
 test("Checkpoint 9: WorkflowDesignerPanel renders dynamic version numbers and no hardcoded v4/v5 guardrail", async () => {
   const { WorkflowDesignerPanel } = await vite.ssrLoadModule("/components/cockpits/WorkflowDesignerPanel.tsx");
   const source = await readFile(new URL("../components/cockpits/WorkflowDesignerPanel.tsx", import.meta.url), "utf8");

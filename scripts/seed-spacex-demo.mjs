@@ -181,7 +181,14 @@ for (const [stageKey, label, sortOrder, serviceTargetDays] of workflowStages) {
 const workflowVersionId = "workflow-version-spaceport-request-v1";
 await one(supabase.from("workflow_versions").upsert({ id: workflowVersionId, workflow_id: workflow.id, version_number: 1, version_label: "v1", change_summary: "Self-contained SpaceX Louisiana demonstration workflow", is_active: true, lifecycle_status: "published", published_at: "2026-08-01T00:00:00Z", effective_date: "2026-08-01" }, { onConflict: "id" }), "demo workflow version");
 for (const [stageKey, label, sequenceOrder, targetDurationDays] of workflowStages) {
-  await one(supabase.from("workflow_version_stages").upsert({ id: `${workflowVersionId}-${stageKey}`, workflow_version_id: workflowVersionId, stage_key: stageKey, sequence_order: sequenceOrder, label, customer_visibility_label: label, responsible_org_code: stageKey === "technical_review" ? "SPACEPORT" : stageKey === "agency_coordination" ? "LA-PROJECTS" : "PATH", target_duration_days: targetDurationDays, minimum_statutory_days: 0, required_inputs: [], completion_requirements: [`Confirm ${label.toLowerCase()} evidence`], permitted_transitions: [], can_run_in_parallel: false, is_milestone_gate: stageKey !== "monitoring" }, { onConflict: "workflow_version_id,stage_key" }), `versioned workflow stage ${stageKey}`);
+  const responsibleOrgCode = stageKey === "technical_review"
+    ? "SPACEPORT"
+    : stageKey === "agency_coordination"
+      ? "LA-PROJECTS"
+      : "STATEPO";
+  // Published workflow rows are immutable. Insert missing baseline stages for
+  // a fresh seed, but never overwrite an existing published stage contract.
+  await one(supabase.from("workflow_version_stages").upsert({ id: `${workflowVersionId}-${stageKey}`, workflow_version_id: workflowVersionId, stage_key: stageKey, sequence_order: sequenceOrder, label, customer_visibility_label: label, responsible_org_code: responsibleOrgCode, target_duration_days: targetDurationDays, minimum_statutory_days: 0, required_inputs: [], completion_requirements: [`Confirm ${label.toLowerCase()} evidence`], permitted_transitions: [], can_run_in_parallel: false, is_milestone_gate: stageKey !== "monitoring" }, { onConflict: "workflow_version_id,stage_key", ignoreDuplicates: true }), `versioned workflow stage ${stageKey}`);
 }
 
 const airWorkstream = await one(supabase.from("workstreams").select("id").eq("code", "WS-AIR-TITLE-V").maybeSingle(), "find Title V workstream");
