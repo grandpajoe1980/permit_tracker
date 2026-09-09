@@ -685,7 +685,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
 
     // Stage 1: Sarah completes the assigned intake stage.
     await openAssignedWork(stateOfficePage, requestTitle);
-    await expect(stateOfficePage.getByText("Request intake", { exact: true })).toBeVisible();
+    await expect(stateOfficePage.getByRole("heading", { name: "Request intake", exact: true })).toBeVisible();
     await completeCurrentStage(stateOfficePage);
     await stateOfficeContext.close();
 
@@ -694,7 +694,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     const applicantPage = await applicantContext.newPage();
     await signIn(applicantPage, "alex");
     await claimAndOpenWork(applicantPage, requestTitle);
-    await expect(applicantPage.getByText("Technical team review", { exact: true })).toBeVisible();
+    await expect(applicantPage.getByRole("heading", { name: "Technical team review", exact: true })).toBeVisible();
     await completeCurrentStage(applicantPage);
     await applicantContext.close();
 
@@ -704,7 +704,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await signIn(finalStaffPage, "sarah");
     for (const stageName of ["Agency coordination", "Construction release", "Monitoring and closeout"]) {
       await claimAndOpenWork(finalStaffPage, requestTitle);
-      await expect(finalStaffPage.getByText(stageName, { exact: true })).toBeVisible();
+      await expect(finalStaffPage.getByRole("heading", { name: stageName, exact: true })).toBeVisible();
       await completeCurrentStage(finalStaffPage);
     }
 
