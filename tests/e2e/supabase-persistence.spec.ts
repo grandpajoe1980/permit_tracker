@@ -457,11 +457,15 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(page.getByText("objection raised", { exact: true })).toBeVisible();
     await expect(page.getByText("Waiting on CPRA", { exact: true })).toBeVisible();
 
-    // Read the linked workstream directly to prove the dependency is still
-    // blocked; only its separate clear action can resume the workflow.
-    await page.goto("/work/workflow/PATH-DEMO-WS-COAST");
-    await expect(page.getByRole("heading", { name: "Demo — Coastal concurrence and dependency clearance", exact: true })).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText(/blocked/i).first()).toBeVisible({ timeout: 15_000 });
+    // CPRA can respond to the coordination record, while the originating
+    // workstream remains project-scoped. Read that shared project view to
+    // prove the dependency is still blocked; only its separate clear action
+    // can resume the workflow.
+    await page.goto("/?view=project&workstream=PATH-DEMO-WS-COAST");
+    await expect(page.getByRole("heading", { name: /SpaceX .*Starbase Louisiana/i, exact: false })).toBeVisible({ timeout: 30_000 });
+    const focusedWorkstream = page.locator('[data-focused-workstream-id="PATH-DEMO-WS-COAST"]');
+    await expect(focusedWorkstream).toBeVisible({ timeout: 15_000 });
+    await expect(focusedWorkstream.getByText(/blocked/i).first()).toBeVisible({ timeout: 15_000 });
 
     await page.goto("/work/coordination/PATH-DEMO-COORD-RESPONDED");
     await expect(page.getByRole("heading", { name: "Confirm coastal concurrence conditions", exact: true })).toBeVisible({ timeout: 30_000 });
