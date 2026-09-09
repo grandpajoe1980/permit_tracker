@@ -173,8 +173,17 @@ function userIdForPersona(id: string) {
 }
 
 function makeAuthenticatedPersona(email: string, name: string, userId?: string): DemoPersona {
-  const membership = userId ? repository.getOrganizationMemberships().find((entry) => entry.userId === userId && entry.status === "active") : undefined;
   const profile = userId ? repository.getProfileByUserId(userId) : undefined;
+  const knownPersona = getPersonaFromEmail(email);
+  if (knownPersona) {
+    return {
+      ...knownPersona,
+      id: userId ?? knownPersona.id,
+      name: profile?.fullName ?? knownPersona.name,
+      email,
+    };
+  }
+  const membership = userId ? repository.getOrganizationMemberships().find((entry) => entry.userId === userId && entry.status === "active") : undefined;
   if (membership?.role === "organization_admin" || membership?.role === "system_admin") {
     return {
       id: userId ?? "authenticated-user",
@@ -199,15 +208,6 @@ function makeAuthenticatedPersona(email: string, name: string, userId?: string):
       scenario: "Agency operations",
       group: "Louisiana Governor's Office of Major Projects & Delivery",
       organization: profile?.organizationName,
-    };
-  }
-  const knownPersona = getPersonaFromEmail(email);
-  if (knownPersona) {
-    return {
-      ...knownPersona,
-      id: userId ?? knownPersona.id,
-      name: profile?.fullName ?? knownPersona.name,
-      email,
     };
   }
   return {

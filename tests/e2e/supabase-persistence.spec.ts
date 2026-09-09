@@ -137,7 +137,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await pageCustomer.fill("#request-title", requestTitle);
     await pageCustomer.fill("#request-description", "Fresh staff-operator identity acceptance scenario.");
     await pageCustomer.getByRole("button", { name: "Submit request", exact: true }).click();
-    await pageCustomer.getByRole("button", { name: "Back to request choices", exact: true }).click();
+    await expect(pageCustomer.getByText("Request submitted", { exact: true })).toBeVisible({ timeout: 15_000 });
     await expect(pageCustomer.getByText(requestTitle, { exact: false }).first()).toBeVisible();
     await contextCustomer.close();
 
@@ -149,6 +149,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await pageStaff.click("#demo-persona-sarah");
     await pageStaff.getByRole("button", { name: "Administration", exact: true }).click();
     await expect(pageStaff.getByRole("heading", { name: "Customer intake queue", exact: true })).toBeVisible();
+    await expect(pageStaff.getByText(requestTitle, { exact: false }).first()).toBeVisible({ timeout: 15_000 });
     await pageStaff.getByRole("textbox", { name: "Search intake requests" }).fill(requestTitle);
     const intakeRow = pageStaff.getByText(requestTitle, { exact: false }).first().locator("..").locator("..");
     await expect(intakeRow.getByRole("button", { name: "Review and route", exact: true })).toBeVisible();
