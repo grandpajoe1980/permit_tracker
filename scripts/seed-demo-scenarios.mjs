@@ -100,7 +100,7 @@ async function main() {
     `find project ${PROJECT_NUMBER}`,
   );
 
-  const organizationCodes = ["SPACEPORT", "LDEQ", "DOTD", "CPRA", "LA-PROJECTS"];
+  const organizationCodes = ["SPACEPORT", "LDEQ", "DOTD", "CPRA", "LA-PROJECTS", "STATEPO"];
   const organizations = await unwrap(
     await client.from("organizations").select("id, code, name").in("code", organizationCodes),
     "find demo organizations",
@@ -151,6 +151,35 @@ async function main() {
     sarah: "Sarah Johnson",
     joe: "Joe Skaggs",
   }[persona];
+
+  // The current authenticated Sarah Johnson demo persona belongs to STATEPO.
+  // Keep that organization-level project access idempotent and scoped to the
+  // tagged demo project so the intake queue is testable through real RLS.
+  const existingStatepoParticipant = await unwrap(
+    await client
+      .from("project_participants")
+      .select("id")
+      .eq("project_id", project.id)
+      .eq("organization_id", orgId("STATEPO"))
+      .limit(1)
+      .maybeSingle(),
+    "find STATEPO project access",
+  );
+  if (!existingStatepoParticipant) {
+    await unwrap(
+      await client.from("project_participants").insert({
+        project_id: project.id,
+        organization_id: orgId("STATEPO"),
+        participation_role: "coordinating",
+        access_scope: "project",
+        organization_name: organizationByCode.STATEPO.name,
+        project_role: "State Project Office",
+        visibility_scope: "project",
+        is_active: true,
+      }),
+      "ensure STATEPO project access",
+    );
+  }
 
   const workstreams = [
     {

@@ -15,8 +15,8 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(pageA.getByRole("button", { name: "Open project page" })).toBeVisible();
 
     // Navigate to Requests & Permits
-    await pageA.click("text=Requests & permits");
-    await expect(pageA.locator("text=Customer intake")).toBeVisible();
+    await pageA.getByRole("button", { name: "My requests", exact: true }).click();
+    await expect(pageA.getByRole("heading", { name: "Requests & permits", exact: true })).toBeVisible();
 
     // Submit a Help Request
     await pageA.click("text=Request government help / service");
@@ -58,14 +58,17 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
 
     await pageReviewer.click("#demo-login-trigger");
     await pageReviewer.click("#demo-persona-jordan");
-    await expect(pageReviewer.getByRole("heading", { name: "My Work", exact: true })).toBeVisible();
+    await expect(pageReviewer.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible();
 
-    // Select a real reviewer queue card that exposes the RFI command.
-    const rfiCard = pageReviewer.locator("article").filter({ hasText: "RFI" }).filter({ has: pageReviewer.getByRole("button", { name: "Request Information", exact: true }) }).first();
-    await expect(rfiCard).toBeVisible();
-    const rfiBtn = rfiCard.getByRole("button", { name: "Request Information", exact: true });
-    await expect(rfiBtn).toBeVisible();
-    await rfiBtn.click();
+    // Unanswered RFIs are intentionally in the reviewer Waiting queue. Open
+    // the persisted record there, then use its canonical detail action bar.
+    await pageReviewer.getByRole("button", { name: "Team Work", exact: true }).click();
+    await pageReviewer.getByRole("button", { name: /^Waiting/ }).click();
+    const rfiRow = pageReviewer.locator('[data-testid^="inbox-row-"]').filter({ hasText: "RFI" }).first();
+    await expect(rfiRow).toBeVisible();
+    await rfiRow.click();
+    await expect(pageReviewer.getByRole("button", { name: "Request Information", exact: true })).toBeVisible();
+    await pageReviewer.getByRole("button", { name: "Request Information", exact: true }).click();
     await pageReviewer.fill("#question-text", questionText);
     await pageReviewer.getByRole("dialog").getByRole("button", { name: "Request Information", exact: true }).click();
     await expect(pageReviewer.getByRole("dialog")).not.toBeVisible();
@@ -84,7 +87,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
 
     await pageApplicant.click("#demo-login-trigger");
     await pageApplicant.click("#demo-persona-alex");
-    await expect(pageApplicant.getByRole("heading", { name: "My Work", exact: true })).toBeVisible();
+    await expect(pageApplicant.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible();
 
     await pageApplicant.getByRole("button", { name: /^My actions/ }).click();
     const customerQuestion = pageApplicant.locator("article").filter({ hasText: questionText }).first();
@@ -105,7 +108,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(pageReviewerAgain.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
     await pageReviewerAgain.click("#demo-login-trigger");
     await pageReviewerAgain.click("#demo-persona-jordan");
-    await expect(pageReviewerAgain.getByRole("heading", { name: "My Work", exact: true })).toBeVisible();
+    await expect(pageReviewerAgain.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible();
     const reviewerResponse = pageReviewerAgain.locator("article").filter({ hasText: responseText }).first();
     await expect(reviewerResponse).toBeVisible();
     await reviewerResponse.getByRole("button", { name: "Open Work", exact: true }).click();
