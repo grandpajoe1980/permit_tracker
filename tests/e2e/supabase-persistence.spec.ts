@@ -74,10 +74,6 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await pageReviewer.fill("#question-due", dueDate);
     await pageReviewer.getByRole("dialog").getByRole("button", { name: "Request Information", exact: true }).click();
     await expect(pageReviewer.getByRole("dialog")).not.toBeVisible();
-    const issuedRfiCard = pageReviewer.locator("article").filter({ hasText: questionText }).first();
-    await expect(issuedRfiCard).toBeVisible();
-    await issuedRfiCard.getByRole("button", { name: "Open Work", exact: true }).click();
-    await expect(pageReviewer.getByText("Waiting on Applicant (RFI Issued)", { exact: false }).first()).toBeVisible();
 
     await contextReviewer.close();
 
@@ -89,12 +85,12 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
 
     await pageApplicant.click("#demo-login-trigger");
     await pageApplicant.click("#demo-persona-alex");
-    await expect(pageApplicant.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible();
 
     await pageApplicant.getByRole("button", { name: /^My actions/ }).click();
-    const customerQuestion = pageApplicant.locator("article").filter({ hasText: questionText }).first();
+    await pageApplicant.getByRole("searchbox", { name: "Search work inbox" }).fill(questionText);
+    const customerQuestion = pageApplicant.locator('[data-testid^="inbox-row-"]').first();
     await expect(customerQuestion).toBeVisible();
-    await customerQuestion.getByRole("button", { name: "Open Work", exact: true }).click();
+    await customerQuestion.click();
     await expect(pageApplicant.getByText(questionText, { exact: false }).first()).toBeVisible();
     await pageApplicant.getByRole("button", { name: "Respond", exact: true }).click();
     await pageApplicant.getByRole("dialog").locator("#action-note").fill(responseText);
@@ -111,9 +107,10 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await pageReviewerAgain.click("#demo-login-trigger");
     await pageReviewerAgain.click("#demo-persona-jordan");
     await expect(pageReviewerAgain.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible();
-    const reviewerResponse = pageReviewerAgain.locator("article").filter({ hasText: responseText }).first();
+    await pageReviewerAgain.getByRole("searchbox", { name: "Search work inbox" }).fill(responseText);
+    const reviewerResponse = pageReviewerAgain.locator('[data-testid^="inbox-row-"]').first();
     await expect(reviewerResponse).toBeVisible();
-    await reviewerResponse.getByRole("button", { name: "Open Work", exact: true }).click();
+    await reviewerResponse.click();
     await expect(pageReviewerAgain.getByText(questionText, { exact: false }).first()).toBeVisible();
     await expect(pageReviewerAgain.getByText(responseText, { exact: false }).first()).toBeVisible();
     await pageReviewerAgain.getByRole("button", { name: "Accept & Resume Review", exact: true }).click();

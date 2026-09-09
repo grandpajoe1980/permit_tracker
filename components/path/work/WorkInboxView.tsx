@@ -59,10 +59,17 @@ export function WorkInboxView({
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
-        (item) =>
-          item.title.toLowerCase().includes(q) ||
-          item.id.toLowerCase().includes(q) ||
-          item.workstreamTitle.toLowerCase().includes(q)
+        (item) => [
+          item.title,
+          item.id,
+          item.workstreamTitle,
+          item.sourceRfi?.questionText,
+          ...(item.sourceRfi?.responses ?? []).map((response) => response.responseText),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(q)
       );
     }
     return result;
