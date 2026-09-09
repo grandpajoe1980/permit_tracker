@@ -2150,7 +2150,7 @@ export default function Home() {
               setToast("Only workstreams, tasks, and customer requests can be claimed.");
               return;
             }
-            const ticketId = item.sourceId || item.id;
+            const ticketId = item.kind === "workflow" ? item.workstreamId ?? item.sourceId : item.sourceId || item.id;
             const res = await repository.claimTicketPersisted({
               ticketType,
               ticketId,

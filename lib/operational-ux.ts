@@ -573,9 +573,12 @@ function customerRequestToWorkItem(
   const isSupervisorOrAdmin = persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin";
   const isTargetAgency = request.knownAgencyCode ? sameAgency(request.knownAgencyCode, persona.agencyCode) : false;
   const isTriage = request.status === "triage" || request.status === "submitted";
+  const linkedStaffWorkflow = !isSubmitter && Boolean(workstream);
   const isAssignedToMe = Boolean(
-    (request.assignedToUserId && request.assignedToUserId === persona.id) ||
-    (workstream?.assignedToUserId && workstream.assignedToUserId === persona.id)
+    linkedStaffWorkflow
+      ? workstream?.assignedToUserId && workstream.assignedToUserId === persona.id
+      : (request.assignedToUserId && request.assignedToUserId === persona.id) ||
+        (workstream?.assignedToUserId && workstream.assignedToUserId === persona.id)
   );
   const isActionRequired = isSubmitter
     ? request.status === "draft" || request.status === "pending_customer" || request.itsmState === "pending_customer"
@@ -589,8 +592,12 @@ function customerRequestToWorkItem(
     ? ("blue" as const)
     : ("amber" as const);
 
-  const assignedAgency = request.assignmentGroupName || request.knownAgencyCode || workstream?.assignmentGroupName || workstream?.regulatoryLead.orgCode || "State Project Office";
-  const ownerName = request.assignedToUserName ?? workstream?.assignedToUserName ?? "Unassigned";
+  const assignedAgency = linkedStaffWorkflow
+    ? workstream?.assignmentGroupName || workstream?.regulatoryLead.orgCode || request.knownAgencyCode || "State Project Office"
+    : request.assignmentGroupName || request.knownAgencyCode || workstream?.assignmentGroupName || workstream?.regulatoryLead.orgCode || "State Project Office";
+  const ownerName = linkedStaffWorkflow
+    ? workstream?.assignedToUserName ?? "Unassigned"
+    : request.assignedToUserName ?? workstream?.assignedToUserName ?? "Unassigned";
   const customerClarification = request.triageNotes?.trim();
   const persistedState = workstream?.operationalState;
   const persistedBlocked = persistedState === "blocked" || persistedState === "waiting_government" || persistedState === "waiting_external" || persistedState === "waiting_applicant";
@@ -602,7 +609,6 @@ function customerRequestToWorkItem(
     : persistedState === "running" || request.status === "in_progress"
     ? ("blue" as const)
     : ("amber" as const);
-  const linkedStaffWorkflow = !isSubmitter && Boolean(workstream);
   const workflowAction = workstream?.currentActionSummary ?? "Complete the technical action and notify the customer.";
 
   return {
@@ -655,9 +661,9 @@ function customerRequestToWorkItem(
       : request.description,
     submittedByName: request.submittedByName ?? "SpaceX Representative",
     submittedByUserId: request.submittedByUserId,
-    assignedUserId: request.assignedToUserId ?? workstream?.assignedToUserId,
-    assignmentGroupId: request.assignmentGroupId ?? workstream?.assignmentGroupId,
-    assignmentGroupName: request.assignmentGroupName ?? workstream?.assignmentGroupName,
+    assignedUserId: linkedStaffWorkflow ? workstream?.assignedToUserId : request.assignedToUserId ?? workstream?.assignedToUserId,
+    assignmentGroupId: linkedStaffWorkflow ? workstream?.assignmentGroupId : request.assignmentGroupId ?? workstream?.assignmentGroupId,
+    assignmentGroupName: linkedStaffWorkflow ? workstream?.assignmentGroupName : request.assignmentGroupName ?? workstream?.assignmentGroupName,
     itsmState: workstream?.itsmState ?? request.itsmState ?? mapCustomerRequestStatusToITSMState(request.status),
     priority: request.priority,
     clockStatus: workstream?.clockStatus ?? request.clockStatus,

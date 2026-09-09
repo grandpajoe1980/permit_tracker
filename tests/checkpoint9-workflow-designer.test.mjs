@@ -91,6 +91,16 @@ test("Checkpoint 9: stage completion resolves an executable next-stage assignmen
   assert.match(migration, /expected executable-group lookup/);
 });
 
+test("Checkpoint 9: routed intake tasks are connected to the stage completion transaction", async () => {
+  const migration = await readFile(new URL("../supabase/migrations/20260909190000_connect_intake_tasks_to_stage_completion.sql", import.meta.url), "utf8");
+  assert.match(migration, /stage_id = w\.current_stage_id/);
+  assert.match(migration, /is_stage_action = true/);
+  assert.match(migration, /rpc_triage_customer_request/);
+  assert.match(migration, /v_stage_id, true/);
+  assert.match(migration, /rpc_create_workstream_from_request/);
+  assert.match(migration, /ensure_stage_action\(v_workstream\.id\)/);
+});
+
 test("Checkpoint 9: baseline seeding uses real owners without rewriting published stages", async () => {
   const seed = await readFile(new URL("../scripts/seed-spacex-demo.mjs", import.meta.url), "utf8");
   assert.match(seed, /responsibleOrgCode/);
