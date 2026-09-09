@@ -1657,6 +1657,7 @@ export async function mutateUpdateTask(params: {
   updates: Partial<Pick<TaskRecord, "title" | "description" | "status" | "assignedOrgCode" | "assignedUserId" | "assignedUserName" | "isCriticalPath" | "durationDays" | "floatDays" | "actualCompletionDate">>;
   actorName?: string;
   actorOrgName?: string;
+  reason?: string;
 }, requestClient?: SupabaseClient): Promise<MutationResult<TaskRecord>> {
   const client = requestClient ?? getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
@@ -1692,7 +1693,7 @@ export async function mutateUpdateTask(params: {
       actorOrgName: params.actorOrgName ?? "PATH",
       actionType: "task_updated",
       newValue: params.updates.status ?? "Updated",
-      reason: "Task record updated in PATH database.",
+      reason: params.reason || "Task record updated in PATH database.",
     });
   }
 

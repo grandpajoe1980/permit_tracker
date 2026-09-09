@@ -1915,6 +1915,7 @@ class ProjectDeliveryRepository {
     updates: Partial<Pick<TaskRecord, "title" | "description" | "status" | "assignedOrgCode" | "assignedUserId" | "assignedUserName" | "isCriticalPath" | "durationDays" | "floatDays" | "actualCompletionDate">>;
     actorName?: string;
     actorOrgName?: string;
+    reason?: string;
   }): TaskRecord | null {
     for (const ws of this.workstreams) {
       const task = ws.tasks?.find((t) => t.id === params.taskId);
@@ -1929,7 +1930,7 @@ class ProjectDeliveryRepository {
               actorOrgName: params.actorOrgName ?? ws.regulatoryLead?.orgCode ?? "PATH",
               actionType: "task_updated",
               newValue: params.updates.status ?? "Updated",
-              reason: "Task record updated.",
+              reason: params.reason || "Task record updated.",
             })
           );
         }
@@ -1944,6 +1945,7 @@ class ProjectDeliveryRepository {
     updates: Partial<Pick<TaskRecord, "title" | "description" | "status" | "assignedOrgCode" | "assignedUserId" | "assignedUserName" | "isCriticalPath" | "durationDays" | "floatDays" | "actualCompletionDate">>;
     actorName?: string;
     actorOrgName?: string;
+    reason?: string;
   }): Promise<{ data: TaskRecord | null; error: Error | null }> {
     if (!isSupabaseConfigured()) {
       if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
