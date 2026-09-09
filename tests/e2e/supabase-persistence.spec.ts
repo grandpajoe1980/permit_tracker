@@ -70,6 +70,8 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(pageReviewer.getByRole("button", { name: "Request Information", exact: true })).toBeVisible();
     await pageReviewer.getByRole("button", { name: "Request Information", exact: true }).click();
     await pageReviewer.fill("#question-text", questionText);
+    const dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    await pageReviewer.fill("#question-due", dueDate);
     await pageReviewer.getByRole("dialog").getByRole("button", { name: "Request Information", exact: true }).click();
     await expect(pageReviewer.getByRole("dialog")).not.toBeVisible();
     const issuedRfiCard = pageReviewer.locator("article").filter({ hasText: questionText }).first();
