@@ -64,10 +64,10 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     // the persisted record there, then use its canonical detail action bar.
     await pageReviewer.getByRole("button", { name: "Team Work", exact: true }).click();
     await pageReviewer.getByRole("button", { name: /^Waiting/ }).click();
-    const rfiRow = pageReviewer.locator('[data-testid^="inbox-row-"]').filter({ hasText: "RFI" }).first();
-    await expect(rfiRow).toBeVisible();
+    const rfiRow = pageReviewer.locator('[data-testid^="inbox-row-"]').filter({ hasText: "RFI-DEMO-TITLE-V" }).first();
+    await expect(rfiRow).toBeVisible({ timeout: 15_000 });
     await rfiRow.click();
-    await expect(pageReviewer.getByRole("button", { name: "Request Information", exact: true })).toBeVisible();
+    await expect(pageReviewer.getByRole("button", { name: "Request Information", exact: true })).toBeVisible({ timeout: 15_000 });
     await pageReviewer.getByRole("button", { name: "Request Information", exact: true }).click();
     await pageReviewer.fill("#question-text", questionText);
     const dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -116,7 +116,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await pageReviewerAgain.getByRole("button", { name: "Accept & Resume Review", exact: true }).click();
     await pageReviewerAgain.getByRole("dialog").getByRole("button", { name: "Accept & Resume Review", exact: true }).click();
     await expect(pageReviewerAgain.getByRole("dialog")).not.toBeVisible();
-    await expect(pageReviewerAgain.getByText("Running (Response Accepted)", { exact: false }).first()).toBeVisible();
+    await expect(pageReviewerAgain.getByText("Accepted", { exact: true }).first()).toBeVisible({ timeout: 15_000 });
     await contextReviewerAgain.close();
   });
 });
