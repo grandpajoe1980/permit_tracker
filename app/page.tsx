@@ -316,6 +316,10 @@ function persistedTeamUsers() {
   return teamUsersFromMemberships(repository.getProfiles(), repository.getOrganizationMemberships(), repository.getOrganizations());
 }
 
+function persistedOrganizationId(code: string): string | null {
+  return repository.getOrganizations().find((organization) => organization.code.toUpperCase() === code.trim().toUpperCase())?.id ?? null;
+}
+
 function syncRequestState(request: ServiceRequest, workstreamState?: ReturnType<typeof repository.getWorkstreamById>): ServiceRequest {
   if (!workstreamState) return request;
   const completed = workstreamState.operationalState === "complete";
@@ -1507,12 +1511,18 @@ export default function Home() {
         setDialogError("This information request is not connected to an authoritative workstream.");
         return;
       }
+      const requestingOrgId = persistedOrganizationId(activePersona.agencyCode.split(" /")[0]);
+      const recipientOrgId = persistedOrganizationId("SPACEX");
+      if (!requestingOrgId || !recipientOrgId) {
+        setDialogError("The requesting or recipient organization is not available in the authorized directory.");
+        return;
+      }
       const rfiResult = await repository.createRFIPersisted({
         workstreamId,
         workstreamTitle: item.workstreamTitle,
-        requestingOrgId: `org-${activePersona.agencyCode.toLowerCase()}`,
+        requestingOrgId,
         requestingOrgCode: activePersona.agencyCode.split(" /")[0],
-        recipientOrgId: "org-spacex",
+        recipientOrgId,
         recipientOrgCode: "SPACEX",
         title: `Information needed · ${item.workstreamTitle}`,
         questionText: questionText.trim(),
@@ -1540,12 +1550,18 @@ export default function Home() {
       let createdLabel = "Structured blocker";
       const target = blockReason === "customer" ? "SpaceX Regulatory Engineering" : blockReason === "another_agency" ? blockAgency : blockReason === "statutory" ? "Statutory waiting period" : "Internal agency team";
       if (blockReason === "customer") {
+        const requestingOrgId = persistedOrganizationId(activePersona.agencyCode.split(" /")[0]);
+        const recipientOrgId = persistedOrganizationId("SPACEX");
+        if (!requestingOrgId || !recipientOrgId) {
+          setDialogError("The requesting or recipient organization is not available in the authorized directory.");
+          return;
+        }
         const rfiResult = await repository.createRFIPersisted({
           workstreamId,
           workstreamTitle: item.workstreamTitle,
-          requestingOrgId: `org-${activePersona.agencyCode.toLowerCase()}`,
+          requestingOrgId,
           requestingOrgCode: activePersona.agencyCode.split(" /")[0],
-          recipientOrgId: "org-spacex",
+          recipientOrgId,
           recipientOrgCode: "SPACEX",
           title: `Information needed · ${item.workstreamTitle}`,
           questionText: blockNeed.trim(),
@@ -1810,12 +1826,18 @@ export default function Home() {
         setDialogError("Tell SpaceX what needs clarification.");
         return;
       }
+      const requestingOrgId = persistedOrganizationId(activePersona.agencyCode.split(" /")[0]);
+      const recipientOrgId = persistedOrganizationId("SPACEX");
+      if (!requestingOrgId || !recipientOrgId) {
+        setDialogError("The requesting or recipient organization is not available in the authorized directory.");
+        return;
+      }
       const clarificationResult = await repository.createRFIPersisted({
         workstreamId: item.sourceRfi.workstreamId,
         workstreamTitle: item.sourceRfi.workstreamTitle,
-        requestingOrgId: `org-${activePersona.agencyCode.toLowerCase()}`,
+        requestingOrgId,
         requestingOrgCode: activePersona.agencyCode.split(" /")[0],
-        recipientOrgId: "org-spacex",
+        recipientOrgId,
         recipientOrgCode: "SPACEX",
         title: `Clarification requested · ${item.sourceRfi.code}`,
         questionText: questionText.trim(),
