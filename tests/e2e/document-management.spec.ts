@@ -27,10 +27,11 @@ async function signInAndOpenDocuments(page: Page) {
   await page.goto("/");
   await expect(page.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
   await page.getByRole("button", { name: "Quick Demo Sign-In" }).click();
-  await page.getByRole("button", { name: /Alex Martin/ }).click();
-  await expect(page.getByRole("button", { name: "Documents", exact: true })).toBeVisible({ timeout: 15_000 });
-  await page.getByRole("button", { name: "Documents", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Documents & Engineering Packages" })).toBeVisible();
+  await page.locator("#demo-persona-alex").last().click();
+  await expect(page.getByRole("button", { name: "Project Overview", exact: true })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: "Project Overview", exact: true }).click();
+  await page.getByRole("button", { name: "Project documents", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Project Document Vault", exact: true })).toBeVisible();
 }
 
 test.describe("authoritative document Storage lifecycle", () => {
@@ -42,19 +43,19 @@ test.describe("authoritative document Storage lifecycle", () => {
     try {
       await signInAndOpenDocuments(page);
 
-      await page.locator("#customer-document-upload").setInputFiles({
+      await page.locator('input[type="file"]').first().setInputFiles({
         name: fileName,
         mimeType: "text/plain",
         buffer: contents,
       });
 
       await expect(page.getByRole("status")).toContainText("uploaded to Supabase Storage");
-      const versionLabel = page.getByText(new RegExp(`v\\d+\\.0 · ${fileName}`));
+      const versionLabel = page.getByText(fileName, { exact: true });
       await expect(versionLabel).toBeVisible();
 
       const versionRow = versionLabel.locator("../..");
       const downloadPromise = page.waitForEvent("download");
-      await versionRow.getByRole("button", { name: "Download", exact: true }).click();
+      await versionRow.getByRole("button", { name: "File", exact: true }).click();
       const download = await downloadPromise;
       const downloadedPath = testInfo.outputPath(fileName);
       await download.saveAs(downloadedPath);
@@ -79,10 +80,12 @@ test.describe("authoritative document Storage lifecycle", () => {
   test("downloads a project-specific seeded demo PDF", async ({ page }, testInfo) => {
     await signInAndOpenDocuments(page);
 
-    const seededVersion = page.getByText(/la82-drainage-hydrodynamic-demo-v1\.pdf/).first();
+    await page.getByRole("button", { name: "Select document LA-82 Heavy-Haul Drainage & Hydrodynamic Study", exact: true }).click();
+    const seededVersion = page.getByText("la82-drainage-hydrodynamic-demo-v1.pdf", { exact: true });
+    await expect(seededVersion).toBeVisible();
     const seededVersionRow = seededVersion.locator("../..");
     const downloadPromise = page.waitForEvent("download");
-    await seededVersionRow.getByRole("button", { name: "Download", exact: true }).click();
+    await seededVersionRow.getByRole("button", { name: "File", exact: true }).click();
     const download = await downloadPromise;
     const downloadedPath = testInfo.outputPath("la82-drainage-hydrodynamic-demo-v1.pdf");
     await download.saveAs(downloadedPath);
