@@ -70,6 +70,30 @@ test("uses persisted stage runs for completed history and internal completion no
   assert.equal(journey.stages[1].state, "current");
 });
 
+test("keeps multiple persisted active stage runs current for parallel work", async () => {
+  const { buildWorkflowJourney } = await vite.ssrLoadModule("/lib/workflow-journey.ts");
+  const source = {
+    id: "ws-parallel",
+    currentStageId: "s2",
+    currentStageName: "Technical review",
+    operationalState: "running",
+    stages: [
+      { id: "s1", workflowVersionId: "v1", stageKey: "intake", name: "Intake", customerVisibilityLabel: "Intake", sequenceOrder: 1, requiredInputs: [] },
+      { id: "s2", workflowVersionId: "v1", stageKey: "technical_review", name: "Technical review", customerVisibilityLabel: "Technical review", sequenceOrder: 2, requiredInputs: [], canRunInParallel: true },
+      { id: "s3", workflowVersionId: "v1", stageKey: "agency_coordination", name: "Agency coordination", customerVisibilityLabel: "Agency coordination", sequenceOrder: 3, requiredInputs: [], canRunInParallel: true },
+    ],
+    stageRuns: [
+      { id: "run-intake", stageId: "s1", stageKey: "intake", status: "completed", completedAt: "2026-09-01T12:00:00Z" },
+      { id: "run-review", stageId: "s2", stageKey: "technical_review", status: "active", startedAt: "2026-09-02T12:00:00Z" },
+      { id: "run-agency", stageId: "s3", stageKey: "agency_coordination", status: "active", startedAt: "2026-09-03T12:00:00Z" },
+    ],
+  };
+  const journey = buildWorkflowJourney(source);
+  assert.deepEqual(journey.stages.map((stage) => stage.state), ["completed", "current", "current"]);
+  assert.deepEqual(journey.currentStages.map((stage) => stage.label), ["Technical review", "Agency coordination"]);
+  assert.equal(journey.completedCount, 1);
+});
+
 test("renders role-safe full journey and hides internal assignees for customers", async () => {
   const { WorkflowJourney } = await vite.ssrLoadModule("/components/cockpits/WorkflowJourney.tsx");
   const source = {

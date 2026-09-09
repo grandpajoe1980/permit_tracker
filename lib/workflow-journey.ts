@@ -135,7 +135,13 @@ export function buildWorkflowJourney(source: WorkflowJourneySource, templates: W
           sequence: definition.sequenceOrder,
           label: definition.name,
           customerLabel: definition.customerVisibilityLabel,
-          state: stageRun?.status === "completed" ? "completed" as WorkflowJourneyStageState : stageRun?.status === "cancelled" ? "waived" as WorkflowJourneyStageState : "upcoming" as WorkflowJourneyStageState,
+          state: stageRun?.status === "completed"
+            ? "completed" as WorkflowJourneyStageState
+            : stageRun?.status === "cancelled"
+              ? "waived" as WorkflowJourneyStageState
+              : stageRun?.status === "active"
+                ? "current" as WorkflowJourneyStageState
+                : "upcoming" as WorkflowJourneyStageState,
           ownerOrgCode: definition.responsibleOrgCode,
           targetDate: stageRun?.status === "completed" ? stageRun.completedAt : undefined,
           actualCompletionDate: stageRun?.completedAt,

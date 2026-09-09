@@ -13,6 +13,8 @@ test("scenario seed is repeatable, tagged, and non-destructive", () => {
   assert.match(seed, /upsert\(client, "customer_requests"/);
   assert.match(seed, /upsert\(client, "rfis"/);
   assert.match(seed, /upsert\(client, "coordination_requests"/);
+  assert.match(seed, /upsert\(client, "stage_runs", stageRuns/);
+  assert.match(seed, /upsert\(client, "notifications", notifications, "upsert tagged demo notifications", "dedupe_key"\)/);
   assert.doesNotMatch(seed, /\.delete\(|\.remove\(|DROP\s+TABLE|TRUNCATE/i);
   assert.doesNotMatch(sql, /DELETE\s+FROM|DROP\s+TABLE|TRUNCATE/i);
   assert.match(sql, /on conflict \(id\) do update/i);
@@ -36,6 +38,7 @@ test("scenario seed covers the updated plan's linked lifecycle states", () => {
     "stage_history",
     "triaged_workstream_ids",
     "attachmentVersionId",
+    "stageRuns",
   ]) assert.match(seed, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
