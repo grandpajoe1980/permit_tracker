@@ -81,6 +81,16 @@ test("Checkpoint 9: server validation rejects inactive workflow owners and group
   assert.match(migration, /else 'STATEPO' end/);
 });
 
+test("Checkpoint 9: stage completion resolves an executable next-stage assignment group", async () => {
+  const migration = await readFile(new URL("../supabase/migrations/20260909180000_choose_executable_stage_assignment_group.sql", import.meta.url), "utf8");
+  assert.match(migration, /resolve_stage_assignment_group/);
+  assert.match(migration, /assignment_group_memberships/);
+  assert.match(migration, /coalesce\(p\.status, 'active'\)/);
+  assert.match(migration, /default_assignment_group_id/);
+  assert.match(migration, /complete_workstream_stage/);
+  assert.match(migration, /expected executable-group lookup/);
+});
+
 test("Checkpoint 9: baseline seeding uses real owners without rewriting published stages", async () => {
   const seed = await readFile(new URL("../scripts/seed-spacex-demo.mjs", import.meta.url), "utf8");
   assert.match(seed, /responsibleOrgCode/);

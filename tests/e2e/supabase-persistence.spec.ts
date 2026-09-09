@@ -586,4 +586,154 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(page.getByText(/Task correction saved:/, { exact: false })).toBeVisible({ timeout: 15_000 });
     await context.close();
   });
+
+  test("Scenario 11: Clarification through completion updates queues, project, schedule, and customer state", async ({ browser }) => {
+    test.setTimeout(180_000);
+    const requestTitle = `E2E Complete Workflow ${Date.now()}`;
+    const requestDescription = "Full persisted acceptance story from customer clarification through all configured workflow stages.";
+    const workflowVersionId = "workflow-version-d412c02d1de74798b7a20824bed70406";
+    const stateOfficeGroupId = "28e4ef60-48ad-45e0-b391-38188cfbdb5b";
+    const sarahUserId = "031dc622-0885-42bb-9c84-1f9b6cb18a1d";
+    const targetDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    async function signIn(page: import("@playwright/test").Page, personaId: string) {
+      await page.goto("/");
+      await expect(page.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
+      await page.click("#demo-login-trigger");
+      await page.click(`#demo-persona-${personaId}`);
+      await expect(page.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 30_000 });
+    }
+
+    async function completeCurrentStage(page: import("@playwright/test").Page) {
+      await expect(page.getByRole("button", { name: "Complete Step", exact: true })).toBeVisible({ timeout: 15_000 });
+      await page.getByRole("button", { name: "Complete Step", exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      const checks = dialog.locator('input[type="checkbox"]');
+      for (let index = 0; index < await checks.count(); index += 1) {
+        const checkbox = checks.nth(index);
+        if (!(await checkbox.isChecked())) await checkbox.check();
+      }
+      await dialog.getByRole("button", { name: "Complete & Send Forward", exact: true }).click();
+      await expect(dialog).not.toBeVisible();
+      await expect(page.getByRole("status").filter({ hasText: "Step completed" })).toBeVisible({ timeout: 20_000 });
+    }
+
+    async function openAssignedWork(page: import("@playwright/test").Page, title: string) {
+      await page.getByRole("button", { name: /^My Work/ }).click();
+      await expect(page.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible({ timeout: 30_000 });
+      const search = page.getByRole("searchbox", { name: "Search work inbox" });
+      await search.fill(title);
+      const rows = page.locator('[data-testid^="inbox-row-"]');
+      await expect(rows).toHaveCount(1, { timeout: 20_000 });
+      await rows.first().click();
+    }
+
+    async function claimAndOpenWork(page: import("@playwright/test").Page, title: string) {
+      await page.getByRole("button", { name: "Team Work", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Team Work", exact: true })).toBeVisible({ timeout: 30_000 });
+      await page.getByRole("button", { name: /^Unassigned/ }).click();
+      const search = page.getByRole("searchbox", { name: "Filter team work" });
+      await search.fill(title);
+      const rows = page.locator('[data-testid^="inbox-row-"]');
+      await expect(rows).toHaveCount(1, { timeout: 20_000 });
+      await rows.first().getByRole("button", { name: "Take ownership", exact: true }).click();
+      await expect(page.getByRole("status").filter({ hasText: "Claimed ownership" })).toBeVisible({ timeout: 20_000 });
+      await page.getByRole("button", { name: /^Assigned/ }).click();
+      await search.fill(title);
+      await expect(rows).toHaveCount(1, { timeout: 20_000 });
+      await rows.first().click();
+    }
+
+    // Customer creates the request in an isolated authenticated context.
+    const customerContext = await browser.newContext();
+    const customerPage = await customerContext.newPage();
+    await signIn(customerPage, "alex");
+    await customerPage.getByRole("button", { name: "My requests", exact: true }).click();
+    await expect(customerPage.getByRole("heading", { name: "Requests & permits", exact: true })).toBeVisible();
+    await customerPage.getByText("Request government help / service", { exact: true }).click();
+    await customerPage.fill("#request-title", requestTitle);
+    await customerPage.fill("#request-description", requestDescription);
+    await customerPage.getByRole("button", { name: "Submit request", exact: true }).click();
+    await expect(customerPage.getByText("Request submitted", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await customerContext.close();
+
+    // The state-office operator deliberately routes the request to v4 and Sarah.
+    const stateOfficeContext = await browser.newContext();
+    const stateOfficePage = await stateOfficeContext.newPage();
+    await signIn(stateOfficePage, "sarah");
+    await stateOfficePage.getByRole("button", { name: "Administration", exact: true }).click();
+    await expect(stateOfficePage.getByRole("heading", { name: "Customer intake queue", exact: true })).toBeVisible({ timeout: 30_000 });
+    await stateOfficePage.getByRole("textbox", { name: "Search intake requests" }).fill(requestTitle);
+    const intakeRow = stateOfficePage.getByText(requestTitle, { exact: false }).first().locator("..").locator("..");
+    await expect(intakeRow.getByRole("button", { name: "Review and route", exact: true })).toBeVisible({ timeout: 20_000 });
+    await intakeRow.getByRole("button", { name: "Review and route", exact: true }).click();
+    const triageDialog = stateOfficePage.getByRole("dialog");
+    const routingSections = triageDialog.locator("section");
+    for (let index = (await routingSections.count()) - 1; index > 0; index -= 1) {
+      await routingSections.nth(index).getByRole("button", { name: "Remove", exact: true }).click();
+    }
+    const routeRow = triageDialog.locator("section").first();
+    const labeledControl = (label: RegExp, tag: "select" | "input") => routeRow.locator("label").filter({ hasText: label }).locator(tag).first();
+    await labeledControl(/^Agency/, "select").selectOption("STATEPO");
+    await labeledControl(/^Team/, "select").selectOption(stateOfficeGroupId);
+    await labeledControl(/^Assigned person/, "select").selectOption(sarahUserId);
+    await labeledControl(/^Target date/, "input").fill(targetDate);
+    await labeledControl(/^Published workflow/, "select").selectOption(workflowVersionId);
+    await triageDialog.getByRole("button", { name: "Confirm routing and create work", exact: true }).click();
+    await expect(triageDialog).not.toBeVisible();
+    await expect(stateOfficePage.getByRole("status").filter({ hasText: "workstream" })).toBeVisible({ timeout: 20_000 });
+
+    // Stage 1: Sarah completes the assigned intake stage.
+    await openAssignedWork(stateOfficePage, requestTitle);
+    await expect(stateOfficePage.getByText("Request intake", { exact: true })).toBeVisible();
+    await completeCurrentStage(stateOfficePage);
+    await stateOfficeContext.close();
+
+    // Stage 2: Alex claims the SPACEPORT handoff in a new authenticated context.
+    const applicantContext = await browser.newContext();
+    const applicantPage = await applicantContext.newPage();
+    await signIn(applicantPage, "alex");
+    await claimAndOpenWork(applicantPage, requestTitle);
+    await expect(applicantPage.getByText("Technical team review", { exact: true })).toBeVisible();
+    await completeCurrentStage(applicantPage);
+    await applicantContext.close();
+
+    // Stages 3–5: Sarah independently claims each returned state-office handoff.
+    const finalStaffContext = await browser.newContext();
+    const finalStaffPage = await finalStaffContext.newPage();
+    await signIn(finalStaffPage, "sarah");
+    for (const stageName of ["Agency coordination", "Construction release", "Monitoring and closeout"]) {
+      await claimAndOpenWork(finalStaffPage, requestTitle);
+      await expect(finalStaffPage.getByText(stageName, { exact: true })).toBeVisible();
+      await completeCurrentStage(finalStaffPage);
+    }
+
+    // Persisted operational read-back: completed work is in the team history,
+    // the project Work and Schedule views, and no longer presents an action.
+    await finalStaffPage.getByRole("button", { name: "Team Work", exact: true }).click();
+    await finalStaffPage.getByRole("button", { name: /^Completed/ }).click();
+    await finalStaffPage.getByRole("searchbox", { name: "Filter team work" }).fill(requestTitle);
+    await expect(finalStaffPage.locator('[data-testid^="inbox-row-"]')).toHaveCount(1, { timeout: 20_000 });
+    await finalStaffPage.getByRole("button", { name: "Project Overview", exact: true }).click();
+    await expect(finalStaffPage.getByRole("heading", { name: "Project context", exact: true })).toBeVisible({ timeout: 30_000 });
+    await finalStaffPage.getByRole("button", { name: "Work", exact: true }).click();
+    await finalStaffPage.getByRole("searchbox", { name: "Search project workstreams" }).fill(requestTitle);
+    await expect(finalStaffPage.getByText(requestTitle, { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(finalStaffPage.getByText("Complete", { exact: true }).first()).toBeVisible();
+    await finalStaffPage.getByRole("button", { name: "Schedule", exact: true }).click();
+    await expect(finalStaffPage.getByText(requestTitle, { exact: false }).first()).toBeVisible({ timeout: 20_000 });
+    await finalStaffContext.close();
+
+    // Customer read-back after a fresh sign-in: the completed request is no
+    // longer an actionable response and the project status is visible.
+    const customerReadBackContext = await browser.newContext();
+    const customerReadBackPage = await customerReadBackContext.newPage();
+    await signIn(customerReadBackPage, "alex");
+    await customerReadBackPage.getByRole("button", { name: "My requests", exact: true }).click();
+    await expect(customerReadBackPage.getByRole("heading", { name: "Requests & permits", exact: true })).toBeVisible({ timeout: 20_000 });
+    await customerReadBackPage.getByRole("button", { name: new RegExp(requestTitle) }).click();
+    await expect(customerReadBackPage.getByText("Complete", { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+    await expect(customerReadBackPage.getByRole("button", { name: "Respond", exact: true })).toHaveCount(0);
+    await customerReadBackContext.close();
+  });
 });

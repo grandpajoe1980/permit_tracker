@@ -56,6 +56,62 @@ test("available actions are permission-aware and customer-safe", () => {
   assert.deepEqual(ux.getAvailableActions(stage, ux.getOperationalPersona(customerPersona)), []);
 });
 
+test("linked staff intake projects into the workflow stage instead of resolving the request", () => {
+  const workstream = repository.getWorkstreams().find((entry) => entry.id === "WS-LA82-HEAVYHAUL");
+  assert.ok(workstream, "The linked workstream fixture must exist");
+  const request = {
+    id: "customer-request-linked-workflow",
+    confirmationNumber: "PATH-2026-LINKED",
+    projectId: workstream.projectId,
+    requestType: "government_help",
+    title: "Linked workflow request",
+    description: "A routed request must use the workflow stage for staff actions.",
+    submittedByUserId: "user-alex-martin",
+    submittedByName: "Alex Martin",
+    relatedWorkstreamId: workstream.id,
+    blocksActiveWork: false,
+    status: "in_progress",
+    attachmentDocumentVersionIds: [],
+    createdAt: "2026-09-09T12:00:00.000Z",
+    updatedAt: "2026-09-09T12:00:00.000Z",
+    assignmentGroupId: workstream.assignmentGroupId,
+    assignmentGroupName: workstream.assignmentGroupName,
+    assignedToUserId: workstream.assignedToUserId,
+    assignedToUserName: workstream.assignedToUserName,
+    itsmState: workstream.itsmState,
+  };
+  const staff = data.demoPersonas.find((persona) => persona.id === "sarah-johnson");
+  const staffItem = ux.getOperationalWorkItems({
+    persona: staff,
+    requests: [],
+    workstreams: [workstream],
+    customerRequests: [request],
+    rfis: [],
+    coordinationRequests: [],
+    documents: [],
+    commitments: [],
+  }).items.find((item) => item.sourceId === request.id);
+  assert.ok(staffItem);
+  assert.equal(staffItem.kind, "workflow");
+  assert.equal(staffItem.title, workstream.currentStageName);
+  assert.equal(staffItem.sourceWorkstream?.id, workstream.id);
+  assert.ok(ux.getAvailableActions(staffItem, ux.getOperationalPersona(staff)).includes("complete_step"));
+
+  const customerItem = ux.getOperationalWorkItems({
+    persona: customerPersona,
+    requests: [],
+    workstreams: [workstream],
+    customerRequests: [request],
+    rfis: [],
+    coordinationRequests: [],
+    documents: [],
+    commitments: [],
+  }).items.find((item) => item.sourceId === request.id);
+  assert.ok(customerItem);
+  assert.equal(customerItem.kind, "customer_request");
+  assert.deepEqual(ux.getAvailableActions(customerItem, ux.getOperationalPersona(customerPersona)), []);
+});
+
 test("issued RFI details do not promise reviewer actions before a response exists", () => {
   const reviewer = ux.getOperationalWorkItems({
     persona: reviewerPersona,

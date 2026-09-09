@@ -602,12 +602,14 @@ function customerRequestToWorkItem(
     : persistedState === "running" || request.status === "in_progress"
     ? ("blue" as const)
     : ("amber" as const);
+  const linkedStaffWorkflow = !isSubmitter && Boolean(workstream);
+  const workflowAction = workstream?.currentActionSummary ?? "Complete the technical action and notify the customer.";
 
   return {
     id: request.id,
     sourceId: request.id,
-    kind: "customer_request",
-    title: request.title,
+    kind: linkedStaffWorkflow ? "workflow" : "customer_request",
+    title: linkedStaffWorkflow ? workstream?.currentStageName ?? request.title : request.title,
     projectName: PROJECT_NAME,
     workstreamId: request.relatedWorkstreamId ?? workstream?.id ?? undefined,
     workstreamTitle: workstream?.title ?? (request.knownAgencyCode ? `${request.knownAgencyCode} Request · ${request.title}` : `Customer Request · ${request.confirmationNumber}`),
@@ -629,18 +631,24 @@ function customerRequestToWorkItem(
         ? "Review the customer's request, accept into workflow, or request clarification."
         : "Awaiting project office triage and assignment."
       : isAssignedToMe
-      ? "Complete the technical action and notify the customer."
+      ? workflowAction
       : "Assigned to agency team for technical action.",
     removesFromQueue: isSubmitter
       ? "Providing the requested information"
       : isSupervisorOrAdmin && isTriage
       ? "Accepting into workflow or completing the request"
       : "Completing assigned review action",
-    dueDate: request.desiredDate,
-    ageLabel: `Submitted ${request.createdAt ? new Date(request.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "recently"}`,
-    scheduleImpact: request.blocksActiveWork ? "Blocks active SpaceX project work" : "Routine customer coordination",
+    dueDate: workstream?.forecastTargetDate ?? request.desiredDate,
+    ageLabel: linkedStaffWorkflow
+      ? `${daysBetween(workstream?.forecastStartDate)} days in current stage`
+      : `Submitted ${request.createdAt ? new Date(request.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "recently"}`,
+    scheduleImpact: workstream?.isCriticalPath
+      ? `Critical path · ${workstream.scheduleVarianceDays ? `${workstream.scheduleVarianceDays} day variance` : "launch date driver"}`
+      : request.blocksActiveWork ? "Blocks active SpaceX project work" : "Routine customer coordination",
     nextHandoff: isSubmitter ? "State Project Office Review" : `${assignedAgency} Technical Reviewer`,
-    requiredInputs: request.attachmentDocumentVersionIds?.length ? ["Attached document versions verified"] : ["Customer description and requested outcome"],
+    requiredInputs: linkedStaffWorkflow
+      ? workstream?.tasks.filter((task) => task.status !== "completed").slice(0, 3).map((task) => task.title) ?? ["Review the assigned record", "Record your determination", "Add a handoff note"]
+      : request.attachmentDocumentVersionIds?.length ? ["Attached document versions verified"] : ["Customer description and requested outcome"],
     documents: [],
     customerVisibleSummary: customerClarification && request.status === "pending_customer"
       ? `${request.description}\n\nProject office clarification request: ${customerClarification}`
@@ -662,6 +670,8 @@ function customerRequestToWorkItem(
     isCriticalPath: request.blocksActiveWork || Boolean(workstream?.isCriticalPath),
     ownerOrganization: assignedAgency,
     ownerName,
+    sourceRequest: request,
+    sourceWorkstream: workstream,
   };
 }
 
