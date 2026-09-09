@@ -20,6 +20,7 @@ export async function GET(request: Request) {
       app: "PATH / Louisiana Project Delivery Command System",
       version: BUILD_INFO.version,
       commit: BUILD_INFO.commitShort,
+      commitFull: BUILD_INFO.commitHash,
       environment: BUILD_INFO.environment,
       checks: {
         application: "ok",

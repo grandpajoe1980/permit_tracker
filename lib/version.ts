@@ -9,13 +9,20 @@ export interface BuildInfo {
   repositoryUrl: string;
 }
 
-function runtimeValue(name: string): string {
-  if (typeof process !== "undefined" && process.env?.[name]) {
-    return process.env[name] ?? "";
-  }
+const processBuildEnv: Record<string, string | undefined> = typeof process !== "undefined"
+  ? {
+      VERCEL_GIT_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA,
+      VERCEL_GIT_COMMIT_AUTHOR_DATE: process.env.VERCEL_GIT_COMMIT_AUTHOR_DATE,
+      VERCEL_GIT_COMMIT_REF: process.env.VERCEL_GIT_COMMIT_REF,
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      BUILD_TIMESTAMP: process.env.BUILD_TIMESTAMP,
+    }
+  : {};
 
-  const metaEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
-  return metaEnv?.[name] ?? "";
+const metaEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+
+function runtimeValue(name: string): string {
+  return processBuildEnv[name] || metaEnv?.[name] || "";
 }
 
 const commitHash = runtimeValue("VERCEL_GIT_COMMIT_SHA") || runtimeValue("GIT_COMMIT_SHA") || "unknown";

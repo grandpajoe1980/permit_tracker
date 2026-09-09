@@ -10,6 +10,10 @@ const viteSource = await readFile(
   new URL("../vite.config.ts", import.meta.url),
   "utf8"
 );
+const versionSource = await readFile(
+  new URL("../lib/version.ts", import.meta.url),
+  "utf8"
+);
 const baselineReport = await readFile(
   new URL("../docs/BASELINE_REPORT.md", import.meta.url),
   "utf8"
@@ -25,6 +29,11 @@ test("SystemVersionFooter handles unavailable build identity safely", () => {
 test("vite.config.ts resolves git commit metadata dynamically when env vars are missing", () => {
   assert.match(viteSource, /git rev-parse HEAD/);
   assert.match(viteSource, /git log -1 --format=%cI/);
+});
+
+test("client build metadata uses statically replaceable environment keys", () => {
+  assert.match(versionSource, /process\.env\.VERCEL_GIT_COMMIT_SHA/);
+  assert.match(versionSource, /process\.env\.VERCEL_GIT_COMMIT_REF/);
 });
 
 test("baseline report records local and origin SHAs, Supabase ref, and acceptance IDs", () => {
