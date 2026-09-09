@@ -6,10 +6,15 @@ import { PRODUCT_NAME, PROGRAM_SUBTITLE } from "@/lib/product-copy";
 import { GitCommit, Clock3, ShieldCheck, ExternalLink } from "lucide-react";
 
 export function SystemVersionFooter() {
+  // Keep the server render and the first client render identical. Build
+  // metadata may differ between the SSR runtime and the browser bundle, and
+  // the health endpoint is intentionally resolved only after mount.
+  const [mounted, setMounted] = useState(false);
   const [runtimeCommit, setRuntimeCommit] = useState("");
 
   useEffect(() => {
     let active = true;
+    const mountFrame = window.requestAnimationFrame(() => setMounted(true));
     void fetch("/api/health", { cache: "no-store" })
       .then((response) => response.ok ? response.json() as Promise<{ commitFull?: string }> : null)
       .then((payload) => {
@@ -20,10 +25,11 @@ export function SystemVersionFooter() {
       });
     return () => {
       active = false;
+      window.cancelAnimationFrame(mountFrame);
     };
   }, []);
 
-  const commitHash = runtimeCommit || BUILD_INFO.commitHash;
+  const commitHash = mounted ? runtimeCommit || BUILD_INFO.commitHash : "unknown";
   const commitShort = commitHash === "unknown" ? "unknown" : commitHash.slice(0, 7);
 
   return (
@@ -60,7 +66,7 @@ export function SystemVersionFooter() {
             )}
           </div>
 
-          {BUILD_INFO.commitDate && BUILD_INFO.commitDate !== "unknown" && (
+          {mounted && BUILD_INFO.commitDate && BUILD_INFO.commitDate !== "unknown" && (
             <div className="flex items-center gap-1.5 text-slate-500 font-mono text-[11px]">
               <Clock3 className="size-3.5 text-slate-400" />
               <span>Committed: {BUILD_INFO.commitDate}</span>
