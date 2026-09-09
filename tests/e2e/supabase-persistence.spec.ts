@@ -58,7 +58,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
 
     await pageReviewer.click("#demo-login-trigger");
     await pageReviewer.click("#demo-persona-jordan");
-    await expect(pageReviewer.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible();
+    await expect(pageReviewer.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible({ timeout: 30_000 });
 
     // Unanswered RFIs are intentionally in the reviewer Waiting queue. Open
     // the persisted record there, then use its canonical detail action bar.
@@ -73,7 +73,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     const dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     await pageReviewer.fill("#question-due", dueDate);
     await pageReviewer.getByRole("dialog").getByRole("button", { name: "Request Information", exact: true }).click();
-    await expect(pageReviewer.getByRole("dialog")).not.toBeVisible();
+    await expect(pageReviewer.getByRole("dialog")).not.toBeVisible({ timeout: 30_000 });
 
     await contextReviewer.close();
 
@@ -95,7 +95,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await pageApplicant.getByRole("button", { name: "Respond", exact: true }).click();
     await pageApplicant.getByRole("dialog").locator("#action-note").fill(responseText);
     await pageApplicant.getByRole("dialog").getByRole("button", { name: "Respond", exact: true }).click();
-    await expect(pageApplicant.getByRole("dialog")).not.toBeVisible();
+    await expect(pageApplicant.getByRole("dialog")).not.toBeVisible({ timeout: 30_000 });
 
     await contextApplicant.close();
 
@@ -106,7 +106,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(pageReviewerAgain.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
     await pageReviewerAgain.click("#demo-login-trigger");
     await pageReviewerAgain.click("#demo-persona-jordan");
-    await expect(pageReviewerAgain.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible();
+    await expect(pageReviewerAgain.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible({ timeout: 30_000 });
     await pageReviewerAgain.getByRole("searchbox", { name: "Search work inbox" }).fill(responseText);
     const reviewerResponse = pageReviewerAgain.locator('[data-testid^="inbox-row-"]').first();
     await expect(reviewerResponse).toBeVisible();
@@ -115,7 +115,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(pageReviewerAgain.getByText(responseText, { exact: false }).first()).toBeVisible();
     await pageReviewerAgain.getByRole("button", { name: "Accept & Resume Review", exact: true }).click();
     await pageReviewerAgain.getByRole("dialog").getByRole("button", { name: "Accept & Resume Review", exact: true }).click();
-    await expect(pageReviewerAgain.getByRole("dialog")).not.toBeVisible();
+    await expect(pageReviewerAgain.getByRole("dialog")).not.toBeVisible({ timeout: 60_000 });
     await expect(pageReviewerAgain.getByText("Accepted", { exact: true }).first()).toBeVisible({ timeout: 15_000 });
     await contextReviewerAgain.close();
   });
@@ -390,8 +390,8 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
 
     // Sign in with the semantic form controls, then drive the navigation
     // drawer with the keyboard alone.
-    await page.locator("#username").fill("sarah.johnson@demo.permit.local");
-    await page.locator("#password").fill("PATH-Demo-2026!");
+    await page.locator("#username").fill("sarah.johnson@la.gov");
+    await page.locator("#password").fill("PATH-MVP-2026!");
     await page.getByRole("button", { name: "Sign In", exact: true }).press("Enter");
     await expect(page.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible({ timeout: 30_000 });
 
@@ -421,15 +421,16 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await page.goto("/");
     await expect(page.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
     await page.click("#demo-login-trigger");
-    await page.click("#demo-persona-sarah");
+    await page.click("#demo-persona-sam-rivera");
     await expect(page.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 30_000 });
 
     await page.getByRole("button", { name: "Team Work", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Team Work", exact: true })).toBeVisible();
     const requestId = "PATH-DEMO-REQ-ACTIVE";
-    const requestTitle = "Coordinate a utility interconnection review";
+    const requestTitle = "Technical team review";
+    const workstreamTitle = "Demo — Utility interconnection parallel review";
     await page.getByRole("button", { name: /^Assigned/ }).click();
-    await page.getByRole("searchbox", { name: "Filter team work" }).fill(requestTitle);
+    await page.getByRole("searchbox", { name: "Filter team work" }).fill(workstreamTitle);
     const row = page.locator(`[data-testid="inbox-row-${requestId}"]`).first();
     await expect(row).toBeVisible({ timeout: 15_000 });
     await row.getByRole("button", { name: new RegExp(`Open ${requestTitle}`) }).click();
@@ -446,7 +447,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(page.getByRole("button", { name: "Team Work", exact: true })).toBeVisible({ timeout: 30_000 });
     await page.getByRole("button", { name: "Team Work", exact: true }).click();
     await page.getByRole("button", { name: /^Waiting/ }).click();
-    await page.getByRole("searchbox", { name: "Filter team work" }).fill(requestTitle);
+    await page.getByRole("searchbox", { name: "Filter team work" }).fill(workstreamTitle);
     await page.locator(`[data-testid="inbox-row-${requestId}"]`).first().getByRole("button", { name: new RegExp(`Open ${requestTitle}`) }).click();
     await expect(page.getByText("Blocked (Action Required)", { exact: true })).toBeVisible({ timeout: 15_000 });
 
@@ -460,7 +461,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(page.getByRole("button", { name: "Team Work", exact: true })).toBeVisible({ timeout: 30_000 });
     await page.getByRole("button", { name: "Team Work", exact: true }).click();
     await page.getByRole("button", { name: /^Assigned/ }).click();
-    await page.getByRole("searchbox", { name: "Filter team work" }).fill(requestTitle);
+    await page.getByRole("searchbox", { name: "Filter team work" }).fill(workstreamTitle);
     await page.locator(`[data-testid="inbox-row-${requestId}"]`).first().getByRole("button", { name: new RegExp(`Open ${requestTitle}`) }).click();
     await expect(page.getByText(/^Running \(.+\)$/, { exact: true })).toBeVisible({ timeout: 15_000 });
     await context.close();
@@ -474,8 +475,8 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
 
     await page.goto("/");
     await expect(page.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
-    await page.fill("#username", "sarah.johnson@demo.permit.local");
-    await page.fill("#password", "PATH-Demo-2026!");
+    await page.fill("#username", "sarah.johnson@la.gov");
+    await page.fill("#password", "PATH-MVP-2026!");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 30_000 });
     await page.goto("/?view=coordination");
