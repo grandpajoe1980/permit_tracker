@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 import React from "react";
@@ -40,6 +41,17 @@ test("Checkpoint 7: distinct canonical destinations for workstream, phase, and t
   assert.notEqual(workstreamHref, phaseHrefMatch[1]);
   assert.notEqual(workstreamHref, taskHrefMatch[1]);
   assert.notEqual(phaseHrefMatch[1], taskHrefMatch[1]);
+});
+
+test("Checkpoint 7: schedule links are not intercepted into the project shell", async () => {
+  const gantt = await readFile(new URL("../components/cockpits/WorkstreamGraphGantt.tsx", import.meta.url), "utf8");
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+
+  assert.doesNotMatch(gantt, /href=\{item\.canonicalHref\}[\s\S]{0,500}preventDefault\(\)/);
+  assert.doesNotMatch(gantt, /href=\{`\/workstreams\/\$\{encodeURIComponent\(ws\.code \|\| ws\.id\)\}`\}[\s\S]{0,500}preventDefault\(\)/);
+  assert.doesNotMatch(gantt, /href=\{`\/work\/task\/\$\{encodeURIComponent\(task\.id\)\}`\}[\s\S]{0,500}preventDefault\(\)/);
+  assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} customerSafe=\{activePersona\.isCustomer\} \/>/);
+  assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} customerSafe \/>/);
 });
 
 test("Checkpoint 7: schedule renders chronological list and expandable workflow tasks", async () => {

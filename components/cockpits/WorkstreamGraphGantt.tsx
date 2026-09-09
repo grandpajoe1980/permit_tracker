@@ -201,6 +201,17 @@ export function WorkstreamGraphGantt({
   const [fitProject, setFitProject] = useState(false);
   const todayDate = useMemo(() => asOfDateTime(asOfDate), [asOfDate]);
 
+  function openWorkstream(workstream: ProjectRecord["workstreams"][number]) {
+    if (onSelectWorkstream) {
+      onSelectWorkstream(workstream.id);
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      window.location.assign(`/workstreams/${encodeURIComponent(workstream.code || workstream.id)}`);
+    }
+  }
+
   const toggleExpand = (wsId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     setExpandedWorkstreamIds((prev) => {
@@ -682,15 +693,6 @@ export function WorkstreamGraphGantt({
                       <div className="mt-1">
                         <Link
                           href={item.canonicalHref}
-                          onClick={(e) => {
-                            if (item.taskId && onSelectTask) {
-                              e.preventDefault();
-                              onSelectTask(item.taskId);
-                            } else if (!item.taskId && onSelectWorkstream) {
-                              e.preventDefault();
-                              onSelectWorkstream(item.workstreamId);
-                            }
-                          }}
                           className="font-bold text-slate-900 text-sm hover:text-teal-800 hover:underline inline-flex items-center gap-1"
                         >
                           {item.taskTitle ? `${item.workstreamTitle} → ${item.taskTitle}` : item.workstreamTitle}
@@ -810,7 +812,14 @@ export function WorkstreamGraphGantt({
                             onMouseLeave={() => setHoveredWorkstreamId(null)}
                             role="group"
                             aria-label={`${ws.code}: ${ws.title}. Current stage ${ws.currentStageName || "Not configured"}. Owner ${ws.regulatoryLead.assignedReviewerName || "Unassigned"}.`}
-                            onClick={() => onSelectWorkstream?.(ws.id)}
+                            onClick={() => openWorkstream(ws)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                openWorkstream(ws);
+                              }
+                            }}
+                            tabIndex={0}
                             className={`grid grid-cols-12 items-center transition-colors cursor-pointer ${
                               isHovered ? "bg-slate-50/90" : "hover:bg-slate-50/60"
                             }`}
@@ -850,13 +859,7 @@ export function WorkstreamGraphGantt({
                               <div className="mt-1 flex items-center justify-between group">
                                 <Link
                                   href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onSelectWorkstream) {
-                                      e.preventDefault();
-                                      onSelectWorkstream(ws.id);
-                                    }
-                                  }}
+                                  onClick={(e) => e.stopPropagation()}
                                   className="font-bold text-slate-900 text-sm group-hover:text-teal-800 transition line-clamp-1"
                                 >
                                   {ws.title}
@@ -868,13 +871,7 @@ export function WorkstreamGraphGantt({
                               <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap text-xs">
                                 <Link
                                   href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}#phase-${encodeURIComponent(ws.currentStageName || "phase")}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onSelectWorkstream) {
-                                      e.preventDefault();
-                                      onSelectWorkstream(ws.id);
-                                    }
-                                  }}
+                                  onClick={(e) => e.stopPropagation()}
                                   className="text-slate-500 truncate max-w-[200px] hover:text-teal-800 hover:underline"
                                   title="Open stage anchor"
                                 >
@@ -947,7 +944,7 @@ export function WorkstreamGraphGantt({
                                     <div className="col-span-12 p-3 pl-8 md:col-span-4 md:border-r">
                                       <Link
                                         href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}#phase-${encodeURIComponent(stage.name)}`}
-                                        onClick={(event) => { event.stopPropagation(); if (onSelectWorkstream) { event.preventDefault(); onSelectWorkstream(ws.id); } }}
+                                        onClick={(event) => event.stopPropagation()}
                                         className="text-sm font-bold text-slate-800 hover:text-teal-800 hover:underline"
                                       >
                                         Step {stage.sequenceOrder}: {customerSafe ? stage.customerVisibilityLabel : stage.name}
@@ -1007,12 +1004,6 @@ export function WorkstreamGraphGantt({
                                       <div className="flex items-center gap-1.5 flex-wrap">
                                         <Link
                                           href={`/work/task/${encodeURIComponent(task.id)}`}
-                                          onClick={(e) => {
-                                            if (onSelectTask) {
-                                              e.preventDefault();
-                                              onSelectTask(task.id);
-                                            }
-                                          }}
                                           className="text-xs font-bold text-slate-900 hover:text-teal-800 hover:underline flex items-center gap-1"
                                         >
                                           <Layers className="size-3 text-slate-400" />
@@ -1058,12 +1049,6 @@ export function WorkstreamGraphGantt({
                                         <div className="relative w-full h-5">
                                           <Link
                                             href={`/work/task/${encodeURIComponent(task.id)}`}
-                                            onClick={(e) => {
-                                              if (onSelectTask) {
-                                                e.preventDefault();
-                                                onSelectTask(task.id);
-                                              }
-                                            }}
                                             className={`absolute h-4 rounded border text-[9px] font-bold px-1.5 flex items-center truncate ${taskBarColor} shadow-xs hover:shadow-sm cursor-pointer`}
                                             style={{
                                               left: `${taskBarLeft}%`,
@@ -1131,11 +1116,11 @@ export function WorkstreamGraphGantt({
                   role="button"
                   tabIndex={0}
                   aria-label={`Open ${ws.title}`}
-                  onClick={() => onSelectWorkstream?.(ws.id)}
+                  onClick={() => openWorkstream(ws)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      onSelectWorkstream?.(ws.id);
+                      openWorkstream(ws);
                     }
                   }}
                   className="grid cursor-pointer gap-3 px-4 py-3.5 text-sm transition-colors hover:bg-slate-50/80 md:grid-cols-12 md:items-center"
