@@ -52,6 +52,7 @@ test("Checkpoint 7: schedule links are not intercepted into the project shell", 
   assert.doesNotMatch(gantt, /href=\{`\/work\/task\/\$\{encodeURIComponent\(task\.id\)\}`\}[\s\S]{0,500}preventDefault\(\)/);
   assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} customerSafe=\{activePersona\.isCustomer\} focusedWorkstreamId=/);
   assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} customerSafe focusedWorkstreamId=/);
+  assert.match(page, /desiredPathBase.*phase-\$\{encodeURIComponent\(selectedProjectPhase\)\}/s);
 });
 
 test("Checkpoint 7: schedule renders chronological list and expandable workflow tasks", async () => {

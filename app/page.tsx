@@ -754,7 +754,10 @@ export default function Home() {
   useEffect(() => {
     if (!loggedIn || route !== "project" || typeof window === "undefined") return;
     const url = new URL(window.location.href);
-    const desiredPath = buildShellPath("project", selectedProjectWorkstreamId ?? undefined, projectSection === "overview" ? undefined : projectSection, projectSection === "schedule" ? selectedProjectPhase ?? undefined : undefined);
+    const desiredPathBase = buildShellPath("project", selectedProjectWorkstreamId ?? undefined, projectSection === "overview" ? undefined : projectSection, projectSection === "schedule" ? selectedProjectPhase ?? undefined : undefined);
+    const desiredPath = projectSection === "schedule" && selectedProjectPhase
+      ? `${desiredPathBase}#phase-${encodeURIComponent(selectedProjectPhase)}`
+      : desiredPathBase;
     if (`${url.pathname}${url.search}` === desiredPath) return;
     window.history.replaceState({ ...currentHistoryState(), route: "project", projectSection }, "", desiredPath);
   }, [projectSection, selectedProjectWorkstreamId, route, loggedIn]);
