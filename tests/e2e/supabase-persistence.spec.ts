@@ -439,7 +439,8 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(coordinationCard).toBeVisible({ timeout: 15_000 });
     await coordinationCard.getByRole("button", { name: "Open Work", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Confirm coastal concurrence conditions", exact: true })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Blocked (Action Required)", { exact: true })).toBeVisible();
+    await expect(page.getByText("objection raised", { exact: true })).toBeVisible();
+    await expect(page.getByText("Waiting on CPRA", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Respond to agency", exact: true }).click();
     const responseDialog = page.getByRole("dialog");
@@ -453,8 +454,17 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await page.reload();
     await expect(page.getByRole("heading", { name: "Confirm coastal concurrence conditions", exact: true })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(responseText, { exact: false })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Blocked (Action Required)", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Clear Blocker & Resume", exact: true })).toBeVisible();
+    await expect(page.getByText("objection raised", { exact: true })).toBeVisible();
+    await expect(page.getByText("Waiting on CPRA", { exact: true })).toBeVisible();
+
+    // Read the linked workstream directly to prove the dependency is still
+    // blocked; only its separate clear action can resume the workflow.
+    await page.goto("/work/workflow/PATH-DEMO-WS-COAST");
+    await expect(page.getByRole("heading", { name: "Demo — Coastal concurrence and dependency clearance", exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/blocked/i).first()).toBeVisible({ timeout: 15_000 });
+
+    await page.goto("/work/coordination/PATH-DEMO-COORD-RESPONDED");
+    await expect(page.getByRole("heading", { name: "Confirm coastal concurrence conditions", exact: true })).toBeVisible({ timeout: 30_000 });
 
     // Restore the tagged demo response text while preserving its seeded
     // objection/blocked state for the next acceptance run.
