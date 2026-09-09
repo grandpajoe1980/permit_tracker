@@ -400,6 +400,8 @@ export interface CustomerRequestRecord {
   relatedWorkstreamId?: string;
   blocksActiveWork: boolean;
   status: "draft" | "submitted" | "triage" | "in_progress" | "resolved" | "closed" | ITSMState;
+  /** Plain-language clarification requested by the project office, when a request is waiting on the customer. */
+  triageNotes?: string;
   attachmentDocumentVersionIds: string[];
   createdAt: string;
   updatedAt: string;

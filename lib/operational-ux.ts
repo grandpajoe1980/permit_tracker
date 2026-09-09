@@ -591,6 +591,7 @@ function customerRequestToWorkItem(
 
   const assignedAgency = request.assignmentGroupName || request.knownAgencyCode || workstream?.assignmentGroupName || workstream?.regulatoryLead.orgCode || "State Project Office";
   const ownerName = request.assignedToUserName ?? workstream?.assignedToUserName ?? "Unassigned";
+  const customerClarification = request.triageNotes?.trim();
 
   return {
     id: request.id,
@@ -611,7 +612,7 @@ function customerRequestToWorkItem(
       : `Customer intake request awaiting triage by project office.`,
     whatToDo: isSubmitter
       ? request.status === "pending_customer" || request.status === "draft"
-        ? "Provide the additional clarification requested by the project office."
+        ? customerClarification ?? "Provide the additional clarification requested by the project office."
         : "Awaiting government triage and assignment."
       : isTriage
       ? isSupervisorOrAdmin
@@ -631,7 +632,9 @@ function customerRequestToWorkItem(
     nextHandoff: isSubmitter ? "State Project Office Review" : `${assignedAgency} Technical Reviewer`,
     requiredInputs: request.attachmentDocumentVersionIds?.length ? ["Attached document versions verified"] : ["Customer description and requested outcome"],
     documents: [],
-    customerVisibleSummary: request.description,
+    customerVisibleSummary: customerClarification && request.status === "pending_customer"
+      ? `${request.description}\n\nProject office clarification request: ${customerClarification}`
+      : request.description,
     submittedByName: request.submittedByName ?? "SpaceX Representative",
     submittedByUserId: request.submittedByUserId,
     assignedUserId: request.assignedToUserId ?? workstream?.assignedToUserId,

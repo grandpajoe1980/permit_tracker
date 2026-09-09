@@ -731,6 +731,7 @@ export function customerRequestRowToDomain(row: Row): CustomerRequestRecord {
     relatedWorkstreamId: str(row.related_workstream_id) || undefined,
     blocksActiveWork: bool(row.blocks_active_work),
     status: (str(row.status, "submitted")) as CustomerRequestRecord["status"],
+    triageNotes: str(row.triage_notes) || undefined,
     attachmentDocumentVersionIds: arr<string>(row.attachment_document_version_ids),
 
     // Milestone 1 ITSM & Assignment Extensions
@@ -772,6 +773,7 @@ export function domainToCustomerRequestRow(domain: Partial<CustomerRequestRecord
     ...(domain.relatedWorkstreamId !== undefined && { related_workstream_id: domain.relatedWorkstreamId }),
     ...(domain.blocksActiveWork !== undefined && { blocks_active_work: domain.blocksActiveWork }),
     ...(domain.status && { status: domain.status }),
+    ...(domain.triageNotes !== undefined && { triage_notes: domain.triageNotes }),
     ...(domain.attachmentDocumentVersionIds && { attachment_document_version_ids: domain.attachmentDocumentVersionIds }),
 
     // Milestone 1 ITSM Extensions

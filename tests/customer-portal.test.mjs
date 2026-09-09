@@ -45,6 +45,26 @@ test("customer overview derives schedule, blockers, actions, and upcoming events
   assert.ok(overview.upcomingEvents.length > 0);
 });
 
+test("customer clarification projection exposes the persisted request without changing submitter ownership", () => {
+  const request = repository.createCustomerRequest({
+    projectId: "proj-spacex-pecan",
+    requestType: "government_help",
+    title: "Clarification projection",
+    description: "Original customer description.",
+    submittedByUserId: "user-alex-martin",
+    submittedByName: "Alex Martin",
+    blocksActiveWork: false,
+    attachmentDocumentVersionIds: [],
+    status: "pending_customer",
+    triageNotes: "Confirm the affected location before routing.",
+  });
+  const alex = demo.demoPersonas.find((persona) => persona.id === "alex-martin");
+  const item = ux.getOperationalWorkItems({ persona: alex, customerRequests: [request] }).items.find((candidate) => candidate.sourceId === request.id);
+  assert.equal(item?.submittedByUserId, "user-alex-martin");
+  assert.match(item?.whatToDo ?? "", /Confirm the affected location/i);
+  assert.match(item?.customerVisibleSummary ?? "", /Project office clarification request/i);
+});
+
 test("customer requests produce confirmation, audit, and government notification", () => {
   const request = repository.createCustomerRequest({
     projectId: "proj-spacex-pecan",

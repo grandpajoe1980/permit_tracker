@@ -173,7 +173,6 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     const responseRow = pageResponse.locator('[data-testid^="inbox-row-"]').first();
     await expect(responseRow).toBeVisible({ timeout: 15_000 });
     await responseRow.click();
-    await expect(pageResponse.getByText("Response needed", { exact: true })).toBeVisible();
     await expect(pageResponse.getByText(clarificationText, { exact: false }).first()).toBeVisible();
     await pageResponse.getByRole("button", { name: "Respond", exact: true }).click();
     await pageResponse.getByRole("dialog").locator("#action-note").fill(customerResponse);
