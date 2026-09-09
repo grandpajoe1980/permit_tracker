@@ -26,14 +26,14 @@ test("Checkpoint 7: distinct canonical destinations for workstream, phase, and t
   assert.match(html, /href="\/workstreams\/WS-LA82-HEAVYHAUL"/);
 
   // 2. Phase / Stage anchor destination
-  assert.match(html, /href="\/workstreams\/WS-LA82-HEAVYHAUL#phase-[^"]+"/);
+  assert.match(html, /href="\/workstreams\/WS-LA82-HEAVYHAUL\?phase=[^#]+#phase-[^"]+"/);
 
   // 3. Task canonical destination
   assert.match(html, /href="\/work\/task\/task-dotd-[123]"/);
 
   // Confirm all three destinations are distinct
   const workstreamHref = "/workstreams/WS-LA82-HEAVYHAUL";
-  const phaseHrefMatch = html.match(/href="(\/workstreams\/WS-LA82-HEAVYHAUL#phase-[^"]+)"/);
+  const phaseHrefMatch = html.match(/href="(\/workstreams\/WS-LA82-HEAVYHAUL\?phase=[^#]+#phase-[^"]+)"/);
   const taskHrefMatch = html.match(/href="(\/work\/task\/task-dotd-[123])"/);
 
   assert.ok(phaseHrefMatch, "Phase anchor href must exist");
@@ -50,8 +50,8 @@ test("Checkpoint 7: schedule links are not intercepted into the project shell", 
   assert.doesNotMatch(gantt, /href=\{item\.canonicalHref\}[\s\S]{0,500}preventDefault\(\)/);
   assert.doesNotMatch(gantt, /href=\{`\/workstreams\/\$\{encodeURIComponent\(ws\.code \|\| ws\.id\)\}`\}[\s\S]{0,500}preventDefault\(\)/);
   assert.doesNotMatch(gantt, /href=\{`\/work\/task\/\$\{encodeURIComponent\(task\.id\)\}`\}[\s\S]{0,500}preventDefault\(\)/);
-  assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} customerSafe=\{activePersona\.isCustomer\} \/>/);
-  assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} customerSafe \/>/);
+  assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} customerSafe=\{activePersona\.isCustomer\} focusedWorkstreamId=/);
+  assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} customerSafe focusedWorkstreamId=/);
 });
 
 test("Checkpoint 7: schedule renders chronological list and expandable workflow tasks", async () => {

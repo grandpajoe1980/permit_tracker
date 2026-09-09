@@ -233,16 +233,17 @@ export function parseWorkItemPath(pathname: string): ParsedWorkItemPath | null {
   return workKinds.has(kind) && id ? { kind, id } : null;
 }
 
-export function buildShellPath(route: AppRoute, workstreamId?: string, tool?: string) {
+export function buildShellPath(route: AppRoute, workstreamId?: string, tool?: string, phase?: string) {
   const params = new URLSearchParams();
   if (route !== "my-work") params.set("view", route);
   if (workstreamId) params.set("workstream", workstreamId);
   if ((route === "secondary" || route === "project") && tool) params.set("tool", tool);
+  if (phase) params.set("phase", phase);
   const query = params.toString();
   return query ? `/?${query}` : "/";
 }
 
-export function parseShellPath(url: URL): { route: AppRoute; workstreamId?: string; tool?: string; workKind?: WorkRouteKind; workItemId?: string; requestId?: string; returnTo?: string; userId?: string; orgId?: string; groupId?: string } {
+export function parseShellPath(url: URL): { route: AppRoute; workstreamId?: string; tool?: string; phase?: string; workKind?: WorkRouteKind; workItemId?: string; requestId?: string; returnTo?: string; userId?: string; orgId?: string; groupId?: string } {
   const view = url.searchParams.get("view") as AppRoute | null;
   const knownRoute = view && NAVIGATION_DEFINITIONS.some((entry) => entry.id === view)
     ? view
@@ -253,6 +254,7 @@ export function parseShellPath(url: URL): { route: AppRoute; workstreamId?: stri
     route: AppRoute;
     workstreamId?: string;
     tool?: string;
+    phase?: string;
     workKind?: WorkRouteKind;
     workItemId?: string;
     requestId?: string;
@@ -264,6 +266,7 @@ export function parseShellPath(url: URL): { route: AppRoute; workstreamId?: stri
     route: knownRoute,
     workstreamId: url.searchParams.get("workstream") ?? undefined,
     tool: url.searchParams.get("tool") ?? undefined,
+    phase: url.searchParams.get("phase") ?? undefined,
     workKind: workKind && workKinds.has(workKind) ? workKind : undefined,
     workItemId,
     requestId: url.searchParams.get("request")?.trim() || undefined,

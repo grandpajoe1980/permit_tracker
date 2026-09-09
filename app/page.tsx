@@ -151,6 +151,7 @@ type ShellHistoryState = {
   route: Route;
   selectedItemId: string | null;
   selectedProjectWorkstreamId: string | null;
+  selectedProjectPhase?: string | null;
   projectSection: ProjectSection;
   /** Legacy field retained so old history entries can be restored. */
   secondaryTool: SecondaryTool;
@@ -382,6 +383,7 @@ export default function Home() {
   });
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [selectedProjectWorkstreamId, setSelectedProjectWorkstreamId] = useState<string | null>(null);
+  const [selectedProjectPhase, setSelectedProjectPhase] = useState<string | null>(null);
   const [showDemoPeople, setShowDemoPeople] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [username, setUsername] = useState("");
@@ -666,6 +668,7 @@ export default function Home() {
         setRoute(restoredRoute);
         setSelectedItemId(state.selectedItemId);
         setSelectedProjectWorkstreamId(state.selectedProjectWorkstreamId);
+        setSelectedProjectPhase(state.selectedProjectPhase ?? null);
         if (["schedule", "vault", "catalog"].includes(state.secondaryTool)) setSecondaryTool(state.secondaryTool);
         setProjectSection(restoredSection);
         setQueueSearch(state.queueSearch);
@@ -722,6 +725,7 @@ export default function Home() {
       setRoute(restoredRoute);
       setSelectedItemId(null);
       setSelectedProjectWorkstreamId(shell.workstreamId ?? null);
+      setSelectedProjectPhase(shell.phase ?? null);
       if (["schedule", "vault", "catalog"].includes(shell.tool ?? "")) setSecondaryTool(shell.tool as SecondaryTool);
       setProjectSection(restoredSection);
       setRequestedWorkItemPath(null);
@@ -750,7 +754,7 @@ export default function Home() {
   useEffect(() => {
     if (!loggedIn || route !== "project" || typeof window === "undefined") return;
     const url = new URL(window.location.href);
-    const desiredPath = buildShellPath("project", selectedProjectWorkstreamId ?? undefined, projectSection === "overview" ? undefined : projectSection);
+    const desiredPath = buildShellPath("project", selectedProjectWorkstreamId ?? undefined, projectSection === "overview" ? undefined : projectSection, projectSection === "schedule" ? selectedProjectPhase ?? undefined : undefined);
     if (`${url.pathname}${url.search}` === desiredPath) return;
     window.history.replaceState({ ...currentHistoryState(), route: "project", projectSection }, "", desiredPath);
   }, [projectSection, selectedProjectWorkstreamId, route, loggedIn]);
@@ -763,7 +767,7 @@ export default function Home() {
 
   function currentHistoryState(): ShellHistoryState {
     const mainContent = typeof document === "undefined" ? null : document.getElementById("main-content");
-    return { route, selectedItemId, selectedProjectWorkstreamId, projectSection, secondaryTool, queueSearch, queueKind, queueState, queueGroup, scrollY: mainContent?.scrollTop ?? 0 };
+    return { route, selectedItemId, selectedProjectWorkstreamId, selectedProjectPhase, projectSection, secondaryTool, queueSearch, queueKind, queueState, queueGroup, scrollY: mainContent?.scrollTop ?? 0 };
   }
 
   function pushNavigation(path: string, state: ShellHistoryState) {
@@ -808,11 +812,12 @@ export default function Home() {
   }
 
   function openProject(workstreamId?: string, section: ProjectSection = "overview") {
-    pushNavigation(buildShellPath("project", workstreamId, section === "overview" ? undefined : section), { ...currentHistoryState(), route: "project", projectSection: section, secondaryTool: section === "overview" ? secondaryTool : section, selectedItemId: null, selectedProjectWorkstreamId: workstreamId ?? null, scrollY: 0 });
+    pushNavigation(buildShellPath("project", workstreamId, section === "overview" ? undefined : section), { ...currentHistoryState(), route: "project", projectSection: section, secondaryTool: section === "overview" ? secondaryTool : section, selectedItemId: null, selectedProjectWorkstreamId: workstreamId ?? null, selectedProjectPhase: null, scrollY: 0 });
     setProjectSection(section);
     if (section !== "overview") setSecondaryTool(section);
     setSelectedItemId(null);
     setSelectedProjectWorkstreamId(workstreamId ?? null);
+    setSelectedProjectPhase(null);
     setRequestedWorkItemPath(null);
     setRoute("project");
     setMobileNavOpen(false);
@@ -2534,7 +2539,7 @@ export default function Home() {
         {tabs.map(([tab, label]) => <Button key={tab} type="button" variant={section === tab ? "default" : "ghost"} onClick={() => openProjectSection(tab)} className="text-xs font-bold">{label}</Button>)}
       </nav>
       {section === "overview" && <ProjectOverviewPage project={projectRecord} customerSafe={activePersona.isCustomer} workflowTemplates={repository.getWorkflowTemplates()} focusedWorkstreamId={selectedProjectWorkstreamId} onFocusWorkstream={(workstreamId) => openProject(workstreamId ?? undefined)} onOpenSchedule={() => openProjectSection("schedule")} />}
-      {section === "schedule" && <div className="space-y-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Project context · Schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Baseline, forecast, dependencies, and parallel active stages for {projectRecord.name}. Open a workstream, stage, or task to view its canonical record.</p></div><WorkstreamGraphGantt project={projectRecord} customerSafe={activePersona.isCustomer} /></div>}
+      {section === "schedule" && <div className="space-y-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Project context · Schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Baseline, forecast, dependencies, and parallel active stages for {projectRecord.name}. Open a workstream, stage, or task to view its canonical record.</p></div><WorkstreamGraphGantt project={projectRecord} customerSafe={activePersona.isCustomer} focusedWorkstreamId={selectedProjectWorkstreamId ?? undefined} focusedPhase={selectedProjectPhase ?? undefined} /></div>}
       {section === "vault" && <div className="space-y-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Project context · Documents</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Project documents</h1><p className="mt-2 text-sm text-slate-600">The same authorized project documents remain in context while you move between workstreams and the schedule.</p></div><DocumentVaultPanel project={projectRecord} onUploadRevision={(documentId, event) => void uploadProjectRevision(documentId, event, activePersona.organization)} onDownloadDocument={(docId, verId) => void downloadVersion(docId, verId)} onSelectWorkstream={(workstreamId) => openProject(workstreamId)} /></div>}
       {section === "catalog" && <div className="space-y-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Services & permits</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Permit catalog</h1></div><PermitCatalogPanel catalog={repository.getCatalog()} templates={repository.getWorkflowTemplates()} onStartRequest={(permitId) => { setSelectedCatalogPermitId(permitId); if (activePersona.isCustomer) { setRequestCenterMode("permit"); navigate("requests"); } else { showToast("Permit selected. Switch to a SpaceX demo persona to start a request.", "info"); } }} /></div>}
     </div>;
@@ -2644,7 +2649,7 @@ export default function Home() {
     else if (route === "customer-home") content = renderCustomerOverview();
     else if (route === "project") content = renderProject();
     else if (route === "requests") content = <>{renderCustomerRequestCenter()}{requestCenterMode !== "menu" && <div className="mx-auto mt-4 max-w-3xl rounded-xl border border-slate-200 bg-white p-4"><Label htmlFor="request-attachment">Supporting attachment (optional)</Label><Input key={requestFileInputKey} id="request-attachment" type="file" onChange={(event) => setRequestFile(event.target.files?.[0] ?? null)} className="mt-1 cursor-pointer" /><p className="mt-1 text-xs text-slate-500">Attach this file to the selected request before submitting.</p></div>}</>;
-    else if (route === "schedule") content = <div className="space-y-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Read-only project delivery schedule for SpaceX. Internal government notes and control actions are not shown.</p></div><WorkstreamGraphGantt project={projectRecord} customerSafe /></div>;
+    else if (route === "schedule") content = <div className="space-y-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Read-only project delivery schedule for SpaceX. Internal government notes and control actions are not shown.</p></div><WorkstreamGraphGantt project={projectRecord} customerSafe focusedWorkstreamId={selectedProjectWorkstreamId ?? undefined} focusedPhase={selectedProjectPhase ?? undefined} /></div>;
     else if (route === "contacts" || route === "profile") content = renderContacts();
     else if (route === "help") content = renderHelp();
     else if (route === "notifications") content = renderNotifications();

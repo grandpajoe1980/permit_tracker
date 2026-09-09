@@ -5,8 +5,9 @@ import { resolveProjectRoute, resolveWorkstreamRoute } from "@/lib/supabase/rout
 
 export const dynamic = "force-dynamic";
 
-export default async function GlobalWorkstreamRoute({ params }: { params: Promise<{ workstreamId: string }> }) {
+export default async function GlobalWorkstreamRoute({ params, searchParams }: { params: Promise<{ workstreamId: string }>; searchParams: Promise<{ phase?: string }> }) {
   const { workstreamId: rawWorkstreamId } = await params;
+  const { phase } = await searchParams;
   const workstreamId = rawWorkstreamId ?? "";
 
   const client = await createRequestSupabaseClient();
@@ -22,7 +23,9 @@ export default async function GlobalWorkstreamRoute({ params }: { params: Promis
     const project = await resolveProjectRoute(client, workstream.project_id);
 
     if (project?.number) {
-      redirect(`/projects/${encodeURIComponent(project.number)}/workstreams/${encodeURIComponent(workstream.id)}`);
+      const phaseQuery = phase ? `&phase=${encodeURIComponent(phase)}` : "";
+      const phaseHash = phase ? `#phase-${encodeURIComponent(phase)}` : "";
+      redirect(`/?view=project&workstream=${encodeURIComponent(workstream.id)}&tool=schedule${phaseQuery}${phaseHash}`);
     }
   }
 

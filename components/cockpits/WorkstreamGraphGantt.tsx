@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -180,6 +180,8 @@ export function WorkstreamGraphGantt({
   onSelectTask,
   project: projectOverride,
   asOfDate,
+  focusedWorkstreamId,
+  focusedPhase,
 }: {
   customerSafe?: boolean;
   onSelectWorkstream?: (workstreamId: string) => void;
@@ -187,6 +189,8 @@ export function WorkstreamGraphGantt({
   onSelectTask?: (taskId: string) => void;
   project?: ProjectRecord;
   asOfDate?: string | Date;
+  focusedWorkstreamId?: string;
+  focusedPhase?: string;
 }) {
   const project = projectOverride ?? getFullProjectRecord();
   const schedule = evaluateProjectSchedule(project.workstreams);
@@ -200,6 +204,21 @@ export function WorkstreamGraphGantt({
   const [zoom, setZoom] = useState<"day" | "week" | "month">("week");
   const [fitProject, setFitProject] = useState(false);
   const todayDate = useMemo(() => asOfDateTime(asOfDate), [asOfDate]);
+
+  useEffect(() => {
+    if (!focusedPhase || !focusedWorkstreamId) return;
+    const frame = window.requestAnimationFrame(() => {
+      setExpandedWorkstreamIds((previous) => {
+        const next = new Set(previous);
+        next.add(focusedWorkstreamId);
+        return next;
+      });
+      window.requestAnimationFrame(() => {
+        document.getElementById(`phase-${encodeURIComponent(focusedPhase)}`)?.scrollIntoView({ block: "center", behavior: "auto" });
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusedPhase, focusedWorkstreamId]);
 
   function openWorkstream(workstream: ProjectRecord["workstreams"][number]) {
     if (onSelectWorkstream) {
@@ -870,7 +889,7 @@ export function WorkstreamGraphGantt({
                               {/* Current Stage & State Badge */}
                               <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap text-xs">
                                 <Link
-                                  href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}#phase-${encodeURIComponent(ws.currentStageName || "phase")}`}
+                                  href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}?phase=${encodeURIComponent(ws.currentStageName || "phase")}#phase-${encodeURIComponent(ws.currentStageName || "phase")}`}
                                   onClick={(e) => e.stopPropagation()}
                                   className="text-slate-500 truncate max-w-[200px] hover:text-teal-800 hover:underline"
                                   title="Open stage anchor"
@@ -943,7 +962,7 @@ export function WorkstreamGraphGantt({
                                   <div key={stage.id} id={`phase-${encodeURIComponent(stage.name)}`} className="grid grid-cols-12 items-center bg-sky-50/30">
                                     <div className="col-span-12 p-3 pl-8 md:col-span-4 md:border-r">
                                       <Link
-                                        href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}#phase-${encodeURIComponent(stage.name)}`}
+                                        href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}?phase=${encodeURIComponent(stage.name)}#phase-${encodeURIComponent(stage.name)}`}
                                         onClick={(event) => event.stopPropagation()}
                                         className="text-sm font-bold text-slate-800 hover:text-teal-800 hover:underline"
                                       >
