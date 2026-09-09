@@ -4,7 +4,7 @@ Audience: smaller implementation models working one checkpoint at a time.
 Companion evidence: `docs/UX_SIMPLIFICATION_PLAN.md`.  
 Rule: do not restart the architecture. Preserve the domain model, audited mutations, Supabase persistence, private document storage, and versioned workflow concepts.
 
-## Current completion ledger — 2026-09-08
+## Current completion ledger — 2026-09-09
 
 This ledger supplements CP0–CP10 and is the active status record for the PATH UX completion plan. Historical test counts and prior completion notes are not release evidence.
 
@@ -12,21 +12,21 @@ This ledger supplements CP0–CP10 and is the active status record for the PATH 
 |---|---|---|
 | R1 — authenticated identity and request updates | Implemented—unverified | Fresh customer → non-admin staff update, submitter preservation, audit actor, spoof/unauthorized negative case |
 | R2 — authoritative assignment and Take Ownership | Implemented—unverified | Two authenticated workers claiming one record, persisted conflict result, assignment/audit/notification/queue read-back |
-| R3 — shell and navigation | Implemented—unverified | Desktop and 390px browser scroll/focus/Back-Forward checks at normal and 200% zoom |
-| R4 — real-stage schedule | Implemented—unverified | Stage-run hydration, alignment/Today/readability checks, canonical destinations, unscheduled/parallel cases, idempotent demo-seed read-back |
+| R3 — shell and navigation | Implemented—unverified | Chrome desktop/390px/200% scroll and overflow checks pass; second-browser and complete Back/Forward/focus walkthrough remain |
+| R4 — real-stage schedule | Implemented—unverified | Stage-run hydration, alignment/Today/readability, canonical workstream/phase/task destinations, deep-link anchor restoration, unscheduled/parallel cases, and idempotent demo-seed read-back; persisted block/unblock and second-browser proof remain |
 | CP0–CP10 remaining gates | Open | Exercise each gate with authenticated persisted evidence; do not infer completion from source or fixture tests |
 | Supabase migration consistency | Verified | `npx --yes supabase@2.117.0 migration list --linked` reports all 54 local/remote versions equal; linked `db push --dry-run` reports `upToDate: true` with no pending migrations, seeds, or roles |
 
 ### Evidence recorded during the current implementation wave
 
-- Source and focused behavior: the identity-safe claim, staff-operator intake, assignment-label, stage-run hydration, shell, and schedule tests pass. The serial full suite completed with **441 passed, 8 skipped, 0 failed**. Skips remain unaccepted environment-gated cases.
-- Release checks: `npx vinext build`, the focused ESLint command, and `node scripts/scan-build-secrets.mjs` all pass. The build still reports non-blocking large-chunk warnings.
+- Source and focused behavior: the identity-safe claim, staff-operator intake, assignment-label, stage-run hydration, shell, canonical schedule-link, phase-deep-link, and footer-health tests pass. The final serial full suite completed with **452 tests, 444 passed, 8 skipped, 0 failed**. Skips remain unaccepted environment-gated cases.
+- Release checks: final `npx vinext build`, full ESLint command, and explicit `node scripts/scan-build-secrets.mjs` all pass. The build still reports non-blocking large-chunk warnings.
 - Live Supabase: project `zomzacaxwqfwjstkxbpv` contains the claim RPC and staff-operator boundary. Two independently authenticated workers produced one persisted claim and one conflict on the same task; the winner and audit records were read back. A non-admin staff clarification update preserved the customer submitter and attributed the audit to the staff actor; the request state and notification were restored after the probe.
 - Live demo workflow: the tagged demo workstreams retain five distinct stages in the published workflow. `stage_runs` hydration is wired and preserves unavailable history rather than inventing completion dates.
 - Migration reconciliation: the two genuinely remote-only SQL statements were recovered from `supabase_migrations.schema_migrations`; six locally mis-timestamped files were aligned to their genuine applied versions. Normalized statement hashes match the live records, and the linked dry-run is clean.
-- Git synchronization: R0 reconciliation checkpoint `cb3b7f18eeddb50b2a5ae9304537b9ae985c1c7a` was pushed with matching local `main`/`origin/main` full SHAs and a clean worktree. This is branch synchronization evidence, not a verified deployment or tagged-release claim.
-- Deployment signal: GitHub reports a successful `Vercel` status for the earlier implementation commit. The migration-reconciliation checkpoint has no independently verified deployment record; direct Vercel lookup is rejected by the connected account with HTTP 403 scope authorization, so the deployed SHA and production smoke test remain open.
-- Still open: browser visual/action verification is unverified because the repository's `agent-browser` CLI is unavailable and the fallback browser could not reach the local dev server (`ERR_BLOCKED_BY_CLIENT`/connection refused). Deployment SHA and production smoke test are also unverified. No release acceptance claim is made from source, SSR, or live RPC evidence alone.
+- Git synchronization: the application checkpoint `da098acd4fc83aa01458563efd69ace3058e6b42` was pushed with matching local `main`/`origin/main` full SHAs and a clean worktree. This evidence ledger is being committed afterward as a documentation-only synchronization update; it must also be pushed and leave the worktree clean. This is branch synchronization evidence, not a verified tagged-release claim.
+- Deployment and production smoke: GitHub reports successful `Vercel` deployment for the application checkpoint `da098acd4fc83aa01458563efd69ace3058e6b42`. `https://permit-tracker-iota.vercel.app/api/health` returns status `ok`, environment `production`, and that application SHA. Chrome smoke confirms the footer links to the application checkpoint, the guide is absent, the header/sidebar remain fixed, body overflow is absent at 390px and 200% zoom, and the schedule deep link restores the selected workstream/stage and `#phase-Technical%20team%20review`.
+- Still open: a second supported browser is not available in the current environment; the full authenticated customer/staff/admin browser journeys, fresh cross-persona mutation read-backs, persisted block/unblock browser story, and two consecutive final user-story/consistency review passes remain unverified. No release acceptance claim is made from source, SSR, or live RPC evidence alone.
 
 The guide requirement formerly listed under CP10 is superseded by R3. PATH must not ship a replacement welcome panel or replay control.
 
@@ -263,12 +263,13 @@ Primary files: `components/cockpits/WorkstreamGraphGantt.tsx`, schedule engine/m
 
 Steps:
 
-1. Default viewport places Today about 25% from the left, retaining recent history and more future space. Keep Fit project as an explicit control.
+1. Default viewport places Today at **30% ±2%** of the date-grid width, excluding the label column; Fit project remains an explicit exception/control.
 2. Expand each workstream into real workflow stages/tasks. Support parallel steps. Use recorded actuals, baseline, and forecast distinctly.
 3. Never synthesize phase dates. Show Not scheduled and an authorized configuration link when dates are absent.
 4. A workstream bar opens the workstream. A phase opens its phase/anchor. A task opens the task. Do not scroll to a generic `aria-pressed` element.
 5. Keep color plus text/pattern/status icons. Add an equivalent chronological list for mobile and screen readers.
 6. Move simulator, delay taxonomy, and other dense analysis under Advanced analysis.
+7. Do not provide an internal Gantt scrollbar. Use range/zoom/previous/next/Today/Fit project controls and preserve a usable chronological list.
 
 Gate:
 
