@@ -377,6 +377,43 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await context.close();
   });
 
+  test("Scenario 10: keyboard and touch navigation keep primary actions reachable on mobile", async ({ browser }) => {
+    test.setTimeout(45_000);
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+    });
+    const page = await context.newPage();
+    await page.goto("/");
+    await expect(page.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
+
+    // Sign in with the semantic form controls, then drive the navigation
+    // drawer with the keyboard alone.
+    await page.locator("#username").fill("sarah.johnson@demo.permit.local");
+    await page.locator("#password").fill("PATH-Demo-2026!");
+    await page.getByRole("button", { name: "Sign In", exact: true }).press("Enter");
+    await expect(page.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible({ timeout: 30_000 });
+
+    const toggle = page.getByRole("button", { name: "Toggle navigation" });
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    const drawer = page.locator("#mobile-navigation");
+    await expect(drawer).toHaveAttribute("role", "dialog");
+    const teamWork = drawer.locator("#nav-agency-queue");
+    await teamWork.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "Team Work", exact: true })).toBeVisible();
+
+    // Exercise the same path through a touch-capable context.
+    await toggle.tap();
+    await expect(drawer).toHaveAttribute("role", "dialog");
+    await drawer.locator("#nav-my-work").tap();
+    await expect(page.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible();
+    await expect(page.locator("#main-content")).toHaveCSS("overflow-y", "auto");
+    await context.close();
+  });
+
   test("Scenario 7: Block and clear a workstream through the persisted workflow boundary", async ({ browser }) => {
     test.setTimeout(60_000);
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
