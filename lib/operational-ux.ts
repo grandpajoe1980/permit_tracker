@@ -592,6 +592,16 @@ function customerRequestToWorkItem(
   const assignedAgency = request.assignmentGroupName || request.knownAgencyCode || workstream?.assignmentGroupName || workstream?.regulatoryLead.orgCode || "State Project Office";
   const ownerName = request.assignedToUserName ?? workstream?.assignedToUserName ?? "Unassigned";
   const customerClarification = request.triageNotes?.trim();
+  const persistedState = workstream?.operationalState;
+  const persistedBlocked = persistedState === "blocked" || persistedState === "waiting_government" || persistedState === "waiting_external" || persistedState === "waiting_applicant";
+  const persistedComplete = persistedState === "complete" || persistedState === "cancelled";
+  const persistedTone = persistedComplete || request.status === "resolved" || request.status === "closed"
+    ? ("green" as const)
+    : persistedBlocked || request.blocksActiveWork || request.scheduleImportance === "critical"
+    ? ("red" as const)
+    : persistedState === "running" || request.status === "in_progress"
+    ? ("blue" as const)
+    : ("amber" as const);
 
   return {
     id: request.id,
@@ -601,8 +611,8 @@ function customerRequestToWorkItem(
     projectName: PROJECT_NAME,
     workstreamId: request.relatedWorkstreamId ?? workstream?.id ?? undefined,
     workstreamTitle: workstream?.title ?? (request.knownAgencyCode ? `${request.knownAgencyCode} Request · ${request.title}` : `Customer Request · ${request.confirmationNumber}`),
-    statusTone: tone,
-    statusLabel: request.status.replaceAll("_", " ").toUpperCase(),
+    statusTone: workstream?.operationalStateLabel ? persistedTone : tone,
+    statusLabel: workstream?.operationalStateLabel ?? request.status.replaceAll("_", " ").toUpperCase(),
     whyHere: isSubmitter
       ? "You submitted this request to the Louisiana Project Delivery team."
       : isSupervisorOrAdmin
@@ -640,9 +650,11 @@ function customerRequestToWorkItem(
     assignedUserId: request.assignedToUserId ?? workstream?.assignedToUserId,
     assignmentGroupId: request.assignmentGroupId ?? workstream?.assignmentGroupId,
     assignmentGroupName: request.assignmentGroupName ?? workstream?.assignmentGroupName,
-    itsmState: request.itsmState ?? mapCustomerRequestStatusToITSMState(request.status),
+    itsmState: workstream?.itsmState ?? request.itsmState ?? mapCustomerRequestStatusToITSMState(request.status),
     priority: request.priority,
-    clockStatus: request.clockStatus,
+    clockStatus: workstream?.clockStatus ?? request.clockStatus,
+    waitingOn: workstream?.waitingOnEntity,
+    waitLabel: workstream?.waitingReason,
     requiresCurrentUserAction: isActionRequired,
     requiresOrganizationAction: isTargetAgency || isSupervisorOrAdmin,
     visibilityOnly: !isActionRequired,
@@ -876,6 +888,9 @@ export function getAvailableActions(item: OperationalWorkItem, persona: Operatio
       ? "request_information"
       : "request_clarification";
     actions.push("complete_step", "update_status", informationAction, "mark_blocked", "escalate", "transfer", "add_note");
+    if (item.workstreamId && (item.statusTone === "red" || item.statusLabel.toLowerCase().includes("block") || item.statusLabel.toLowerCase().includes("wait"))) {
+      actions.push("clear_blocker");
+    }
   } else if (item.kind === "commitment") {
     // Commitments need the ability to mark fulfilled, update status, request info, and block
     if (item.statusTone !== "green") {

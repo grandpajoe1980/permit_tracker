@@ -367,4 +367,56 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     expect(zoomOverflow).toEqual({ documentOverflow: false, mainOverflow: false });
     await context.close();
   });
+
+  test("Scenario 7: Block and clear a workstream through the persisted workflow boundary", async ({ browser }) => {
+    test.setTimeout(60_000);
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    await page.goto("/");
+    await expect(page.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
+    await page.click("#demo-login-trigger");
+    await page.click("#demo-persona-sarah");
+    await expect(page.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 30_000 });
+
+    await page.getByRole("button", { name: "Team Work", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Team Work", exact: true })).toBeVisible();
+    const requestId = "PATH-DEMO-REQ-ACTIVE";
+    const requestTitle = "Coordinate a utility interconnection review";
+    await page.getByRole("button", { name: /^Assigned/ }).click();
+    await page.getByRole("searchbox", { name: "Filter team work" }).fill(requestTitle);
+    const row = page.locator(`[data-testid="inbox-row-${requestId}"]`).first();
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await row.getByRole("button", { name: new RegExp(`Open ${requestTitle}`) }).click();
+    await expect(page.getByRole("heading", { name: requestTitle, exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Mark Blocked", exact: true }).click();
+    const blockDialog = page.getByRole("dialog");
+    await blockDialog.locator("#block-reason").selectOption("internal");
+    await blockDialog.locator("#block-need").fill("Persisted R4 browser acceptance blocker.");
+    await blockDialog.getByRole("button", { name: "Mark Blocked", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Structured blocker committed" })).toBeVisible({ timeout: 15_000 });
+
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Team Work", exact: true })).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("button", { name: "Team Work", exact: true }).click();
+    await page.getByRole("button", { name: /^Waiting/ }).click();
+    await page.getByRole("searchbox", { name: "Filter team work" }).fill(requestTitle);
+    await page.locator(`[data-testid="inbox-row-${requestId}"]`).first().getByRole("button", { name: new RegExp(`Open ${requestTitle}`) }).click();
+    await expect(page.getByText("Blocked (Action Required)", { exact: true })).toBeVisible({ timeout: 15_000 });
+
+    await page.getByRole("button", { name: "Clear Blocker & Resume", exact: true }).click();
+    const clearDialog = page.getByRole("dialog");
+    await clearDialog.locator("#unblock-note").fill("R4 browser acceptance resolution.");
+    await clearDialog.getByRole("button", { name: "Clear Blocker & Resume", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Blocker cleared" })).toBeVisible({ timeout: 15_000 });
+
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Team Work", exact: true })).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("button", { name: "Team Work", exact: true }).click();
+    await page.getByRole("button", { name: /^Assigned/ }).click();
+    await page.getByRole("searchbox", { name: "Filter team work" }).fill(requestTitle);
+    await page.locator(`[data-testid="inbox-row-${requestId}"]`).first().getByRole("button", { name: new RegExp(`Open ${requestTitle}`) }).click();
+    await expect(page.getByText(/^Running \(.+\)$/, { exact: true })).toBeVisible({ timeout: 15_000 });
+    await context.close();
+  });
 });
