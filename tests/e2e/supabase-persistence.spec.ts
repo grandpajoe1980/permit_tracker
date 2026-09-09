@@ -419,4 +419,49 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(page.getByText(/^Running \(.+\)$/, { exact: true })).toBeVisible({ timeout: 15_000 });
     await context.close();
   });
+
+  test("Scenario 8: Agency coordination response remains separate from blocker clearance", async ({ browser }) => {
+    test.setTimeout(60_000);
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    const responseText = `E2E coordination response ${Date.now()}`;
+
+    await page.goto("/");
+    await expect(page.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
+    await page.click("#demo-login-trigger");
+    await page.click("#demo-persona-sarah");
+    await page.goto("/?view=coordination");
+    await expect(page.getByRole("heading", { name: "Coordination Requests", exact: true })).toBeVisible({ timeout: 30_000 });
+
+    const coordinationCard = page.locator("article").filter({ hasText: "PATH-DEMO-COORD-RESPONDED" }).first();
+    await expect(coordinationCard).toBeVisible({ timeout: 15_000 });
+    await coordinationCard.getByRole("button", { name: "Open Work", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Confirm coastal concurrence conditions", exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Blocked (Action Required)", { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Respond to agency", exact: true }).click();
+    const responseDialog = page.getByRole("dialog");
+    await responseDialog.locator("#coordination-status").selectOption("objection_raised");
+    await responseDialog.locator("#coordination-response").fill(responseText);
+    await responseDialog.getByRole("button", { name: "Respond to agency", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "response recorded" })).toBeVisible({ timeout: 15_000 });
+
+    // The response transaction is persisted, but it must not silently resume
+    // the linked workstream. The explicit clear action remains available.
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Confirm coastal concurrence conditions", exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(responseText, { exact: false })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Blocked (Action Required)", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Clear Blocker & Resume", exact: true })).toBeVisible();
+
+    // Restore the tagged demo response text while preserving its seeded
+    // objection/blocked state for the next acceptance run.
+    await page.getByRole("button", { name: "Respond to agency", exact: true }).click();
+    const restoreDialog = page.getByRole("dialog");
+    await restoreDialog.locator("#coordination-status").selectOption("objection_raised");
+    await restoreDialog.locator("#coordination-response").fill("Response recorded: CPRA requested one additional condition review. The originating work remains blocked until the dependency is explicitly cleared.");
+    await restoreDialog.getByRole("button", { name: "Respond to agency", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "response recorded" })).toBeVisible({ timeout: 15_000 });
+    await context.close();
+  });
 });
