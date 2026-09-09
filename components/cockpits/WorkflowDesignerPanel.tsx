@@ -692,11 +692,12 @@ export function WorkflowDesignerPanel({
                               <input
                                 id={`workflow-stage-target-days-${stageDomKey}`}
                                 type="number"
-                                min={1}
+                                min={0}
                                 value={stage.targetDurationDays}
                                 onChange={(e) => updateStageField(stage.stageKey, "targetDurationDays", Number(e.target.value))}
                                 className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium"
                               />
+                              <p className="mt-1 text-xs text-slate-500">0 leaves this and following stages unscheduled. Statutory minimums still apply.</p>
                             </div>
                             <div>
                               <label className="font-bold text-slate-700 block mb-1" htmlFor={`workflow-stage-statutory-days-${stageDomKey}`}>Statutory Min (Days)</label>

@@ -25,6 +25,7 @@ import { evaluateProjectSchedule } from "@/lib/engines/schedule-engine";
 import type { OperationalState, ProjectRecord } from "@/lib/domain-models";
 import { asOfDateTime } from "@/lib/time";
 import { buildWorkflowJourney } from "@/lib/workflow-journey";
+import { layoutGanttStages } from "@/lib/gantt-stage-layout";
 import { InteractiveScheduleSimulator } from "./InteractiveScheduleSimulator";
 
 function displayDate(value?: string) {
@@ -762,9 +763,9 @@ export function WorkstreamGraphGantt({
                       const workflowVersion = ws.workflowVersionId
                         ? workflowTemplates.flatMap((template) => template.versions).find((version) => version.id === ws.workflowVersionId)
                         : workflowTemplate?.versions.find((version) => version.status === "published") ?? workflowTemplate?.versions[0];
-                      const workflowStages = workflowVersion?.stages ?? [];
+                      const workflowStages = [...(workflowVersion?.stages ?? [])].sort((a, b) => a.sequenceOrder - b.sequenceOrder);
                       const journey = buildWorkflowJourney({ ...ws, stages: workflowStages, tasks: ws.tasks, stageRuns: ws.stageRuns }, workflowTemplates);
-                      const stageRows = workflowStages.map((stage, index) => {
+                      const stageInputs = workflowStages.map((stage, index) => {
                         const stageRun = (ws.stageRuns ?? []).find((run) => run.stageId === stage.id || run.stageKey === stage.stageKey);
                         const stageJourney = journey.stages.find((candidate) => candidate.id === stage.id);
                         const stageTasks = ws.tasks.filter((task) => task.stageId === stage.id || task.stageId === stage.stageKey);
@@ -772,22 +773,20 @@ export function WorkstreamGraphGantt({
                         const stageEndDates = stageTasks.flatMap((task) => [task.actualCompletionDate, task.forecastDueDate, task.baselineDueDate].filter(Boolean) as string[]).sort();
                         const stageStart = stageRun?.startedAt?.slice(0, 10) ?? stageStartDates[0];
                         const stageEnd = stageRun?.completedAt?.slice(0, 10) ?? stageEndDates[stageEndDates.length - 1];
+                        return { stage, index, stageJourney, stageStart, stageEnd };
+                      });
+                      const projected = layoutGanttStages(stageInputs.map((row) => ({ id: row.stage.id, start: row.stageStart, end: row.stageEnd, durationDays: row.stage.targetDurationDays })), ws.forecastStartDate || ws.baselineStartDate || todayDate.toISOString());
+                      const stageRows = stageInputs.map(({ stage, index, stageJourney }) => {
+                        const { start: stageStart, end: stageEnd, estimated, lane } = projected[index];
                         const hasStageDates = Boolean(stageStart && stageEnd);
                         const stageLeft = hasStageDates ? getTimelinePosition(stageStart) : 0;
                         // Date-only due dates are inclusive, including one-day stages.
                         const stageRight = hasStageDates ? getTimelinePosition(stageEnd) + 86400000 / spanMs * 100 : 0;
                         const stageWidth = Math.max(0, Math.min(100, stageRight) - Math.max(0, stageLeft));
                         const stageState = stageJourney?.state === "completed" ? "Completed" : stageJourney?.state === "blocked" ? "Blocked" : stageJourney?.state === "waiting" ? "Waiting" : stageJourney?.state === "current" ? "Current" : stageJourney?.state === "not_recorded" ? "Not recorded" : stageJourney?.state === "waived" ? "Waived" : "Upcoming";
-                        return { stage, index, stageJourney, stageStart, stageEnd, hasStageDates, stageLeft, stageWidth, stageState };
+                        return { stage, index, stageJourney, stageStart, stageEnd, hasStageDates, stageLeft, stageWidth, stageState, estimated, lane };
                       });
-                      const laneEnds: number[] = [];
-                      const stageLanes = new Map<string, number>();
-                      for (const row of stageRows.filter((row) => row.hasStageDates && row.stageWidth > 0).sort((a, b) => a.stageLeft - b.stageLeft)) {
-                        let lane = laneEnds.findIndex((end) => end <= row.stageLeft);
-                        if (lane < 0) lane = laneEnds.length;
-                        laneEnds[lane] = Math.max(0, row.stageLeft) + row.stageWidth;
-                        stageLanes.set(row.stage.id, lane);
-                      }
+                      const trackHeight = Math.max(1, ...stageRows.filter((row) => row.hasStageDates && row.stageWidth > 0).map((row) => row.lane + 1)) * 40 - 4;
 
                       return (
                         <div key={ws.id} className="divide-y divide-slate-50">
@@ -831,9 +830,9 @@ export function WorkstreamGraphGantt({
                                 {months.map((month) => <div key={month.label} className="border-r border-slate-300 last:border-0" />)}
                               </div>
                               {todayDisplayPercent >= 0 && todayDisplayPercent <= 100 && <div className="absolute inset-y-0 w-0.5 bg-red-500/80 z-10 pointer-events-none" style={{ left: `${todayDisplayPercent}%` }} />}
-                              <div className="relative h-9 w-full" aria-label={`${ws.code} workflow stages`}>
+                              <div className="relative my-3 w-full" style={{ height: `${trackHeight}px` }} aria-label={`${ws.code} workflow stages`}>
                                 {!stageRows.some((row) => row.hasStageDates && row.stageWidth > 0) && <span className="px-2 text-sm text-slate-500">{stageRows.some((row) => row.hasStageDates) ? "Outside selected range" : "No scheduled stages"}</span>}
-                                {stageRows.filter((row) => row.hasStageDates && row.stageWidth > 0).map(({ stage, index, stageStart, stageEnd, stageLeft, stageWidth, stageState }) => (
+                                {stageRows.filter((row) => row.hasStageDates && row.stageWidth > 0).map(({ stage, index, stageStart, stageEnd, stageLeft, stageWidth, stageState, estimated, lane }) => (
                                   <Link
                                     key={stage.id}
                                     data-testid={`gantt-stage-block-${ws.code}-${stage.stageKey}`}
@@ -842,15 +841,14 @@ export function WorkstreamGraphGantt({
                                     className={`group/stage absolute h-9 rounded-none border text-sm font-bold focus:z-20 hover:z-20 focus:outline-2 focus:outline-offset-2 ${STAGE_COLOR_CLASSES[index % STAGE_COLOR_CLASSES.length]}`}
                                     style={{
                                       left: `${Math.max(0, stageLeft)}%`, width: `${stageWidth}%`,
-                                      // Concurrent stages share the same row, never cover each other.
-                                      height: `${36 / Math.max(1, laneEnds.length)}px`,
-                                      top: `${36 * (stageLanes.get(stage.id) ?? 0) / Math.max(1, laneEnds.length)}px`,
+                                      height: "36px",
+                                      top: `${40 * lane}px`,
                                     }}
                                     aria-label={`${customerSafe ? stage.customerVisibilityLabel : stage.name}: ${stageState}. ${displayDate(stageStart)} to ${displayDate(stageEnd)}`}
                                   >
                                     <span className="block h-full overflow-hidden truncate px-1">{customerSafe ? stage.customerVisibilityLabel : stage.name}</span>
                                     <span role="tooltip" className="pointer-events-none absolute bottom-full left-0 z-30 mb-2 hidden w-60 rounded border border-slate-300 bg-white p-3 text-sm font-normal text-slate-900 shadow-lg group-hover/stage:block group-focus/stage:block">
-                                      <strong>{customerSafe ? stage.customerVisibilityLabel : stage.name}</strong><br />{stageState}<br />{displayDate(stageStart)} → {displayDate(stageEnd)}
+                                      <strong>{customerSafe ? stage.customerVisibilityLabel : stage.name}</strong><br />{stageState}<br />{displayDate(stageStart)} → {displayDate(stageEnd)}{estimated && <><br />Demo projection · configured duration or 10-day default</>}
                                     </span>
                                   </Link>
                                 ))}

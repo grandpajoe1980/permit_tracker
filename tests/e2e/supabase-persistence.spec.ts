@@ -253,7 +253,14 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     });
     expect(stageBlockEvidence.borderRadius).toBe("0px");
     expect(stageBlockEvidence.state).toBe("current");
-    expect(stageBlockEvidence.height).toBeGreaterThanOrEqual(12);
+    expect(stageBlockEvidence.height).toBe(36);
+    const staircase = await parallelStages.evaluate((track) => {
+      const bars = Array.from(track.querySelectorAll<HTMLElement>("[data-stage-state]"));
+      return { track: track.getBoundingClientRect().height, heights: bars.map((bar) => bar.getBoundingClientRect().height), offsets: bars.map((bar) => Number.parseFloat(bar.style.top)) };
+    });
+    expect(staircase.heights.every((height) => height === 36)).toBe(true);
+    expect(Math.max(...staircase.offsets)).toBeGreaterThan(0);
+    expect(staircase.track).toBeGreaterThanOrEqual(Math.max(...staircase.offsets) + 36);
     const stage = page.getByTestId("gantt-stage-block-PATH-DEMO-WS-UTILITY-technical_review");
     await stage.focus();
     await expect(stage.getByRole("tooltip")).toBeVisible();

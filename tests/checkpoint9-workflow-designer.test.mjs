@@ -181,6 +181,14 @@ test("Checkpoint 9: validateWorkflowDraft catches unreachable stages, cycles, mi
   const validResult = validateWorkflowDraft({ stages: validStages });
   assert.equal(validResult.valid, true);
   assert.equal(validResult.errors.length, 0);
+  const unscheduledStages = structuredClone(validStages);
+  unscheduledStages[0].targetDurationDays = 0;
+  assert.equal(validateWorkflowDraft({ stages: unscheduledStages }).valid, true);
+  unscheduledStages[0].targetDurationDays = -1;
+  assert.equal(validateWorkflowDraft({ stages: unscheduledStages }).valid, false);
+  unscheduledStages[0].targetDurationDays = 0;
+  unscheduledStages[0].minimumStatutoryDays = 1;
+  assert.equal(validateWorkflowDraft({ stages: unscheduledStages }).valid, false);
 
   // 1. Missing owner
   const missingOwnerStages = JSON.parse(JSON.stringify(validStages));

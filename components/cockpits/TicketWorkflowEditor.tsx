@@ -172,7 +172,7 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
               ...s,
               name: editName.trim() || s.name,
               responsibleOrgCode: editOrg,
-              targetDurationDays: Number(editDuration) || s.targetDurationDays,
+              targetDurationDays: Number.isFinite(Number(editDuration)) ? Number(editDuration) : s.targetDurationDays,
             }
           : s
       )
@@ -194,7 +194,7 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
       responsibleOrgCode: newStageOrg,
       sequenceOrder: stages.length + 1,
       responsibleOrgId: newStageOrg,
-      targetDurationDays: Number(newStageDuration) || 5,
+      targetDurationDays: Number.isFinite(Number(newStageDuration)) ? Number(newStageDuration) : 5,
       minimumStatutoryDays: 0,
       requiredInputs: ["Supporting technical submittal"],
       completionRequirements: ["State review sign-off"],
@@ -464,7 +464,7 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
                   <Input
                     id="stage-duration"
                     type="number"
-                    min={1}
+                    min={0}
                     max={120}
                     value={newStageDuration}
                     onChange={(e) => setNewStageDuration(Number(e.target.value))}

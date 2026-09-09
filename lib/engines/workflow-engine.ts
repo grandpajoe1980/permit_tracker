@@ -188,8 +188,8 @@ export function validateWorkflowDraft(params: {
     }
 
     // Duration / statutory constraints
-    if (stage.targetDurationDays <= 0) {
-      errors.push(`Stage "${stage.name}" target SLA duration must be greater than 0 days.`);
+    if (!Number.isFinite(stage.targetDurationDays) || stage.targetDurationDays < 0) {
+      errors.push(`Stage "${stage.name}" target SLA duration must be zero or greater.`);
     }
     if (stage.minimumStatutoryDays < 0) {
       errors.push(`Stage "${stage.name}" minimum statutory duration cannot be negative.`);
