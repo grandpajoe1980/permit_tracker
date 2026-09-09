@@ -47,8 +47,8 @@ const {
 } = await vite.ssrLoadModule("/lib/supabase/mappings.ts");
 
 const schema = await vite.ssrLoadModule("/db/schema.ts");
-const claimMigration = readFileSync(resolve(root, "supabase/migrations/20260908200000_identity_safe_claim_ticket.sql"), "utf8");
-const staffIntakeMigration = readFileSync(resolve(root, "supabase/migrations/20260908250000_allow_staff_intake_operations.sql"), "utf8");
+const claimMigration = readFileSync(resolve(root, "supabase/migrations/20260908234702_identity_safe_claim_ticket.sql"), "utf8");
+const staffIntakeMigration = readFileSync(resolve(root, "supabase/migrations/20260909000425_allow_staff_intake_operations.sql"), "utf8");
 
 test("Identity-safe claim and staff intake migrations preserve server-owned actors", () => {
   assert.match(claimMigration, /create or replace function public\.rpc_claim_ticket/i);

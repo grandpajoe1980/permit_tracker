@@ -4,8 +4,8 @@ import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const [coordinationMigration, catalogMigration, mutations, catalog, adminRoute, shell, scenarioSeed, commandSeed] = await Promise.all([
-  read("supabase/migrations/20260907200000_coordination_response_transaction.sql"),
-  read("supabase/migrations/20260907201000_catalog_resource_provenance.sql"),
+  read("supabase/migrations/20260907191530_20260907200000_coordination_response_transaction.sql"),
+  read("supabase/migrations/20260907191542_20260907201000_catalog_resource_provenance.sql"),
   read("lib/supabase/mutations.ts"),
   read("components/cockpits/PermitCatalogPanel.tsx"),
   read("app/admin/page.tsx"),

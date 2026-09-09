@@ -84,7 +84,8 @@ All acceptance records are deterministically isolated using the `PATH-DEMO-*` pr
 - `20260907123535_rfi_team_notifications_and_actor.sql`
 - `20260907123737_harden_mutation_authorization_nulls.sql`
 - `20260907124408_harden_mutation_authorization_nulls.sql`
-- `20260907132000_customer_request_filing_recovery.sql`
-- `20260907180000_deliberate_intake_routing.sql`
-- `20260907200000_coordination_response_transaction.sql`
-- `20260907201000_catalog_resource_provenance.sql`
+- `20260907165524_customer_request_filing_recovery.sql`
+- `20260907173101_deliberate_intake_routing.sql`
+- `20260907173748_deliberate_intake_routing_task_dates.sql`
+- `20260907191530_20260907200000_coordination_response_transaction.sql`
+- `20260907191542_20260907201000_catalog_resource_provenance.sql`

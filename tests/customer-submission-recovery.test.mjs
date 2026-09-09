@@ -6,7 +6,7 @@ const [page, mutations, repository, migration, recovery] = await Promise.all([
   readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../lib/supabase/mutations.ts", import.meta.url), "utf8"),
   readFile(new URL("../lib/repository.ts", import.meta.url), "utf8"),
-  readFile(new URL("../supabase/migrations/20260907132000_customer_request_filing_recovery.sql", import.meta.url), "utf8"),
+  readFile(new URL("../supabase/migrations/20260907165524_customer_request_filing_recovery.sql", import.meta.url), "utf8"),
   readFile(new URL("../lib/customer-submission-recovery.ts", import.meta.url), "utf8"),
 ]);
 

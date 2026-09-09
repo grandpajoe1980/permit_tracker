@@ -59,7 +59,7 @@ Implemented and live-verified on 2026-09-07:
 
 Evidence:
 
-- Forward migration `20260907132000_customer_request_filing_recovery` is applied to project `zomzacaxwqfwjstkxbpv`; read-back confirms both new indexes, nullable workstream identity, migration ledger entry, and `anon_execute=false` / `authenticated_execute=true` for the RPC.
+- Forward migration `20260907165524_customer_request_filing_recovery` is applied to project `zomzacaxwqfwjstkxbpv`; read-back confirms both new indexes, nullable workstream identity, migration ledger entry, and `anon_execute=false` / `authenticated_execute=true` for the RPC.
 - Auth-context rollback probe succeeded with Joe Skaggs's system-admin identity: a request-linked filing was returned with `workstream_id = null`, actor linkage, audit insertion, and no committed probe row.
 - A second rollback probe called the same filing twice and read back exactly one row inside the transaction, proving the idempotency boundary without leaving demo data.
 - `npm test`: 394 total, 368 passed, 0 failed, 26 explicitly skipped because local Supabase URL/key credentials are unavailable. Lint, production build, and secret scan pass.

@@ -15,7 +15,7 @@ This ledger supplements CP0–CP10 and is the active status record for the PATH 
 | R3 — shell and navigation | Implemented—unverified | Desktop and 390px browser scroll/focus/Back-Forward checks at normal and 200% zoom |
 | R4 — real-stage schedule | Implemented—unverified | Stage-run hydration, alignment/Today/readability checks, canonical destinations, unscheduled/parallel cases, idempotent demo-seed read-back |
 | CP0–CP10 remaining gates | Open | Exercise each gate with authenticated persisted evidence; do not infer completion from source or fixture tests |
-| Supabase migration consistency | Open | Reconcile local files with the genuine remote ledger and dry-run the linked migration state |
+| Supabase migration consistency | Verified | `npx --yes supabase@2.117.0 migration list --linked` reports all 54 local/remote versions equal; linked `db push --dry-run` reports `upToDate: true` with no pending migrations, seeds, or roles |
 
 ### Evidence recorded during the current implementation wave
 
@@ -23,9 +23,10 @@ This ledger supplements CP0–CP10 and is the active status record for the PATH 
 - Release checks: `npx vinext build`, the focused ESLint command, and `node scripts/scan-build-secrets.mjs` all pass. The build still reports non-blocking large-chunk warnings.
 - Live Supabase: project `zomzacaxwqfwjstkxbpv` contains the claim RPC and staff-operator boundary. Two independently authenticated workers produced one persisted claim and one conflict on the same task; the winner and audit records were read back. A non-admin staff clarification update preserved the customer submitter and attributed the audit to the staff actor; the request state and notification were restored after the probe.
 - Live demo workflow: the tagged demo workstreams retain five distinct stages in the published workflow. `stage_runs` hydration is wired and preserves unavailable history rather than inventing completion dates.
+- Migration reconciliation: the two genuinely remote-only SQL statements were recovered from `supabase_migrations.schema_migrations`; six locally mis-timestamped files were aligned to their genuine applied versions. Normalized statement hashes match the live records, and the linked dry-run is clean.
 - Git synchronization: final documentation commit `b1813e46a01fc370aa3af6e7d2367cd7d03593ff` is the current local `main` and `origin/main` full SHA; the worktree is clean. This is branch synchronization evidence, not a verified deployment or tagged-release claim.
 - Deployment signal: GitHub reports a successful `Vercel` status for implementation commit `b1813e46a01fc370aa3af6e7d2367cd7d03593ff`. The final docs-only commit is `faecb1e`; direct Vercel deployment lookup is rejected by the connected account with HTTP 403 scope authorization, so the deployed SHA and production smoke test remain open.
-- Still open: the local and genuine remote migration ledgers contain different timestamped records and require reconciliation plus dry-run proof. Browser visual/action verification is also unverified because the repository's `agent-browser` CLI is unavailable and the fallback browser could not reach the local dev server (`ERR_BLOCKED_BY_CLIENT`/connection refused). No release acceptance claim is made from source, SSR, or live RPC evidence alone.
+- Still open: browser visual/action verification is unverified because the repository's `agent-browser` CLI is unavailable and the fallback browser could not reach the local dev server (`ERR_BLOCKED_BY_CLIENT`/connection refused). Deployment SHA and production smoke test are also unverified. No release acceptance claim is made from source, SSR, or live RPC evidence alone.
 
 The guide requirement formerly listed under CP10 is superseded by R3. PATH must not ship a replacement welcome panel or replay control.
 

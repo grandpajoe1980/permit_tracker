@@ -57,7 +57,7 @@ For each task: reproduce, patch minimally, run focused tests/build/lint as appro
 
 ## Live external-filing recovery verification — 2026-09-07
 
-- Applied forward migration `20260907132000_customer_request_filing_recovery` to the connected demo project. Read-back confirms `external_filings.customer_request_id`, nullable `workstream_id`, request/permit uniqueness, and the migration ledger entry.
+- Applied forward migration `20260907165524_customer_request_filing_recovery` to the connected demo project. Read-back confirms `external_filings.customer_request_id`, nullable `workstream_id`, request/permit uniqueness, and the migration ledger entry.
 - The new `rpc_create_external_filing` is `search_path`-hardened, callable by `authenticated`, denied to `anon`, and owns the filing audit insert because the direct table insert is intentionally denied by the RLS boundary.
 - With Joe Skaggs's system-admin identity placed in the transaction JWT context, a request-linked filing with no workstream returned the canonical row and actor identity; the transaction was rolled back, so no probe record remained.
 - A second rollback probe invoked the same deterministic filing ID twice and read exactly one row inside the transaction. This proves retry idempotency without changing demo data.

@@ -221,7 +221,7 @@ test("intake routing requires an explicit editable review before fan-out", async
 });
 
 test("keeps deliberate intake outcomes persisted and duplicate-safe", async () => {
-  const routingMigration = await readFile(new URL("../supabase/migrations/20260907180000_deliberate_intake_routing.sql", import.meta.url), "utf8");
+  const routingMigration = await readFile(new URL("../supabase/migrations/20260907173748_deliberate_intake_routing_task_dates.sql", import.meta.url), "utf8");
   assert.match(routingMigration, /assignment_group_id/);
   assert.match(routingMigration, /assigned_to_user_id/);
   assert.match(routingMigration, /workflow_version_id/);
