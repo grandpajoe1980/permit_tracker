@@ -52,6 +52,25 @@ test("Checkpoint 9: TicketWorkflowEditor clearly labels live editing as This wor
   assert.match(html, /Administration &gt; Workflows|Administration > Workflows/);
 });
 
+test("Checkpoint 9: live draft creation preserves the published version stage contract", async () => {
+  const migration = await readFile(new URL("../supabase/migrations/20260909140000_preserve_published_workflow_stage_contract.sql", import.meta.url), "utf8");
+  assert.match(migration, /from public\.workflow_version_stages s/);
+  assert.match(migration, /s\.responsible_org_code/);
+  assert.match(migration, /s\.default_assignment_group_id/);
+  assert.match(migration, /workflow_stages s/);
+  assert.match(migration, /only as the legacy fallback|else\s+insert into public\.workflow_version_stages/s);
+  assert.match(migration, /grant execute on function public\.rpc_create_workflow_draft.*authenticated/s);
+});
+
+test("Checkpoint 9: published workflow instances have an authenticated triage boundary", async () => {
+  const migration = await readFile(new URL("../supabase/migrations/20260909130000_restore_workstream_creation_rpc.sql", import.meta.url), "utf8");
+  assert.match(migration, /create or replace function public\.rpc_create_workstream_from_request/);
+  assert.match(migration, /app_private\.require_project_admin/);
+  assert.match(migration, /lifecycle_status = 'published'/);
+  assert.match(migration, /customer_request_triaged/);
+  assert.match(migration, /grant execute on function public\.rpc_create_workstream_from_request.*authenticated/s);
+});
+
 test("Checkpoint 9: WorkflowDesignerPanel renders dynamic version numbers and no hardcoded v4/v5 guardrail", async () => {
   const { WorkflowDesignerPanel } = await vite.ssrLoadModule("/components/cockpits/WorkflowDesignerPanel.tsx");
   const source = await readFile(new URL("../components/cockpits/WorkflowDesignerPanel.tsx", import.meta.url), "utf8");
