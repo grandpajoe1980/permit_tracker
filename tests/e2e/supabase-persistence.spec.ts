@@ -190,7 +190,6 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await pageReadBack.click("#demo-persona-alex");
     await pageReadBack.getByRole("button", { name: "My requests", exact: true }).click();
     await expect(pageReadBack.getByRole("heading", { name: "Requests & permits", exact: true })).toBeVisible({ timeout: 15_000 });
-    await pageReadBack.getByRole("searchbox", { name: "Search my requests" }).fill(requestTitle);
     await pageReadBack.getByRole("button", { name: new RegExp(requestTitle) }).click();
     await expect(pageReadBack.getByText(customerResponse, { exact: false }).first()).toBeVisible();
     await contextReadBack.close();
