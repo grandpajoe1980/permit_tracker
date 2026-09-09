@@ -94,12 +94,12 @@ export function WorkflowJourney({
   const current = journey.currentStages[0];
   return (
     <section aria-label="Workflow journey" className="rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 bg-slate-50/70 p-4">
+      <div className="flex flex-col items-start gap-3 border-b border-slate-100 bg-slate-50/70 p-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Workflow journey</p>
           <h2 className="mt-1 text-lg font-black text-[#00284d]">What happened, what is happening, what happens next</h2>
         </div>
-        <Badge className="border-teal-200 bg-teal-50 text-xs font-black text-teal-900">{journey.summary}</Badge>
+        <Badge className="max-w-full min-w-0 whitespace-normal break-words border-teal-200 bg-teal-50 text-xs font-black text-teal-900 sm:max-w-[60%] sm:whitespace-nowrap">{journey.summary}</Badge>
       </div>
       {journey.stages.length === 0 ? (
         <p className="p-5 text-sm text-slate-600">Workflow steps are not available for this workstream yet.</p>
