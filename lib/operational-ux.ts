@@ -174,6 +174,11 @@ function sameAgency(left: string, right: string) {
   return Boolean(a && b && (a.includes(b) || b.includes(a)));
 }
 
+function isPendingRfiResponse(response: NonNullable<RFIRecord["responses"]>[number]) {
+  const decision = response.reviewDecision?.toLowerCase();
+  return Boolean(response.responseText.trim()) && decision !== "accepted" && decision !== "rejected";
+}
+
 function humanDate(value?: string) {
   if (!value) return undefined;
   const date = new Date(`${value}T12:00:00`);
@@ -363,7 +368,7 @@ function coordinationToWorkItem(request: CoordinationRequestRecord, persona: Ope
 }
 
 function rfiToWorkItem(rfi: RFIRecord, persona: OperationalPersona, workstream?: WorkstreamRecord): OperationalWorkItem {
-  const response = rfi.responses?.find((entry) => !entry.reviewDecision);
+  const response = rfi.responses?.find(isPendingRfiResponse);
   const forCustomer = persona.isCustomer && sameAgency(rfi.recipientOrgCode, "SPACEX");
   const assignedReviewer = workstream?.regulatoryLead.assignedReviewerName
     ?? participantForWorkstream(rfi.workstreamId)?.projectRole;
@@ -682,7 +687,7 @@ export function getOperationalWorkItems(options: {
     }
   }
   for (const rfi of options.rfis ?? rfisData) {
-    const responseReadyForAssignedReviewer = rfi.responses?.some((response) => !response.reviewDecision) && personaUserIds.has(participantForWorkstream(rfi.workstreamId)?.userId ?? "");
+    const responseReadyForAssignedReviewer = rfi.responses?.some(isPendingRfiResponse) && personaUserIds.has(participantForWorkstream(rfi.workstreamId)?.userId ?? "");
     if (persona.workspace === "customer" || persona.workspace === "supervisor" || persona.workspace === "state_office" || persona.workspace === "admin" || sameAgency(rfi.requestingOrgCode, persona.agencyCode) || Boolean(responseReadyForAssignedReviewer)) {
       items.push(rfiToWorkItem(rfi, persona, workstreamById.get(rfi.workstreamId)));
     }
