@@ -200,7 +200,12 @@ export function WorkstreamGraphGantt({
   const [filterState, setFilterState] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [hoveredWorkstreamId, setHoveredWorkstreamId] = useState<string | null>(null);
-  const [expandedWorkstreamIds, setExpandedWorkstreamIds] = useState<Set<string>>(new Set());
+  // The schedule is stage-first: each persisted workflow stage is visible on
+  // first render, while the control still lets a user collapse a workstream's
+  // detail lanes when they need a shorter view.
+  const [expandedWorkstreamIds, setExpandedWorkstreamIds] = useState<Set<string>>(
+    () => new Set(project.workstreams.map((workstream) => workstream.id)),
+  );
   const [zoom, setZoom] = useState<"day" | "week" | "month">("week");
   const [fitProject, setFitProject] = useState(false);
   const todayDate = useMemo(() => asOfDateTime(asOfDate), [asOfDate]);
@@ -791,37 +796,33 @@ export function WorkstreamGraphGantt({
                       const isHovered = hoveredWorkstreamId === ws.id;
                       const isExpanded = expandedWorkstreamIds.has(ws.id);
 
-                      // Baseline coordinates
-                      const baselineLeft = getTimelinePosition(ws.baselineStartDate);
-
                       // Forecast coordinates
                       const forecastLeft = getTimelinePosition(ws.forecastStartDate);
                       const forecastRight = getTimelinePosition(ws.forecastTargetDate);
 
                       const hasSlip = ws.scheduleVarianceDays > 0;
-                      const hasScheduleDates = Boolean(
-                        ws.baselineStartDate ||
-                        ws.baselineTargetDate ||
-                        ws.forecastStartDate ||
-                        ws.forecastTargetDate ||
-                        ws.actualStartDate ||
-                        ws.actualCompletionDate
-                      );
-                      const currentStart = getTimelinePosition(ws.actualStartDate ?? ws.forecastStartDate ?? ws.baselineStartDate);
-                      const currentEnd = ws.operationalState === "complete"
-                        ? getTimelinePosition(ws.actualCompletionDate ?? ws.forecastTargetDate)
-                        : todayDisplayPercent;
-                      const pastEnd = Math.min(todayDisplayPercent, currentStart);
-                      const futureStart = ws.operationalState === "complete" ? forecastRight : Math.max(todayDisplayPercent, forecastLeft);
-                      const pastWidth = Math.max(1.5, pastEnd - baselineLeft);
-                      const currentWidth = Math.max(1.5, currentEnd - currentStart);
-                      const futureWidth = ws.operationalState === "complete" ? 0 : Math.max(1.5, forecastRight - futureStart);
                       const workflowTemplates = repository.getWorkflowTemplates();
                       const workflowTemplate = workflowTemplates.find((template) => template.permitTypeId === ws.permitTypeId);
                       const workflowVersion = ws.workflowVersionId
                         ? workflowTemplates.flatMap((template) => template.versions).find((version) => version.id === ws.workflowVersionId)
                         : workflowTemplate?.versions.find((version) => version.status === "published") ?? workflowTemplate?.versions[0];
                       const workflowStages = workflowVersion?.stages ?? [];
+                      const journey = buildWorkflowJourney({ ...ws, stages: workflowStages, tasks: ws.tasks, stageRuns: ws.stageRuns }, workflowTemplates);
+                      const stageRows = workflowStages.map((stage, index) => {
+                        const stageRun = (ws.stageRuns ?? []).find((run) => run.stageId === stage.id || run.stageKey === stage.stageKey);
+                        const stageJourney = journey.stages.find((candidate) => candidate.id === stage.id);
+                        const stageTasks = ws.tasks.filter((task) => task.stageId === stage.id || task.stageId === stage.stageKey);
+                        const stageStartDates = stageTasks.flatMap((task) => [task.forecastStartDate, task.baselineStartDate].filter(Boolean) as string[]).sort();
+                        const stageEndDates = stageTasks.flatMap((task) => [task.actualCompletionDate, task.forecastDueDate, task.baselineDueDate].filter(Boolean) as string[]).sort();
+                        const stageStart = stageRun?.startedAt?.slice(0, 10) ?? stageStartDates[0];
+                        const stageEnd = stageRun?.completedAt?.slice(0, 10) ?? stageEndDates[stageEndDates.length - 1];
+                        const hasStageDates = Boolean(stageStart && stageEnd);
+                        const stageLeft = hasStageDates ? getTimelinePosition(stageStart) : 0;
+                        const stageRight = hasStageDates ? getTimelinePosition(stageEnd) : 0;
+                        const stageWidth = Math.max(1.5, stageRight - stageLeft);
+                        const stageState = stageJourney?.state === "completed" ? "Completed" : stageJourney?.state === "blocked" ? "Blocked" : stageJourney?.state === "waiting" ? "Waiting" : stageJourney?.state === "current" ? "Current" : stageJourney?.state === "not_recorded" ? "Not recorded" : stageJourney?.state === "waived" ? "Waived" : "Upcoming";
+                        return { stage, index, stageJourney, stageStart, stageEnd, hasStageDates, stageLeft, stageWidth, stageState };
+                      });
 
                       return (
                         <div key={ws.id} className="divide-y divide-slate-50">
@@ -882,7 +883,7 @@ export function WorkstreamGraphGantt({
                                 <Link
                                   href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}`}
                                   onClick={(e) => e.stopPropagation()}
-                                  className="font-bold text-slate-900 text-sm group-hover:text-teal-800 transition line-clamp-1"
+                                  className="font-bold text-slate-900 text-base group-hover:text-teal-800 transition line-clamp-1"
                                 >
                                   {ws.title}
                                 </Link>
@@ -909,8 +910,8 @@ export function WorkstreamGraphGantt({
                               </p>
                             </div>
 
-                            {/* Right timeline column with one project duration bar and expandable stage blocks */}
-                            <div className="col-span-12 relative flex h-[112px] flex-col justify-center overflow-hidden border-t border-slate-100 p-3 md:col-span-8 md:border-t-0">
+                            {/* Right timeline column: the stage lanes below are the source of truth. */}
+                            <div className="col-span-12 relative flex min-h-[112px] flex-col justify-center overflow-hidden border-t border-slate-100 p-3 md:col-span-8 md:border-t-0">
                               {/* Background monthly grid lines */}
                               <div className="absolute inset-0 grid pointer-events-none opacity-20" style={{ gridTemplateColumns: monthGridTemplate }}>
                                 {months.map((m) => (
@@ -924,50 +925,29 @@ export function WorkstreamGraphGantt({
                                 style={{ left: `${todayDisplayPercent}%` }}
                               />
 
-                              {hasScheduleDates ? (
-                                <div className="relative flex h-10 w-full items-center">
-                                  <div
-                                    className={`absolute h-9 rounded-none border px-3 text-sm font-bold shadow-sm ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} flex items-center cursor-pointer`}
-                                    style={{ left: `${forecastLeft}%`, width: `${Math.max(1.5, forecastRight - forecastLeft)}%` }}
-                                    title={`${ws.title} (${ws.code})\nState: ${stateConfig.label}\nForecast: ${displayDate(ws.forecastStartDate)} → ${displayDate(ws.forecastTargetDate)}${hasSlip ? `\nSlip: +${ws.scheduleVarianceDays} days` : ""}`}
-                                  >
-                                    <span className="truncate">{stateConfig.shortLabel}</span>
-                                  </div>
+                              <div className="relative flex h-10 w-full items-center">
+                                <div
+                                  className={`absolute h-9 rounded-none border px-3 text-base font-bold shadow-sm ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} flex items-center cursor-pointer`}
+                                  style={{ left: `${forecastLeft}%`, width: `${Math.max(1.5, forecastRight - forecastLeft)}%` }}
+                                  title={`${ws.title} (${ws.code})\nState: ${stateConfig.label}\nForecast: ${displayDate(ws.forecastStartDate)} → ${displayDate(ws.forecastTargetDate)}${hasSlip ? `\nSlip: +${ws.scheduleVarianceDays} days` : ""}`}
+                                >
+                                  <span className="truncate">{workflowStages.length > 0 ? `${workflowStages.length} stages · ${stateConfig.shortLabel}` : stateConfig.shortLabel}</span>
                                 </div>
-                              ) : (
-                                <div className="flex items-center gap-2 text-xs text-slate-500">
-                                  <span className="italic">Not scheduled</span>
-                                  <Link href={`/admin/workflows?template=${ws.permitTypeId || "all"}`} className="font-bold text-teal-700 hover:underline">
-                                    Configure schedule
-                                  </Link>
-                                </div>
-                              )}
+                              </div>
                             </div>
                           </div>
 
                           {/* Expanded Stages and Tasks Sub-Rows */}
                           {isExpanded && workflowStages.length > 0 && (
                             <div className="bg-white divide-y divide-slate-100 border-l-4 border-sky-500" aria-label={`${ws.code} workflow stages`}>
-                              {workflowStages.map((stage, index) => {
-                                const journey = buildWorkflowJourney({ ...ws, stages: workflowStages, tasks: ws.tasks, stageRuns: ws.stageRuns }, repository.getWorkflowTemplates());
-                                const stageJourney = journey.stages.find((candidate) => candidate.id === stage.id);
-                                const stageTasks = ws.tasks.filter((task) => task.stageId === stage.id || task.stageId === stage.stageKey);
-                                const stageStartDates = stageTasks.flatMap((task) => [task.forecastStartDate, task.baselineStartDate].filter(Boolean) as string[]).sort();
-                                const stageEndDates = stageTasks.flatMap((task) => [task.actualCompletionDate, task.forecastDueDate, task.baselineDueDate].filter(Boolean) as string[]).sort();
-                                const stageStart = stageStartDates[0];
-                                const stageEnd = stageEndDates[stageEndDates.length - 1];
-                                const hasStageDates = Boolean(stageStart && stageEnd);
-                                const stageLeft = hasStageDates ? getTimelinePosition(stageStart) : 0;
-                                const stageRight = hasStageDates ? getTimelinePosition(stageEnd) : 0;
-                                const stageWidth = Math.max(1.5, stageRight - stageLeft);
-                                const stageState = stageJourney?.state === "completed" ? "Completed" : stageJourney?.state === "blocked" ? "Blocked" : stageJourney?.state === "waiting" ? "Waiting" : stageJourney?.state === "current" ? "Current" : stageJourney?.state === "not_recorded" ? "Not recorded" : "Upcoming";
+                              {stageRows.map(({ stage, index, stageStart, stageEnd, hasStageDates, stageLeft, stageWidth, stageState }) => {
                                 return (
                                   <div key={stage.id} id={`phase-${encodeURIComponent(stage.name)}`} className="grid grid-cols-12 items-center bg-sky-50/30">
                                     <div className="col-span-12 p-3 pl-8 md:col-span-4 md:border-r">
                                       <Link
                                         href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}?phase=${encodeURIComponent(stage.name)}#phase-${encodeURIComponent(stage.name)}`}
                                         onClick={(event) => event.stopPropagation()}
-                                        className="text-sm font-bold text-slate-800 hover:text-teal-800 hover:underline"
+                                        className="text-base font-bold text-slate-800 hover:text-teal-800 hover:underline"
                                       >
                                         Step {stage.sequenceOrder}: {customerSafe ? stage.customerVisibilityLabel : stage.name}
                                       </Link>

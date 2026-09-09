@@ -72,7 +72,7 @@ test("Checkpoint 7: schedule renders chronological list and expandable workflow 
   assert.match(html, />Today</);
 
   // Expand controls exist for workstreams
-  assert.match(html, /Expand WS-LA82-HEAVYHAUL stages and tasks|aria-label="Expand/);
+  assert.match(html, /(?:Expand|Collapse) WS-LA82-HEAVYHAUL stages and tasks|aria-label="(?:Expand|Collapse)/);
 });
 
 test("Checkpoint 7: block/unblock changes schedule variance and critical path health", async () => {

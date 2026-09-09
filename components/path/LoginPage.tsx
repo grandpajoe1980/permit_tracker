@@ -76,6 +76,7 @@ export function LoginPage({
       key={persona.id}
       id={`demo-persona-${demoPersonaDomId(persona)}`}
       type="button"
+      disabled={loadingData}
       onClick={() => void onDemoPersonaSelect(persona)}
       className={`flex w-full items-start justify-between rounded-lg border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 ${
         highlight

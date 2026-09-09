@@ -194,4 +194,124 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(pageReadBack.getByText(customerResponse, { exact: false }).first()).toBeVisible();
     await contextReadBack.close();
   });
+
+  test("Scenario 4: Shell and stage-first schedule keep the main pane as the scroll owner", async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    await page.goto("/");
+    await expect(page.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
+    await page.click("#demo-login-trigger");
+    await page.click("#demo-persona-sarah");
+    await expect(page.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 15_000 });
+
+    const desktopShell = await page.evaluate(() => {
+      const main = document.getElementById("main-content");
+      const aside = document.querySelector("aside[aria-label='Navigation drawer']");
+      const header = document.querySelector("header");
+      if (!main || !aside || !header) return null;
+      const before = header.getBoundingClientRect().top;
+      main.scrollTop = Math.min(500, Math.max(0, main.scrollHeight - main.clientHeight));
+      const after = header.getBoundingClientRect().top;
+      return {
+        headerStationary: Math.abs(before - after) < 1,
+        sidebarOverflowY: getComputedStyle(aside).overflowY,
+      };
+    });
+    expect(desktopShell).toEqual({ headerStationary: true, sidebarOverflowY: "hidden" });
+
+    await page.locator("#nav-project").click();
+    await page.getByRole("button", { name: "Schedule", exact: true }).first().click();
+    await expect(page.getByRole("heading", { name: "Schedule", exact: true }).first()).toBeVisible();
+    await expect(page.getByLabel("Gantt schedule timeline")).toBeVisible();
+    const scheduleScrollEvidence = await page.evaluate(() => {
+      const main = document.getElementById("main-content");
+      const header = document.querySelector("header");
+      if (!main || !header) return null;
+      const before = header.getBoundingClientRect().top;
+      main.scrollTop = Math.min(700, Math.max(0, main.scrollHeight - main.clientHeight));
+      return { mainOwnsScroll: main.scrollHeight > main.clientHeight && main.scrollTop > 0, headerStationary: Math.abs(before - header.getBoundingClientRect().top) < 1 };
+    });
+    expect(scheduleScrollEvidence).toEqual({ mainOwnsScroll: true, headerStationary: true });
+    const timelineEvidence = await page.getByLabel("Gantt schedule timeline").evaluate((timeline) => {
+      const styles = Array.from(timeline.querySelectorAll<HTMLElement>("[style]"));
+      const lefts = styles.map((node) => Number.parseFloat(node.style.left)).filter(Number.isFinite);
+      const overflowingDescendant = styles.some((node) => {
+        const style = getComputedStyle(node);
+        return ["auto", "scroll"].includes(style.overflowY) && node.scrollHeight > node.clientHeight;
+      });
+      return { hasThirtyPercentTodayMarker: lefts.some((left) => Math.abs(left - 30) < 0.1), overflowingDescendant };
+    });
+    expect(timelineEvidence).toEqual({ hasThirtyPercentTodayMarker: true, overflowingDescendant: false });
+    await expect(page.getByLabel(/workflow stages/).first()).toBeVisible({ timeout: 15_000 });
+    expect(await page.getByText(/^Step \d+:/).count()).toBeGreaterThanOrEqual(3);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByLabel("Chronological schedule list")).toBeVisible();
+    const mobileOverflow = await page.evaluate(() => ({
+      documentOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      mainOverflow: (document.getElementById("main-content")?.scrollWidth ?? 0) > (document.getElementById("main-content")?.clientWidth ?? 0) + 1,
+    }));
+    expect(mobileOverflow).toEqual({ documentOverflow: false, mainOverflow: false });
+    await context.close();
+  });
+
+  test("Scenario 5: Take Ownership assigns the authenticated worker and rejects a stale competing claim", async ({ browser }) => {
+    const requestTitle = `E2E Take Ownership Collision ${Date.now()}`;
+    const contextCreator = await browser.newContext();
+    const pageCreator = await contextCreator.newPage();
+    await pageCreator.goto("/");
+    await expect(pageCreator.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
+    await pageCreator.click("#demo-login-trigger");
+    await pageCreator.click("#demo-persona-alex");
+    await pageCreator.getByRole("button", { name: "My requests", exact: true }).click();
+    await pageCreator.getByText("Request government help / service", { exact: true }).click();
+    await pageCreator.fill("#request-title", requestTitle);
+    await pageCreator.fill("#request-description", "Fresh tagged record for the authoritative claim collision scenario.");
+    await pageCreator.getByRole("button", { name: "Submit request", exact: true }).click();
+    await expect(pageCreator.getByText("Request submitted", { exact: true })).toBeVisible({ timeout: 15_000 });
+    await contextCreator.close();
+
+    const contextSarah = await browser.newContext();
+    const pageSarah = await contextSarah.newPage();
+    await pageSarah.goto("/");
+    await expect(pageSarah.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
+    await pageSarah.click("#demo-login-trigger");
+    await pageSarah.click("#demo-persona-sarah");
+    await pageSarah.getByRole("button", { name: "Team Work", exact: true }).click();
+    await expect(pageSarah.getByRole("heading", { name: "Team Work", exact: true })).toBeVisible();
+    await pageSarah.getByRole("searchbox", { name: "Filter team work" }).fill(requestTitle);
+    const sarahRow = pageSarah.locator('[data-testid^="inbox-row-"]').filter({ hasText: requestTitle }).first();
+    await expect(sarahRow).toBeVisible({ timeout: 15_000 });
+
+    const contextJoe = await browser.newContext();
+    const pageJoe = await contextJoe.newPage();
+    await pageJoe.goto("/");
+    await expect(pageJoe.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
+    await pageJoe.fill("#username", "joe.skaggs@la.gov");
+    await pageJoe.fill("#password", "PATH-MVP-2026!");
+    await pageJoe.getByRole("button", { name: "Sign In", exact: true }).click();
+    await pageJoe.getByRole("button", { name: "Team Work", exact: true }).click();
+    await expect(pageJoe.getByRole("heading", { name: "Team Work", exact: true })).toBeVisible();
+    await pageJoe.getByRole("searchbox", { name: "Filter team work" }).fill(requestTitle);
+    const joeRow = pageJoe.locator('[data-testid^="inbox-row-"]').filter({ hasText: requestTitle }).first();
+    await expect(joeRow).toBeVisible({ timeout: 15_000 });
+
+    await sarahRow.getByRole("button", { name: "Take ownership", exact: true }).click();
+    await expect(pageSarah.getByRole("status").filter({ hasText: "Claimed ownership" })).toBeVisible({ timeout: 15_000 });
+
+    await joeRow.getByRole("button", { name: "Take ownership", exact: true }).click();
+    await expect(pageJoe.getByRole("status").filter({ hasText: "Claim conflict" })).toBeVisible({ timeout: 15_000 });
+
+    await pageSarah.reload();
+    await expect(pageSarah.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
+    await pageSarah.click("#demo-login-trigger");
+    await pageSarah.click("#demo-persona-sarah");
+    await pageSarah.getByRole("button", { name: "Team Work", exact: true }).click();
+    await pageSarah.getByRole("searchbox", { name: "Filter team work" }).fill(requestTitle);
+    await expect(pageSarah.getByText("Sarah Johnson", { exact: true }).first()).toBeVisible({ timeout: 15_000 });
+    await expect(pageSarah.getByText(/user-[0-9a-f-]{36}/i)).toHaveCount(0);
+
+    await contextSarah.close();
+    await contextJoe.close();
+  });
 });

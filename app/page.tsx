@@ -947,19 +947,8 @@ export default function Home() {
     setUsername(persona.email);
     setPassword(persona.password ?? DEMO_PASSWORD);
     setLoginError("");
-    setLoadingData(false);
-    // Remote hydration runs after the route changes so the demo picker remains responsive.
-    const permits = (getOperationalPersona(persona).isCustomer && persona.email.startsWith("applicant.")
-      ? userPermits
-      : allowsFixtureData() ? pecanIslandRequests : []);
-    const finalPermits = permits;
-    setCurrentPersona(persona);
-    setProfileDraft(profileDraftForPersona(persona));
-    setCurrentUser({ username: persona.email, name: persona.name, agencyId: "spaceport", applicationIds: finalPermits.map((item) => item.id), scenario: `${persona.role} · ${persona.scenario}` });
-    setUserPermits(permits);
-    setSelectedItemId(null);
-    setRoute(getOperationalPersona(persona).isCustomer ? "customer-home" : "my-work");
-    setLoadingData(false);
+    setHydrationError("");
+    setLoadingData(true);
     setShowDemoPeople(false);
     const demoPassword = persona.password;
     if (supabaseConfigured() && !demoPassword) {
@@ -969,6 +958,7 @@ export default function Home() {
       setUserPermits([]);
       setRoute("my-work");
       setLoginError("This demo profile is not configured for production sign-in. Use an authorized account.");
+      setLoadingData(false);
       return;
     }
     if (supabaseConfigured() && demoPassword) {
@@ -980,19 +970,45 @@ export default function Home() {
           setUserPermits([]);
           setRoute("my-work");
           setLoginError(error?.message ?? "Demo authentication failed. No production data was loaded.");
+          setLoadingData(false);
           return;
         }
-        await repository.hydrateFromSupabase();
+        const hydratedFromDb = await repository.hydrateFromSupabase();
+        if (!hydratedFromDb && !allowsFixtureData()) {
+          setCurrentPersona(null);
+          setCurrentUser(null);
+          setUserPermits([]);
+          setRoute("my-work");
+          setHydrationError("The operational workspace could not load from Supabase. Retry or contact an administrator.");
+          setLoadingData(false);
+          return;
+        }
         const loaded = await loadRequestsForUser();
         const hydratedPermits = loaded.permits.length > 0 || !allowsFixtureData() ? loaded.permits : pecanIslandRequests;
         const authenticatedPersona = makeAuthenticatedPersona(user.email ?? persona.email, String(user.user_metadata?.full_name ?? persona.name), user.id);
         setCurrentPersona(authenticatedPersona);
         setProfileDraft(profileDraftForPersona(authenticatedPersona));
+        setCurrentUser({ username: user.email ?? persona.email, name: authenticatedPersona.name, agencyId: "spaceport", applicationIds: hydratedPermits.map((item) => item.id), scenario: `${authenticatedPersona.role} · ${authenticatedPersona.scenario}` });
         setUserPermits(hydratedPermits);
-        setCurrentUser((current) => current ? { ...current, applicationIds: hydratedPermits.map((item) => item.id) } : current);
+        setRoute(getOperationalPersona(authenticatedPersona).isCustomer ? "customer-home" : "my-work");
         setMutationVersion((value) => value + 1);
+        setLoadingData(false);
       })();
+      return;
     }
+
+    // Fixture-only mode has no remote identity to wait for, so it can enter the
+    // workspace directly while retaining the same state transition contract.
+    const permits = getOperationalPersona(persona).isCustomer && persona.email.startsWith("applicant.")
+      ? userPermits
+      : pecanIslandRequests;
+    setCurrentPersona(persona);
+    setProfileDraft(profileDraftForPersona(persona));
+    setCurrentUser({ username: persona.email, name: persona.name, agencyId: "spaceport", applicationIds: permits.map((item) => item.id), scenario: `${persona.role} · ${persona.scenario}` });
+    setUserPermits(permits);
+    setSelectedItemId(null);
+    setRoute(getOperationalPersona(persona).isCustomer ? "customer-home" : "my-work");
+    setLoadingData(false);
   }
 
   async function signOut() {
