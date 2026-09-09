@@ -13,6 +13,10 @@ export interface TeamWorkViewProps {
   onOpenItem: (item: OperationalWorkItem) => void;
   onTakeOwnership?: (item: OperationalWorkItem) => Promise<void> | void;
   canTakeOwnership?: boolean;
+  activeTab?: TeamWorkSectionId;
+  onActiveTabChange?: (tab: TeamWorkSectionId) => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
 }
 
 export function TeamWorkView({
@@ -23,9 +27,23 @@ export function TeamWorkView({
   onOpenItem,
   onTakeOwnership,
   canTakeOwnership = true,
+  activeTab: controlledActiveTab,
+  onActiveTabChange,
+  searchQuery: controlledSearchQuery,
+  onSearchQueryChange,
 }: TeamWorkViewProps) {
-  const [activeTab, setActiveTab] = useState<TeamWorkSectionId>("unassigned");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [localActiveTab, setLocalActiveTab] = useState<TeamWorkSectionId>("unassigned");
+  const [localSearchQuery, setLocalSearchQuery] = useState("");
+  const activeTab = controlledActiveTab ?? localActiveTab;
+  const searchQuery = controlledSearchQuery ?? localSearchQuery;
+  const setActiveTab = (tab: TeamWorkSectionId) => {
+    onActiveTabChange?.(tab);
+    if (controlledActiveTab === undefined) setLocalActiveTab(tab);
+  };
+  const setSearchQuery = (query: string) => {
+    onSearchQueryChange?.(query);
+    if (controlledSearchQuery === undefined) setLocalSearchQuery(query);
+  };
 
   const filteredByTeam = useMemo(() => {
     if (!selectedTeamId || selectedTeamId === "all") return items;
@@ -64,13 +82,13 @@ export function TeamWorkView({
         </div>
 
         {teamOptions.length > 0 && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
             <label htmlFor="team-select" className="text-xs font-bold text-slate-600">Team:</label>
             <select
               id="team-select"
               value={selectedTeamId}
               onChange={(e) => onSelectTeam?.(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 focus:border-teal-500 focus:outline-none"
+              className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 focus:border-teal-500 focus:outline-none sm:w-auto"
             >
               <option value="all">All Teams ({items.length})</option>
               {teamOptions.map((team) => (
@@ -108,7 +126,7 @@ export function TeamWorkView({
 
       {/* Search and item list */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <input
             type="search"
             aria-label="Filter team work"
@@ -117,7 +135,7 @@ export function TeamWorkView({
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full max-w-sm rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs placeholder:text-slate-400 focus:border-teal-500 focus:outline-none"
           />
-          <p className="text-xs font-bold text-slate-500 shrink-0">
+          <p className="text-left text-xs font-bold text-slate-500 sm:shrink-0 sm:text-right">
             Showing {visibleItems.length} of {currentGroup.items.length} items
           </p>
         </div>

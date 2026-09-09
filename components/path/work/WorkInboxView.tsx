@@ -9,6 +9,10 @@ export interface WorkInboxViewProps {
   onOpenItem: (item: OperationalWorkItem) => void;
   title?: string;
   subtitle?: string;
+  activeTab?: "needs_action" | "waiting" | "recently_completed";
+  onActiveTabChange?: (tab: "needs_action" | "waiting" | "recently_completed") => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
 }
 
 const EMPTY_ITEMS: OperationalWorkItem[] = [];
@@ -18,14 +22,28 @@ export function WorkInboxView({
   onOpenItem,
   title = "My Work",
   subtitle = "Prioritized operational actions assigned to you.",
+  activeTab: controlledActiveTab,
+  onActiveTabChange,
+  searchQuery: controlledSearchQuery,
+  onSearchQueryChange,
 }: WorkInboxViewProps) {
   const [now] = useState(() => Date.now());
-  const [activeTab, setActiveTab] = useState<"needs_action" | "waiting" | "recently_completed">("needs_action");
+  const [localActiveTab, setLocalActiveTab] = useState<"needs_action" | "waiting" | "recently_completed">("needs_action");
   const [filterDueSoon, setFilterDueSoon] = useState(false);
   const [filterOverdue, setFilterOverdue] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [localSearchQuery, setLocalSearchQuery] = useState("");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectedKind, setSelectedKind] = useState<string>("all");
+  const activeTab = controlledActiveTab ?? localActiveTab;
+  const searchQuery = controlledSearchQuery ?? localSearchQuery;
+  const setActiveTab = (tab: "needs_action" | "waiting" | "recently_completed") => {
+    onActiveTabChange?.(tab);
+    if (controlledActiveTab === undefined) setLocalActiveTab(tab);
+  };
+  const setSearchQuery = (query: string) => {
+    onSearchQueryChange?.(query);
+    if (controlledSearchQuery === undefined) setLocalSearchQuery(query);
+  };
 
   const needsActionItems = groups.find((g) => g.id === "needs_action")?.items ?? EMPTY_ITEMS;
   const dueSoonItems = groups.find((g) => g.id === "due_soon")?.items ?? EMPTY_ITEMS;
@@ -200,7 +218,7 @@ export function WorkInboxView({
 
       {/* List */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <input
             type="search"
             aria-label="Search work inbox"
@@ -209,7 +227,7 @@ export function WorkInboxView({
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full max-w-sm rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs placeholder:text-slate-400 focus:border-teal-500 focus:outline-none"
           />
-          <p className="text-xs font-bold text-slate-500 shrink-0">
+          <p className="text-left text-xs font-bold text-slate-500 sm:shrink-0 sm:text-right">
             Showing {filteredItems.length} items
           </p>
         </div>

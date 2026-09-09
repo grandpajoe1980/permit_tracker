@@ -314,4 +314,56 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await contextSarah.close();
     await contextJoe.close();
   });
+
+  test("Scenario 6: Back and Forward restore queue state, scroll, focus, mobile navigation, and zoom", async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    await page.goto("/");
+    await expect(page.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
+    await page.click("#demo-login-trigger");
+    await page.click("#demo-persona-sarah");
+    await expect(page.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible({ timeout: 15_000 });
+
+    const search = page.getByRole("searchbox", { name: "Search work inbox" });
+    await search.fill("RFI");
+    await page.getByRole("button", { name: /^Waiting/ }).click();
+    const beforeNavigation = await page.evaluate(() => {
+      const main = document.getElementById("main-content");
+      if (!main) return null;
+      main.scrollTop = Math.min(350, Math.max(0, main.scrollHeight - main.clientHeight));
+      return { scrollTop: main.scrollTop, scrollable: main.scrollHeight > main.clientHeight };
+    });
+    expect(beforeNavigation?.scrollable).toBe(true);
+
+    await page.locator("#nav-agency-queue").click();
+    await expect(page.getByRole("heading", { name: "Team Work", exact: true })).toBeVisible();
+    await page.goBack();
+    await expect(page.getByRole("heading", { name: "My Work", exact: true }).first()).toBeVisible();
+    await expect(search).toHaveValue("RFI");
+    await expect(page.getByRole("button", { name: /^Waiting/ })).toHaveClass(/bg-\[#00284d\]/);
+    await expect(page.locator("#nav-agency-queue")).toBeFocused();
+    const afterBack = await page.locator("#main-content").evaluate((main) => main.scrollTop);
+    expect(afterBack).toBeGreaterThan(0);
+
+    await page.goForward();
+    await expect(page.getByRole("heading", { name: "Team Work", exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    const toggle = page.getByRole("button", { name: "Toggle navigation" });
+    await toggle.click();
+    await expect(page.locator("#mobile-navigation")).toHaveAttribute("role", "dialog");
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#mobile-navigation")).not.toHaveAttribute("role", "dialog");
+    await expect(toggle).toBeFocused();
+
+    // A 195 CSS-pixel layout viewport exercises the same reflow constraints as
+    // 200% browser zoom on a 390px viewport without conflating CSS zoom with
+    // document geometry.
+    await page.setViewportSize({ width: 195, height: 844 });
+    const zoomOverflow = await page.evaluate(() => ({
+      documentOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      mainOverflow: (document.getElementById("main-content")?.scrollWidth ?? 0) > (document.getElementById("main-content")?.clientWidth ?? 0) + 1,
+    }));
+    expect(zoomOverflow).toEqual({ documentOverflow: false, mainOverflow: false });
+    await context.close();
+  });
 });

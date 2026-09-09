@@ -85,7 +85,7 @@ export function AppShell({
 
       {/* Header */}
       <header className="site-header sticky top-0 z-30 bg-[#00284d] text-white shadow-md">
-        <div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6">
+        <div className="site-header-inner mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6">
           {/* Mobile hamburger */}
           <Button
             ref={hamburgerRef}
@@ -102,12 +102,12 @@ export function AppShell({
           </Button>
 
           {/* Logo badge */}
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d] sm:size-9">
+          <span className="site-header-logo flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#f4a100] text-[#00284d] sm:size-9">
             <Zap className="size-5 fill-current" aria-hidden="true" />
           </span>
 
           {/* Brand and current context */}
-          <div className="min-w-0 flex-1">
+          <div className="site-header-context min-w-0 flex-1">
             <p className="text-xs font-black text-white sm:text-sm tracking-wide">PATH</p>
             <button
               type="button"
@@ -120,7 +120,7 @@ export function AppShell({
           </div>
 
           {/* User identity button (Clickable per step 7) */}
-          <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          <div className="site-header-actions ml-auto flex items-center gap-1.5 sm:gap-2">
             <button
               type="button"
               id="persona-selector"

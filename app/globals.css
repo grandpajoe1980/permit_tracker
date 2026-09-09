@@ -107,7 +107,7 @@ html {
 }
 
 body {
-  min-width: 320px;
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   min-height: 100dvh;
@@ -223,6 +223,30 @@ a[href]:active,
 
 .site-header .min-w-0 {
   flex: 1 1 0%;
+}
+
+@media (max-width: 24rem) {
+  .site-header-inner {
+    gap: 0.25rem;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .site-header-logo,
+  .site-header-context > button {
+    display: none;
+  }
+
+  .site-header-actions {
+    gap: 0;
+  }
+
+  .site-header-actions > button,
+  .site-header-actions #persona-selector {
+    min-width: 2.5rem;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
 }
 
 #main-content {

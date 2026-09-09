@@ -102,6 +102,7 @@ import {
   sanitizeCustomerItem,
   type OperationalWorkItem,
   type QueueSectionId,
+  type TeamWorkSectionId,
   type WorkActionId,
   type WorkspaceMode,
 } from "@/lib/operational-ux";
@@ -160,6 +161,12 @@ type ShellHistoryState = {
   queueState: string;
   queueGroup: string;
   scrollY: number;
+  workInboxTab?: "needs_action" | "waiting" | "recently_completed";
+  workInboxSearch?: string;
+  teamWorkTab?: TeamWorkSectionId;
+  teamWorkSearch?: string;
+  queueAgencyFilter?: string;
+  focusId?: string;
 };
 
 function isProjectSection(value: unknown): value is ProjectSection {
@@ -430,6 +437,10 @@ export default function Home() {
   const [queueState, setQueueState] = useState("all");
   const [queueGroup, setQueueGroup] = useState("all");
   const [queueAgencyFilter, setQueueAgencyFilter] = useState("all");
+  const [workInboxTab, setWorkInboxTab] = useState<"needs_action" | "waiting" | "recently_completed">("needs_action");
+  const [workInboxSearch, setWorkInboxSearch] = useState("");
+  const [teamWorkTab, setTeamWorkTab] = useState<TeamWorkSectionId>("unassigned");
+  const [teamWorkSearch, setTeamWorkSearch] = useState("");
   const [intakeText, setIntakeText] = useState("");
   const [intakeFile, setIntakeFile] = useState<File | null>(null);
   const [intakeStatus, setIntakeStatus] = useState("");
@@ -466,6 +477,7 @@ export default function Home() {
   const demoHydrationRef = useRef<Promise<void> | null>(null);
   const restoringScrollRef = useRef<number | null>(null);
   const [requestedWorkItemPath, setRequestedWorkItemPath] = useState<string | null>(null);
+  const restoringFocusRef = useRef<string | null>(null);
 
   const activePersona = getOperationalPersona(currentPersona);
   const operationalData = getOperationalWorkItems({
@@ -688,8 +700,14 @@ export default function Home() {
         setQueueKind(state.queueKind);
         setQueueState(state.queueState);
         setQueueGroup(state.queueGroup);
+        setWorkInboxTab(state.workInboxTab ?? "needs_action");
+        setWorkInboxSearch(state.workInboxSearch ?? "");
+        setTeamWorkTab(state.teamWorkTab ?? "unassigned");
+        setTeamWorkSearch(state.teamWorkSearch ?? "");
+        setQueueAgencyFilter(state.queueAgencyFilter ?? "all");
         setRequestedWorkItemPath(null);
         restoringScrollRef.current = state.scrollY;
+        restoringFocusRef.current = state.focusId ?? null;
         return;
       }
 
@@ -755,12 +773,18 @@ export default function Home() {
     const restoredScroll = restoringScrollRef.current;
     restoringScrollRef.current = null;
     if (restoredScroll !== null) {
-      window.requestAnimationFrame(() => document.getElementById("main-content")?.scrollTo({ top: restoredScroll, behavior: "auto" }));
+      window.requestAnimationFrame(() => {
+        document.getElementById("main-content")?.scrollTo({ top: restoredScroll, behavior: "auto" });
+        const focusId = restoringFocusRef.current;
+        restoringFocusRef.current = null;
+        if (focusId) document.getElementById(focusId)?.focus();
+      });
       return;
     }
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     document.getElementById("main-content")?.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
-  }, [route, selectedItemId, loggedIn]);
+    restoringFocusRef.current = null;
+  }, [route, projectSection, selectedItemId, selectedProjectWorkstreamId, loggedIn]);
 
   // Keep the selected project section addressable, including old secondary
   // links, even when a legacy button changes the section and route together.
@@ -783,7 +807,8 @@ export default function Home() {
 
   function currentHistoryState(): ShellHistoryState {
     const mainContent = typeof document === "undefined" ? null : document.getElementById("main-content");
-    return { route, selectedItemId, selectedProjectWorkstreamId, selectedProjectPhase, projectSection, secondaryTool, queueSearch, queueKind, queueState, queueGroup, scrollY: mainContent?.scrollTop ?? 0 };
+    const activeElement = typeof document === "undefined" ? null : document.activeElement;
+    return { route, selectedItemId, selectedProjectWorkstreamId, selectedProjectPhase, projectSection, secondaryTool, queueSearch, queueKind, queueState, queueGroup, scrollY: mainContent?.scrollTop ?? 0, workInboxTab, workInboxSearch, teamWorkTab, teamWorkSearch, queueAgencyFilter, focusId: activeElement instanceof HTMLElement ? activeElement.id || undefined : undefined };
   }
 
   function pushNavigation(path: string, state: ShellHistoryState) {
@@ -2092,6 +2117,10 @@ export default function Home() {
         onOpenItem={openItem}
         title="My Work"
         subtitle={`Prioritized actions for ${activePersona.name}.`}
+        activeTab={workInboxTab}
+        onActiveTabChange={setWorkInboxTab}
+        searchQuery={workInboxSearch}
+        onSearchQueryChange={setWorkInboxSearch}
       />
       {activePersona.isCustomer && <form onSubmit={handleIntakeSubmit} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start gap-3"><Sparkles className="mt-0.5 size-5 text-teal-700" aria-hidden="true" /><div className="flex-1"><h2 className="font-black text-[#00284d]">Ask the project office for something</h2><p className="mt-1 text-sm text-slate-600">Describe the need in plain language. PATH will suggest the lead agency and send it to the triage queue.</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><Input value={intakeText} onChange={(event) => setIntakeText(event.target.value)} placeholder="We need a heavy-haul route review for oversized trailers…" aria-label="Describe a project need" /><Button id="intake-submit-btn" type="submit" className="bg-[#00284d] font-bold">Submit request <Send className="size-4" aria-hidden="true" /></Button></div>{intakePreview && <p role="status" aria-live="polite" className="mt-3 rounded-lg bg-teal-50 p-3 text-sm font-bold text-teal-950">Suggested route: {intakePreview.categoryLabel} → {intakePreview.suggestedLeadAgency} · {intakePreview.priority.toUpperCase()}</p>}{intakeStatus && <p role="status" aria-live="polite" className="mt-2 text-sm font-bold text-teal-800">{intakeStatus}</p>}</div></div></form>}
     </div>;
@@ -2110,6 +2139,10 @@ export default function Home() {
           selectedTeamId={queueAgencyFilter === "all" ? undefined : queueAgencyFilter}
           onSelectTeam={(teamId) => setQueueAgencyFilter(teamId)}
           onOpenItem={openItem}
+          activeTab={teamWorkTab}
+          onActiveTabChange={setTeamWorkTab}
+          searchQuery={teamWorkSearch}
+          onSearchQueryChange={setTeamWorkSearch}
           onTakeOwnership={async (item) => {
             const ticketType = item.kind === "customer_request" ? "customer_request" : item.kind === "task" ? "task" : item.kind === "workflow" ? "workstream" : null;
             if (!ticketType) {
