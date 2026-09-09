@@ -958,7 +958,13 @@ export function WorkstreamGraphGantt({
                                         {months.map((month) => <div key={month.label} className="border-r border-slate-300 last:border-0" />)}
                                       </div>
                                       {hasStageDates ? (
-                                        <div className={`absolute h-9 rounded-none border px-2 text-sm font-bold shadow-sm ${STAGE_COLOR_CLASSES[index % STAGE_COLOR_CLASSES.length]}`} style={{ left: `${stageLeft}%`, width: `${stageWidth}%` }} title={`${stage.name}: ${displayDate(stageStart)} → ${displayDate(stageEnd)}`}>
+                                        <div
+                                          data-testid={`gantt-stage-block-${ws.code}-${stage.stageKey}`}
+                                          data-stage-state={stageState.toLowerCase().replaceAll(" ", "-")}
+                                          className={`absolute h-9 rounded-none border px-2 text-sm font-bold shadow-sm ${STAGE_COLOR_CLASSES[index % STAGE_COLOR_CLASSES.length]}`}
+                                          style={{ left: `${stageLeft}%`, width: `${stageWidth}%` }}
+                                          title={`${stage.name}: ${displayDate(stageStart)} → ${displayDate(stageEnd)}`}
+                                        >
                                           <span className="truncate">{stage.name}</span>
                                         </div>
                                       ) : (

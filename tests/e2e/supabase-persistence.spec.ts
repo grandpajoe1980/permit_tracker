@@ -244,6 +244,15 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     expect(timelineEvidence).toEqual({ hasThirtyPercentTodayMarker: true, overflowingDescendant: false });
     await expect(page.getByLabel(/workflow stages/).first()).toBeVisible({ timeout: 15_000 });
     expect(await page.getByText(/^Step \d+:/).count()).toBeGreaterThanOrEqual(3);
+    const parallelStages = page.getByLabel("PATH-DEMO-WS-UTILITY workflow stages");
+    await expect(parallelStages.getByText("Step 2: Technical team review", { exact: true })).toBeVisible();
+    await expect(parallelStages.getByText("Step 3: Agency coordination", { exact: true })).toBeVisible();
+    await expect(parallelStages.getByText("Current", { exact: true })).toHaveCount(2);
+    const stageBlockEvidence = await page.getByTestId("gantt-stage-block-PATH-DEMO-WS-UTILITY-technical_review").evaluate((block) => {
+      const style = getComputedStyle(block);
+      return { borderRadius: style.borderRadius, height: Math.round(block.getBoundingClientRect().height), state: block.getAttribute("data-stage-state") };
+    });
+    expect(stageBlockEvidence).toEqual({ borderRadius: "0px", height: 36, state: "current" });
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByLabel("Chronological schedule list")).toBeVisible();
