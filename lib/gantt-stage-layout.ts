@@ -17,6 +17,7 @@ function timestamp(value?: string) {
 export function layoutGanttStages(stages: GanttStageInput[], anchor: string) {
   let cursor = timestamp(anchor);
   let unscheduled = false;
+  let currentLane = 0;
   const intervals: Array<{ start: number; end: number; lane: number }> = [];
   return stages.map((stage) => {
     if (stage.durationDays === 0) unscheduled = true;
@@ -29,10 +30,14 @@ export function layoutGanttStages(stages: GanttStageInput[], anchor: string) {
       ? recordedEnd + DAY
       : start === undefined ? undefined : start + duration * DAY;
     if (start === undefined || end === undefined) return { id: stage.id, start: undefined, end: undefined, estimated: false, lane: 0 };
-    // An overlapping interval steps below every intersecting predecessor.
-    // This preserves the staircase rather than alternating between reused lanes.
-    const overlaps = intervals.filter((item) => item.start < end && item.end > start);
-    const lane = overlaps.length ? Math.max(...overlaps.map((item) => item.lane)) + 1 : 0;
+    // A workflow never rises after it has stepped down. A new overlap may add
+    // another step, while later non-overlapping stages continue to the right.
+    // Date-only stages that meet on the same handoff day are sequential. The
+    // visual bars butt together, so they must not create a needless step.
+    const overlaps = intervals.filter((item) => item.start < end - DAY && item.end - DAY > start);
+    const overlapLane = overlaps.length ? Math.max(...overlaps.map((item) => item.lane)) + 1 : 0;
+    const lane = Math.max(currentLane, overlapLane);
+    currentLane = lane;
     intervals.push({ start, end, lane });
     cursor = Math.max(...intervals.map((item) => item.end));
     return {

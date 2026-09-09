@@ -28,15 +28,34 @@ test("explicit zero leaves that stage and all successors unscheduled without cha
   assert.deepEqual(input, original);
 });
 
-test("overlap chains staircase down while adjacent dates share the top track", () => {
+test("overlap chains staircase down and later stages never climb back up", () => {
   const result = layoutGanttStages([
     { id: "a", start: "2026-09-01", end: "2026-09-04" },
     { id: "b", start: "2026-09-03", end: "2026-09-06" },
     { id: "c", start: "2026-09-05", end: "2026-09-08" },
     { id: "d", durationDays: 2 },
   ], "2026-09-01");
-  assert.deepEqual(result.map((row) => row.lane), [0, 1, 2, 0]);
+  assert.deepEqual(result.map((row) => row.lane), [0, 1, 2, 2]);
   assert.equal(result[3].start, "2026-09-09");
+});
+
+test("stages after an overlap continue right on the stepped lane", () => {
+  const result = layoutGanttStages([
+    { id: "technical", start: "2026-09-01", end: "2026-09-04" },
+    { id: "agency", start: "2026-09-03", end: "2026-09-06" },
+    { id: "construction", start: "2026-09-07", end: "2026-09-09" },
+    { id: "monitoring", start: "2026-09-10", end: "2026-09-12" },
+  ], "2026-09-01");
+  assert.deepEqual(result.map((row) => row.lane), [0, 1, 1, 1]);
+});
+
+test("same-day handoffs butt together without stepping down", () => {
+  const result = layoutGanttStages([
+    { id: "technical", start: "2026-09-01", end: "2026-09-04" },
+    { id: "agency", start: "2026-09-04", end: "2026-09-07" },
+    { id: "construction", start: "2026-09-07", end: "2026-09-10" },
+  ], "2026-09-01");
+  assert.deepEqual(result.map((row) => row.lane), [0, 0, 0]);
 });
 
 test("in-progress stage keeps its start and gets its configured demo finish", () => {

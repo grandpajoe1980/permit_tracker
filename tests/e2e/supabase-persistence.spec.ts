@@ -261,6 +261,16 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     expect(staircase.heights.every((height) => height === 36)).toBe(true);
     expect(Math.max(...staircase.offsets)).toBeGreaterThan(0);
     expect(staircase.track).toBeGreaterThanOrEqual(Math.max(...staircase.offsets) + 36);
+    expect(staircase.offsets.every((offset, index) => index === 0 || offset >= staircase.offsets[index - 1])).toBe(true);
+    const outsideLabelEvidence = await page.getByLabel("Gantt schedule timeline").evaluate((timeline) => {
+      const labels = Array.from(timeline.querySelectorAll<HTMLElement>(".left-full.top-1\\/2"));
+      return labels.every((label) => {
+        const bar = label.parentElement!;
+        const barRect = bar.getBoundingClientRect();
+        return label.getBoundingClientRect().left >= barRect.right;
+      });
+    });
+    expect(outsideLabelEvidence).toBe(true);
     const stage = page.getByTestId("gantt-stage-block-PATH-DEMO-WS-UTILITY-technical_review");
     await stage.focus();
     await expect(stage.getByRole("tooltip")).toBeVisible();

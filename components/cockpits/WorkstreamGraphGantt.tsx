@@ -786,6 +786,15 @@ export function WorkstreamGraphGantt({
                         const stageState = stageJourney?.state === "completed" ? "Completed" : stageJourney?.state === "blocked" ? "Blocked" : stageJourney?.state === "waiting" ? "Waiting" : stageJourney?.state === "current" ? "Current" : stageJourney?.state === "not_recorded" ? "Not recorded" : stageJourney?.state === "waived" ? "Waived" : "Upcoming";
                         return { stage, index, stageJourney, stageStart, stageEnd, hasStageDates, stageLeft, stageWidth, stageState, estimated, lane };
                       });
+                      const visibleStages = stageRows.filter((row) => row.hasStageDates && row.stageWidth > 0);
+                      const outsideLabelStages = new Set(visibleStages.filter((row) => {
+                        const label = customerSafe ? row.stage.customerVisibilityLabel : row.stage.name;
+                        const textWouldOverflow = row.stageWidth < Math.min(30, Math.max(7, label.length * 1.15));
+                        // A same-date successor also occupies the available label space.
+                        // Only the terminal bar on a lane may borrow the space to its right.
+                        const barToRight = visibleStages.some((candidate) => candidate !== row && candidate.lane === row.lane && candidate.index > row.index && candidate.stageLeft + candidate.stageWidth >= row.stageLeft + row.stageWidth - 0.01);
+                        return textWouldOverflow && !barToRight;
+                      }).map((row) => row.stage.id));
                       const trackHeight = Math.max(1, ...stageRows.filter((row) => row.hasStageDates && row.stageWidth > 0).map((row) => row.lane + 1)) * 40 - 4;
 
                       return (
@@ -832,13 +841,16 @@ export function WorkstreamGraphGantt({
                               {todayDisplayPercent >= 0 && todayDisplayPercent <= 100 && <div className="absolute inset-y-0 w-0.5 bg-red-500/80 z-10 pointer-events-none" style={{ left: `${todayDisplayPercent}%` }} />}
                               <div className="relative my-3 w-full" style={{ height: `${trackHeight}px` }} aria-label={`${ws.code} workflow stages`}>
                                 {!stageRows.some((row) => row.hasStageDates && row.stageWidth > 0) && <span className="px-2 text-sm text-slate-500">{stageRows.some((row) => row.hasStageDates) ? "Outside selected range" : "No scheduled stages"}</span>}
-                                {stageRows.filter((row) => row.hasStageDates && row.stageWidth > 0).map(({ stage, index, stageStart, stageEnd, stageLeft, stageWidth, stageState, estimated, lane }) => (
+                                {visibleStages.map(({ stage, index, stageStart, stageEnd, stageLeft, stageWidth, stageState, estimated, lane }) => {
+                                  const label = customerSafe ? stage.customerVisibilityLabel : stage.name;
+                                  const showOutsideLabel = outsideLabelStages.has(stage.id);
+                                  return (
                                   <Link
                                     key={stage.id}
                                     data-testid={`gantt-stage-block-${ws.code}-${stage.stageKey}`}
                                     data-stage-state={stageState.toLowerCase().replaceAll(" ", "-")}
                                     href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}?phase=${encodeURIComponent(stage.name)}#phase-${encodeURIComponent(stage.name)}`}
-                                    className={`group/stage absolute h-9 rounded-none border text-sm font-bold focus:z-20 hover:z-20 focus:outline-2 focus:outline-offset-2 ${STAGE_COLOR_CLASSES[index % STAGE_COLOR_CLASSES.length]}`}
+                                    className={`group/stage absolute h-9 overflow-visible rounded-none border text-sm font-bold focus:z-20 hover:z-20 focus:outline-2 focus:outline-offset-2 ${STAGE_COLOR_CLASSES[index % STAGE_COLOR_CLASSES.length]}`}
                                     style={{
                                       left: `${Math.max(0, stageLeft)}%`, width: `${stageWidth}%`,
                                       height: "36px",
@@ -846,12 +858,14 @@ export function WorkstreamGraphGantt({
                                     }}
                                     aria-label={`${customerSafe ? stage.customerVisibilityLabel : stage.name}: ${stageState}. ${displayDate(stageStart)} to ${displayDate(stageEnd)}`}
                                   >
-                                    <span className="block h-full overflow-hidden truncate px-1">{customerSafe ? stage.customerVisibilityLabel : stage.name}</span>
+                                    <span className={`block h-full px-1 ${showOutsideLabel ? "invisible" : "overflow-hidden truncate"}`}>{label}</span>
+                                    {showOutsideLabel && <span className="absolute left-full top-1/2 z-10 ml-1 -translate-y-1/2 whitespace-nowrap text-sm font-bold text-slate-900 drop-shadow-[0_1px_0_rgba(255,255,255,0.9)]">{label}</span>}
                                     <span role="tooltip" className="pointer-events-none absolute bottom-full left-0 z-30 mb-2 hidden w-60 rounded border border-slate-300 bg-white p-3 text-sm font-normal text-slate-900 shadow-lg group-hover/stage:block group-focus/stage:block">
-                                      <strong>{customerSafe ? stage.customerVisibilityLabel : stage.name}</strong><br />{stageState}<br />{displayDate(stageStart)} → {displayDate(stageEnd)}{estimated && <><br />Demo projection · configured duration or 10-day default</>}
+                                      <strong>{label}</strong><br />{stageState}<br />{displayDate(stageStart)} → {displayDate(stageEnd)}{estimated && <><br />Demo projection · configured duration or 10-day default</>}
                                     </span>
                                   </Link>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                               {stageRows.some((row) => !row.hasStageDates) && <div className="col-span-2 flex min-w-0 items-center self-stretch gap-1 border-l border-slate-200 px-2" aria-label="Unscheduled stages">
