@@ -243,16 +243,33 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     });
     expect(timelineEvidence).toEqual({ hasThirtyPercentTodayMarker: true, overflowingDescendant: false });
     await expect(page.getByLabel(/workflow stages/).first()).toBeVisible({ timeout: 15_000 });
-    expect(await page.getByText(/^Step \d+:/).count()).toBeGreaterThanOrEqual(3);
+    await expect(page.getByLabel("Gantt schedule timeline").locator("[aria-expanded]")).toHaveCount(0);
     const parallelStages = page.getByLabel("PATH-DEMO-WS-UTILITY workflow stages");
-    await expect(parallelStages.getByText("Step 2: Technical team review", { exact: true })).toBeVisible();
-    await expect(parallelStages.getByText("Step 3: Agency coordination", { exact: true })).toBeVisible();
-    await expect(parallelStages.getByText("Current", { exact: true })).toHaveCount(2);
+    await expect(parallelStages.getByRole("link", { name: /^Technical team review: Current/ })).toBeVisible();
+    await expect(parallelStages.getByRole("link", { name: /^Agency coordination: Current/ })).toBeVisible();
     const stageBlockEvidence = await page.getByTestId("gantt-stage-block-PATH-DEMO-WS-UTILITY-technical_review").evaluate((block) => {
       const style = getComputedStyle(block);
       return { borderRadius: style.borderRadius, height: Math.round(block.getBoundingClientRect().height), state: block.getAttribute("data-stage-state") };
     });
-    expect(stageBlockEvidence).toEqual({ borderRadius: "0px", height: 36, state: "current" });
+    expect(stageBlockEvidence.borderRadius).toBe("0px");
+    expect(stageBlockEvidence.state).toBe("current");
+    expect(stageBlockEvidence.height).toBeGreaterThanOrEqual(12);
+    const stage = page.getByTestId("gantt-stage-block-PATH-DEMO-WS-UTILITY-technical_review");
+    await stage.focus();
+    await expect(stage.getByRole("tooltip")).toBeVisible();
+    const dateAlignment = await page.getByLabel("Gantt schedule timeline").evaluate((timeline) => {
+      const start = Date.parse(timeline.getAttribute("data-range-start")!);
+      const end = Date.parse(timeline.getAttribute("data-range-end")!);
+      const today = Date.parse(timeline.getAttribute("data-today")!);
+      const marker = timeline.querySelector<HTMLElement>('[data-testid="gantt-today"]')!;
+      const monthLabel = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(today));
+      const month = Array.from(marker.parentElement!.children).find((element) => element.textContent === monthLabel)!;
+      const markerX = marker.getBoundingClientRect().left;
+      if (markerX < month.getBoundingClientRect().left || markerX > month.getBoundingClientRect().right) return Infinity;
+      return Math.abs(Number.parseFloat(marker.style.left) - (today - start) / (end - start) * 100);
+    });
+    expect(dateAlignment).toBeLessThan(0.01);
+    await page.screenshot({ path: `test-results/gantt-flat-${browser.browserType().name()}.png` });
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByLabel("Chronological schedule list")).toBeVisible();

@@ -6,14 +6,11 @@ import {
   AlertTriangle,
   ArrowRight,
   Calendar,
-  ChevronDown,
-  ChevronRight,
   Clock3,
   ExternalLink,
   Filter,
   Flame,
   GitBranch,
-  Layers,
   List,
   Sparkles,
   Zap,
@@ -25,7 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getFullProjectRecord } from "@/lib/permit-utils";
 import { repository } from "@/lib/repository";
 import { evaluateProjectSchedule } from "@/lib/engines/schedule-engine";
-import type { OperationalState, ProjectRecord, TaskRecord } from "@/lib/domain-models";
+import type { OperationalState, ProjectRecord } from "@/lib/domain-models";
 import { asOfDateTime } from "@/lib/time";
 import { buildWorkflowJourney } from "@/lib/workflow-journey";
 import { InteractiveScheduleSimulator } from "./InteractiveScheduleSimulator";
@@ -177,7 +174,6 @@ export function WorkstreamGraphGantt({
   customerSafe = false,
   onSelectWorkstream,
   onSelectProject,
-  onSelectTask,
   project: projectOverride,
   asOfDate,
   focusedWorkstreamId,
@@ -200,12 +196,6 @@ export function WorkstreamGraphGantt({
   const [filterState, setFilterState] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [hoveredWorkstreamId, setHoveredWorkstreamId] = useState<string | null>(null);
-  // The schedule is stage-first: each persisted workflow stage is visible on
-  // first render, while the control still lets a user collapse a workstream's
-  // detail lanes when they need a shorter view.
-  const [expandedWorkstreamIds, setExpandedWorkstreamIds] = useState<Set<string>>(
-    () => new Set(project.workstreams.map((workstream) => workstream.id)),
-  );
   const [zoom, setZoom] = useState<"day" | "week" | "month">("week");
   const [fitProject, setFitProject] = useState(false);
   const todayDate = useMemo(() => asOfDateTime(asOfDate), [asOfDate]);
@@ -213,11 +203,6 @@ export function WorkstreamGraphGantt({
   useEffect(() => {
     if (!focusedPhase || !focusedWorkstreamId) return;
     const frame = window.requestAnimationFrame(() => {
-      setExpandedWorkstreamIds((previous) => {
-        const next = new Set(previous);
-        next.add(focusedWorkstreamId);
-        return next;
-      });
       window.requestAnimationFrame(() => {
         document.getElementById(`phase-${encodeURIComponent(focusedPhase)}`)?.scrollIntoView({ block: "center", behavior: "auto" });
       });
@@ -236,18 +221,8 @@ export function WorkstreamGraphGantt({
     }
   }
 
-  const toggleExpand = (wsId: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    setExpandedWorkstreamIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(wsId)) next.delete(wsId);
-      else next.add(wsId);
-      return next;
-    });
-  };
-
   // Timeline boundaries include the earliest baseline work and the current forecast.
-  const timelineStart = useMemo(() => {
+  const projectStart = useMemo(() => {
     const dates = [project.baselineLaunchDate, ...project.workstreams.flatMap((ws) => [ws.baselineStartDate, ws.baselineTargetDate])]
       .filter(Boolean)
       .map((value) => new Date(`${value}T00:00:00Z`).getTime());
@@ -255,7 +230,7 @@ export function WorkstreamGraphGantt({
     return new Date(Number.isFinite(earliest) ? earliest : todayDate.getTime());
   }, [project, todayDate]);
 
-  const timelineEnd = useMemo(() => {
+  const projectEnd = useMemo(() => {
     const dates = [project.currentForecastLaunchDate, ...project.workstreams.flatMap((ws) => [ws.forecastTargetDate, ws.baselineTargetDate])]
       .filter(Boolean)
       .map((value) => new Date(`${value}T23:59:59Z`).getTime());
@@ -263,49 +238,31 @@ export function WorkstreamGraphGantt({
     return new Date(Number.isFinite(latest) ? latest : todayDate.getTime());
   }, [project, todayDate]);
 
-  const totalTimelineDays = useMemo(() => {
-    return Math.max(1, Math.round((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24)));
-  }, [timelineStart, timelineEnd]);
-
-  // Today marker is injected for deterministic tests and defaults to the current date.
-  const todayPositionPercent = useMemo(() => {
-    const elapsed = (todayDate.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24);
-    return Math.max(0, Math.min(100, (elapsed / totalTimelineDays) * 100));
-  }, [todayDate, timelineStart, totalTimelineDays]);
-
-  // The chart fits its selected range in the available plot. Today is a visual
-  // marker, not an instruction to scroll a hidden internal viewport.
-  const todayDisplayPercent = fitProject ? todayPositionPercent : 30;
-
-  // Month segments are derived from the actual persisted schedule range
-  const months = useMemo(() => {
-    const segments: Array<{ label: string; days: number; isCurrent: boolean }> = [];
-    const cursor = new Date(Date.UTC(timelineStart.getUTCFullYear(), timelineStart.getUTCMonth(), 1));
-    const end = timelineEnd.getTime();
-    const formatter = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
-    while (cursor.getTime() <= end) {
-      const monthEnd = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0, 23, 59, 59, 999));
-      const visibleStart = Math.max(timelineStart.getTime(), cursor.getTime());
-      const visibleEnd = Math.min(end, monthEnd.getTime());
-      segments.push({
-        label: formatter.format(cursor),
-        days: Math.max(1, Math.ceil((visibleEnd - visibleStart) / (1000 * 60 * 60 * 24))),
-        isCurrent: cursor.getUTCFullYear() === todayDate.getUTCFullYear() && cursor.getUTCMonth() === todayDate.getUTCMonth(),
-      });
-      cursor.setUTCMonth(cursor.getUTCMonth() + 1);
-    }
-    return segments;
-  }, [timelineStart, timelineEnd, todayDate]);
-
-  const monthGridTemplate = months.map((month) => `${month.days}fr`).join(" ");
-
-  // Helper to compute percentage position on timeline
+  // All geometry uses the same range and origin. Move the range, never just Today.
+  const spanDays = zoom === "day" ? 30 : zoom === "week" ? 180 : 365;
+  const timelineStart = fitProject ? projectStart : new Date(todayDate.getTime() - spanDays * 0.3 * 86400000);
+  const timelineEnd = fitProject ? projectEnd : new Date(timelineStart.getTime() + spanDays * 86400000);
+  const spanMs = Math.max(86400000, timelineEnd.getTime() - timelineStart.getTime());
+  function position(value: number) {
+    return (value - timelineStart.getTime()) / spanMs * 100;
+  }
+  const todayDisplayPercent = position(todayDate.getTime());
+  const months: Array<{ label: string; days: number; isCurrent: boolean }> = [];
+  const cursor = new Date(Date.UTC(timelineStart.getUTCFullYear(), timelineStart.getUTCMonth(), 1));
+  const formatter = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+  while (cursor.getTime() < timelineEnd.getTime()) {
+    const next = Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1);
+    months.push({
+      label: formatter.format(cursor),
+      days: Math.min(next, timelineEnd.getTime()) - Math.max(cursor.getTime(), timelineStart.getTime()),
+      isCurrent: cursor.getUTCFullYear() === todayDate.getUTCFullYear() && cursor.getUTCMonth() === todayDate.getUTCMonth(),
+    });
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+  const monthGridTemplate = months.map((month) => `minmax(0, ${month.days}fr)`).join(" ");
   function getTimelinePosition(dateStr?: string): number {
     if (!dateStr) return 0;
-    const date = new Date(`${dateStr}T12:00:00Z`);
-    if (isNaN(date.getTime())) return 0;
-    const days = (date.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24);
-    return Math.max(0, Math.min(100, (days / totalTimelineDays) * 100));
+    return position(new Date(dateStr.length === 10 ? `${dateStr}T12:00:00Z` : dateStr).getTime());
   }
 
   // Filtered workstreams
@@ -754,8 +711,8 @@ export function WorkstreamGraphGantt({
           {/* ================================================================ */}
           {/* TRADITIONAL GANTT SCHEDULE TIMELINE CHART                        */}
           {/* ================================================================ */}
-          <div className={`rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden ${scheduleViewMode === "bars" ? "hidden md:block" : "hidden"}`}>
-              <div tabIndex={0} aria-label="Gantt schedule timeline">
+          <div className={`rounded-xl border border-slate-200 bg-white shadow-sm ${scheduleViewMode === "bars" ? "hidden md:block" : "hidden"}`}>
+              <div tabIndex={0} aria-label="Gantt schedule timeline" data-range-start={timelineStart.toISOString()} data-range-end={timelineEnd.toISOString()} data-today={todayDate.toISOString()}>
                   {/* Timeline Header Row */}
                   <div className="grid grid-cols-12 border-b border-slate-200 bg-slate-100/90 text-xs font-bold text-slate-700">
                     {/* Left Column: Workstream Header */}
@@ -765,11 +722,12 @@ export function WorkstreamGraphGantt({
                     </div>
 
                     {/* Right Column: Timeline Months Grid */}
-                    <div className="hidden md:col-span-8 md:grid relative py-3" style={{ gridTemplateColumns: monthGridTemplate }}>
+                    <div className="hidden md:col-span-6 md:grid relative py-3" style={{ gridTemplateColumns: monthGridTemplate }}>
                       {months.map((month) => (
                         <div
                           key={month.label}
-                          className={`text-center text-sm font-bold uppercase tracking-wider border-r border-slate-200 last:border-0 ${
+                          title={month.label}
+                          className={`min-w-0 overflow-hidden text-center text-sm font-bold uppercase tracking-wider border-r border-slate-200 last:border-0 ${
                             month.isCurrent ? "text-red-700 bg-red-50/60 font-black" : "text-slate-600"
                           }`}
                         >
@@ -779,7 +737,9 @@ export function WorkstreamGraphGantt({
 
                       {/* Vertical "Today" line marker in header */}
                       <div
+                        data-testid="gantt-today"
                         className="absolute top-0 bottom-0 w-0.5 bg-red-600 z-10 pointer-events-none"
+                        hidden={todayDisplayPercent < 0 || todayDisplayPercent > 100}
                         style={{ left: `${todayDisplayPercent}%` }}
                       >
                         <span className="absolute -top-1 -translate-x-1/2 rounded bg-red-600 px-1 py-0.5 text-[9px] font-black uppercase text-white shadow">
@@ -787,6 +747,7 @@ export function WorkstreamGraphGantt({
                         </span>
                       </div>
                     </div>
+                    <div className="col-span-2 flex items-center border-l border-slate-200 px-2 text-sm">Not scheduled</div>
                   </div>
 
                   {/* Workstream Gantt Rows */}
@@ -794,13 +755,8 @@ export function WorkstreamGraphGantt({
                     {filteredWorkstreams.map((ws) => {
                       const stateConfig = STATE_COLOR_MAP[ws.operationalState] || STATE_COLOR_MAP.running;
                       const isHovered = hoveredWorkstreamId === ws.id;
-                      const isExpanded = expandedWorkstreamIds.has(ws.id);
 
-                      // Forecast coordinates
-                      const forecastLeft = getTimelinePosition(ws.forecastStartDate);
-                      const forecastRight = getTimelinePosition(ws.forecastTargetDate);
 
-                      const hasSlip = ws.scheduleVarianceDays > 0;
                       const workflowTemplates = repository.getWorkflowTemplates();
                       const workflowTemplate = workflowTemplates.find((template) => template.permitTypeId === ws.permitTypeId);
                       const workflowVersion = ws.workflowVersionId
@@ -818,11 +774,20 @@ export function WorkstreamGraphGantt({
                         const stageEnd = stageRun?.completedAt?.slice(0, 10) ?? stageEndDates[stageEndDates.length - 1];
                         const hasStageDates = Boolean(stageStart && stageEnd);
                         const stageLeft = hasStageDates ? getTimelinePosition(stageStart) : 0;
-                        const stageRight = hasStageDates ? getTimelinePosition(stageEnd) : 0;
-                        const stageWidth = Math.max(1.5, stageRight - stageLeft);
+                        // Date-only due dates are inclusive, including one-day stages.
+                        const stageRight = hasStageDates ? getTimelinePosition(stageEnd) + 86400000 / spanMs * 100 : 0;
+                        const stageWidth = Math.max(0, Math.min(100, stageRight) - Math.max(0, stageLeft));
                         const stageState = stageJourney?.state === "completed" ? "Completed" : stageJourney?.state === "blocked" ? "Blocked" : stageJourney?.state === "waiting" ? "Waiting" : stageJourney?.state === "current" ? "Current" : stageJourney?.state === "not_recorded" ? "Not recorded" : stageJourney?.state === "waived" ? "Waived" : "Upcoming";
                         return { stage, index, stageJourney, stageStart, stageEnd, hasStageDates, stageLeft, stageWidth, stageState };
                       });
+                      const laneEnds: number[] = [];
+                      const stageLanes = new Map<string, number>();
+                      for (const row of stageRows.filter((row) => row.hasStageDates && row.stageWidth > 0).sort((a, b) => a.stageLeft - b.stageLeft)) {
+                        let lane = laneEnds.findIndex((end) => end <= row.stageLeft);
+                        if (lane < 0) lane = laneEnds.length;
+                        laneEnds[lane] = Math.max(0, row.stageLeft) + row.stageWidth;
+                        stageLanes.set(row.stage.id, lane);
+                      }
 
                       return (
                         <div key={ws.id} className="divide-y divide-slate-50">
@@ -837,7 +802,7 @@ export function WorkstreamGraphGantt({
                               openWorkstream(ws);
                             }}
                             onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") {
+                              if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
                                 event.preventDefault();
                                 openWorkstream(ws);
                               }
@@ -848,239 +813,63 @@ export function WorkstreamGraphGantt({
                             }`}
                             title={`Click to open ${ws.title} (${ws.code}) details page`}
                           >
-                            {/* Left Meta Column */}
-                            <div className="col-span-12 border-b border-slate-200 p-3.5 md:col-span-4 md:border-b-0 md:border-r">
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => toggleExpand(ws.id, e)}
-                                    onKeyDown={(e) => e.stopPropagation()}
-                                    aria-expanded={isExpanded}
-                                    aria-label={isExpanded ? `Collapse ${ws.code} stages and tasks` : `Expand ${ws.code} stages and tasks`}
-                                    className="p-1 rounded text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition"
-                                    title={isExpanded ? "Collapse workflow stages/tasks" : "Expand workflow stages/tasks"}
-                                  >
-                                    {isExpanded ? <ChevronDown className="size-3.5 text-teal-800" /> : <ChevronRight className="size-3.5" />}
-                                  </button>
-                                  <span className="font-mono text-xs font-black text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
-                                    {ws.code}
-                                  </span>
-                                  {ws.isCriticalPath && (
-                                    <Badge className="bg-purple-100 text-purple-900 border-purple-200 text-[10px] py-0 font-bold flex items-center gap-0.5">
-                                      <Flame className="size-3 text-amber-500 fill-amber-500" /> {customerSafe ? "Priority sequence" : "Critical Path"}
-                                    </Badge>
-                                  )}
-                                </div>
-
-                                <Badge variant="outline" className="font-bold text-[11px] shrink-0">
-                                  {ws.regulatoryLead.orgCode}
-                                </Badge>
-                              </div>
-
-                              {/* Workstream Title & Link */}
-                              <div className="mt-1 flex items-center justify-between group">
-                                <Link
-                                  href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}`}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="font-bold text-slate-900 text-base group-hover:text-teal-800 transition line-clamp-1"
-                                >
-                                  {ws.title}
+                            <div className="col-span-4 min-w-0 border-r border-slate-200 px-3 py-3">
+                              <Link href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}`} className="block truncate text-base font-bold text-slate-900 hover:text-teal-800" title={`${ws.title} · ${ws.code} · Owner: ${ws.regulatoryLead.assignedReviewerName || "Unassigned"}`}>
+                                {ws.title}
+                              </Link>
+                              <div className="mt-1 flex min-w-0 items-center gap-2 text-xs">
+                                <Link className="min-w-0 flex-1 truncate text-slate-500 hover:underline" href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}?phase=${encodeURIComponent(ws.currentStageName || "phase")}#phase-${encodeURIComponent(ws.currentStageName || "phase")}`}>
+                                  {ws.regulatoryLead.orgCode} · {ws.currentStageName || "Not configured"}
                                 </Link>
-                                <ExternalLink className="size-3 text-slate-400 group-hover:text-teal-700 shrink-0 ml-1 opacity-0 group-hover:opacity-100 transition" />
+                                <span className={`shrink-0 rounded-full border px-2 text-[10px] font-bold ${stateConfig.badgeBg} ${stateConfig.badgeText}`}>{stateConfig.shortLabel}</span>
                               </div>
-
-                              {/* Current Stage & State Badge */}
-                              <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap text-xs">
-                                <Link
-                                  href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}?phase=${encodeURIComponent(ws.currentStageName || "phase")}#phase-${encodeURIComponent(ws.currentStageName || "phase")}`}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="text-slate-500 truncate max-w-[200px] hover:text-teal-800 hover:underline"
-                                  title="Open stage anchor"
-                                >
-                                  {ws.currentStageName || "Technical Review"}
-                                </Link>
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${stateConfig.badgeBg} ${stateConfig.badgeText}`}>
-                                  <span className={`size-1.5 rounded-full ${stateConfig.dotColor}`} />
-                                  {stateConfig.shortLabel}
-                                </span>
-                              </div>
-                              <p className="mt-1 truncate text-[11px] text-slate-500" title={`Current owner: ${ws.regulatoryLead.assignedReviewerName}`}>
-                                Owner: {ws.regulatoryLead.assignedReviewerName || "Unassigned"} · {ws.regulatoryLead.orgCode}
-                              </p>
                             </div>
 
-                            {/* Right timeline column: the stage lanes below are the source of truth. */}
-                            <div className="col-span-12 relative flex min-h-[112px] flex-col justify-center overflow-hidden border-t border-slate-100 p-3 md:col-span-8 md:border-t-0">
-                              {/* Background monthly grid lines */}
+                            {/* One horizontal stage track per workstream; no expandable child rows. */}
+                            <div className="col-span-6 relative min-w-0 self-stretch flex items-center" data-testid={`gantt-track-${ws.code}`}>
                               <div className="absolute inset-0 grid pointer-events-none opacity-20" style={{ gridTemplateColumns: monthGridTemplate }}>
-                                {months.map((m) => (
-                                  <div key={m.label} className="border-r border-slate-300 h-full last:border-0" />
+                                {months.map((month) => <div key={month.label} className="border-r border-slate-300 last:border-0" />)}
+                              </div>
+                              {todayDisplayPercent >= 0 && todayDisplayPercent <= 100 && <div className="absolute inset-y-0 w-0.5 bg-red-500/80 z-10 pointer-events-none" style={{ left: `${todayDisplayPercent}%` }} />}
+                              <div className="relative h-9 w-full" aria-label={`${ws.code} workflow stages`}>
+                                {!stageRows.some((row) => row.hasStageDates && row.stageWidth > 0) && <span className="px-2 text-sm text-slate-500">{stageRows.some((row) => row.hasStageDates) ? "Outside selected range" : "No scheduled stages"}</span>}
+                                {stageRows.filter((row) => row.hasStageDates && row.stageWidth > 0).map(({ stage, index, stageStart, stageEnd, stageLeft, stageWidth, stageState }) => (
+                                  <Link
+                                    key={stage.id}
+                                    data-testid={`gantt-stage-block-${ws.code}-${stage.stageKey}`}
+                                    data-stage-state={stageState.toLowerCase().replaceAll(" ", "-")}
+                                    href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}?phase=${encodeURIComponent(stage.name)}#phase-${encodeURIComponent(stage.name)}`}
+                                    className={`group/stage absolute h-9 rounded-none border text-sm font-bold focus:z-20 hover:z-20 focus:outline-2 focus:outline-offset-2 ${STAGE_COLOR_CLASSES[index % STAGE_COLOR_CLASSES.length]}`}
+                                    style={{
+                                      left: `${Math.max(0, stageLeft)}%`, width: `${stageWidth}%`,
+                                      // Concurrent stages share the same row, never cover each other.
+                                      height: `${36 / Math.max(1, laneEnds.length)}px`,
+                                      top: `${36 * (stageLanes.get(stage.id) ?? 0) / Math.max(1, laneEnds.length)}px`,
+                                    }}
+                                    aria-label={`${customerSafe ? stage.customerVisibilityLabel : stage.name}: ${stageState}. ${displayDate(stageStart)} to ${displayDate(stageEnd)}`}
+                                  >
+                                    <span className="block h-full overflow-hidden truncate px-1">{customerSafe ? stage.customerVisibilityLabel : stage.name}</span>
+                                    <span role="tooltip" className="pointer-events-none absolute bottom-full left-0 z-30 mb-2 hidden w-60 rounded border border-slate-300 bg-white p-3 text-sm font-normal text-slate-900 shadow-lg group-hover/stage:block group-focus/stage:block">
+                                      <strong>{customerSafe ? stage.customerVisibilityLabel : stage.name}</strong><br />{stageState}<br />{displayDate(stageStart)} → {displayDate(stageEnd)}
+                                    </span>
+                                  </Link>
                                 ))}
                               </div>
-
-                              {/* Vertical "Today" line marker across row */}
-                              <div
-                                className="absolute top-0 bottom-0 w-0.5 bg-red-500/80 z-10 pointer-events-none"
-                                style={{ left: `${todayDisplayPercent}%` }}
-                              />
-
-                              <div className="relative flex h-10 w-full items-center">
-                                <div
-                                  className={`absolute h-9 rounded-none border px-3 text-base font-bold shadow-sm ${stateConfig.barBorder} ${stateConfig.barColor} ${stateConfig.textColor} flex items-center cursor-pointer`}
-                                  style={{ left: `${forecastLeft}%`, width: `${Math.max(1.5, forecastRight - forecastLeft)}%` }}
-                                  title={`${ws.title} (${ws.code})\nState: ${stateConfig.label}\nForecast: ${displayDate(ws.forecastStartDate)} → ${displayDate(ws.forecastTargetDate)}${hasSlip ? `\nSlip: +${ws.scheduleVarianceDays} days` : ""}`}
-                                >
-                                  <span className="truncate">{workflowStages.length > 0 ? `${workflowStages.length} stages · ${stateConfig.shortLabel}` : stateConfig.shortLabel}</span>
-                                </div>
-                              </div>
                             </div>
+                              {stageRows.some((row) => !row.hasStageDates) && <div className="col-span-2 flex min-w-0 items-center self-stretch gap-1 border-l border-slate-200 px-2" aria-label="Unscheduled stages">
+                                {stageRows.filter((row) => !row.hasStageDates).map(({ stage, index, stageState }) => <Link
+                                  key={stage.id}
+                                  href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}?phase=${encodeURIComponent(stage.name)}#phase-${encodeURIComponent(stage.name)}`}
+                                  className={`group/undated relative min-w-0 flex-1 border px-1 py-2 text-sm focus:z-20 hover:z-20 ${STAGE_COLOR_CLASSES[index % STAGE_COLOR_CLASSES.length]}`}
+                                  title={`${customerSafe ? stage.customerVisibilityLabel : stage.name} · ${stageState} · Not scheduled`}
+                                  aria-label={`${customerSafe ? stage.customerVisibilityLabel : stage.name}: ${stageState}. Not scheduled`}
+                                ><span className="block truncate">{customerSafe ? stage.customerVisibilityLabel : stage.name}</span>
+                                  <span role="tooltip" className="pointer-events-none absolute bottom-full right-0 z-30 mb-2 hidden w-60 rounded border border-slate-300 bg-white p-3 text-sm text-slate-900 shadow-lg group-hover/undated:block group-focus/undated:block">{customerSafe ? stage.customerVisibilityLabel : stage.name}<br />{stageState} · Not scheduled</span>
+                                </Link>)}
+                              </div>}
+
                           </div>
 
-                          {/* Expanded Stages and Tasks Sub-Rows */}
-                          {isExpanded && workflowStages.length > 0 && (
-                            <div className="bg-white divide-y divide-slate-100 border-l-4 border-sky-500" aria-label={`${ws.code} workflow stages`}>
-                              {stageRows.map(({ stage, index, stageStart, stageEnd, hasStageDates, stageLeft, stageWidth, stageState }) => {
-                                return (
-                                  <div key={stage.id} id={`phase-${encodeURIComponent(stage.name)}`} className="grid grid-cols-12 items-center bg-sky-50/30">
-                                    <div className="col-span-12 p-3 pl-8 md:col-span-4 md:border-r">
-                                      <Link
-                                        href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}?phase=${encodeURIComponent(stage.name)}#phase-${encodeURIComponent(stage.name)}`}
-                                        onClick={(event) => event.stopPropagation()}
-                                        className="text-base font-bold text-slate-800 hover:text-teal-800 hover:underline"
-                                      >
-                                        Step {stage.sequenceOrder}: {customerSafe ? stage.customerVisibilityLabel : stage.name}
-                                      </Link>
-                                      <p className="mt-0.5 text-xs text-slate-500">{customerSafe ? "Workflow milestone" : `${stage.responsibleOrgCode} · ${stage.targetDurationDays} day target`}</p>
-                                    </div>
-                                    <div className="col-span-12 relative flex min-h-[52px] items-center overflow-hidden p-3 md:col-span-8">
-                                      <div className="absolute inset-0 grid pointer-events-none opacity-15" style={{ gridTemplateColumns: monthGridTemplate }}>
-                                        {months.map((month) => <div key={month.label} className="border-r border-slate-300 last:border-0" />)}
-                                      </div>
-                                      {hasStageDates ? (
-                                        <div
-                                          data-testid={`gantt-stage-block-${ws.code}-${stage.stageKey}`}
-                                          data-stage-state={stageState.toLowerCase().replaceAll(" ", "-")}
-                                          className={`absolute h-9 rounded-none border px-2 text-sm font-bold shadow-sm ${STAGE_COLOR_CLASSES[index % STAGE_COLOR_CLASSES.length]}`}
-                                          style={{ left: `${stageLeft}%`, width: `${stageWidth}%` }}
-                                          title={`${stage.name}: ${displayDate(stageStart)} → ${displayDate(stageEnd)}`}
-                                        >
-                                          <span className="truncate">{stage.name}</span>
-                                        </div>
-                                      ) : (
-                                        <span className="relative text-sm italic text-slate-500">Not scheduled</span>
-                                      )}
-                                      <span className="relative ml-auto text-xs font-black uppercase tracking-wide text-slate-600">{stageState}</span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                          {isExpanded && ws.tasks && ws.tasks.length > 0 && (
-                            <div className="bg-slate-50/70 divide-y divide-slate-100 border-l-4 border-teal-600">
-                              {ws.tasks.map((task: TaskRecord) => {
-                                const hasDates = Boolean(task.baselineStartDate || task.baselineDueDate || task.forecastStartDate || task.forecastDueDate || task.actualCompletionDate);
-                                const isTaskComplete = task.status === "completed";
-                                const taskBarColor = isTaskComplete
-                                  ? "bg-teal-500 border-teal-600 text-white"
-                                  : task.status === "blocked"
-                                    ? "bg-rose-500 border-rose-600 text-white"
-                                    : task.status === "in_progress"
-                                      ? "bg-emerald-500 border-emerald-600 text-white"
-                                      : task.status === "waiting"
-                                        ? "bg-amber-500 border-amber-600 text-slate-900"
-                                        : "bg-slate-300 border-slate-400 text-slate-800";
-
-                                const taskBaselineLeft = task.baselineStartDate ? getTimelinePosition(task.baselineStartDate) : undefined;
-                                const taskBaselineRight = task.baselineDueDate ? getTimelinePosition(task.baselineDueDate) : undefined;
-                                const taskForecastLeft = task.forecastStartDate ? getTimelinePosition(task.forecastStartDate) : undefined;
-                                const taskForecastRight = task.forecastDueDate ? getTimelinePosition(task.forecastDueDate) : undefined;
-                                const taskActualRight = task.actualCompletionDate ? getTimelinePosition(task.actualCompletionDate) : undefined;
-
-                                const taskBarLeft = taskForecastLeft ?? taskBaselineLeft ?? 0;
-                                const taskBarEnd = taskActualRight ?? taskForecastRight ?? taskBaselineRight ?? (taskBarLeft + 3);
-                                const taskBarWidth = Math.max(1.5, taskBarEnd - taskBarLeft);
-
-                                return (
-                                  <div
-                                    key={task.id}
-                                    className="grid grid-cols-12 items-center hover:bg-slate-100/70 transition-colors"
-                                  >
-                                    {/* Sub-row left metadata */}
-                                    <div className="col-span-12 p-3 pl-8 md:col-span-4 border-r border-slate-200">
-                                      <div className="flex items-center gap-1.5 flex-wrap">
-                                        <Link
-                                          href={`/work/task/${encodeURIComponent(task.id)}`}
-                                          className="text-xs font-bold text-slate-900 hover:text-teal-800 hover:underline flex items-center gap-1"
-                                        >
-                                          <Layers className="size-3 text-slate-400" />
-                                          <span>{task.title}</span>
-                                          <ExternalLink className="size-2.5 text-slate-400" />
-                                        </Link>
-                                      </div>
-                                      <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-500 flex-wrap">
-                                        <Badge variant="outline" className="text-[9px] py-0">{task.assignedOrgCode || "Gov"}</Badge>
-                                        <span className="font-semibold uppercase">{task.status.replace("_", " ")}</span>
-                                        {task.isCriticalPath && (
-                                          <span className="text-purple-700 font-bold">Critical</span>
-                                        )}
-                                        {task.predecessorTaskIds?.length === 0 && (
-                                          <span className="text-sky-700 font-bold">Parallel start</span>
-                                        )}
-                                      </div>
-                                      <div className="mt-0.5 text-[10px] text-slate-500">
-                                        {hasDates ? (
-                                          <span>Due: {displayDate(task.forecastDueDate || task.baselineDueDate)}</span>
-                                        ) : (
-                                          <span>Schedule: <span className="italic text-slate-400">Not scheduled</span> <Link href={`/admin/workflows?template=${ws.permitTypeId || "all"}`} className="text-teal-700 hover:underline font-bold">Configure</Link></span>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    {/* Sub-row right timeline bar */}
-                                    <div className="col-span-12 relative flex h-10 flex-col justify-center overflow-hidden border-t border-slate-100 p-2 md:col-span-8 md:border-t-0">
-                                      {/* Background monthly grid lines */}
-                                      <div className="absolute inset-0 grid pointer-events-none opacity-15" style={{ gridTemplateColumns: monthGridTemplate }}>
-                                        {months.map((m) => (
-                                          <div key={m.label} className="border-r border-slate-300 h-full last:border-0" />
-                                        ))}
-                                      </div>
-
-                                      {/* Today line */}
-                                      <div
-                                        className="absolute top-0 bottom-0 w-0.5 bg-red-500/80 z-10 pointer-events-none"
-                                        style={{ left: `${todayDisplayPercent}%` }}
-                                      />
-
-                                      {hasDates ? (
-                                        <div className="relative w-full h-5">
-                                          <Link
-                                            href={`/work/task/${encodeURIComponent(task.id)}`}
-                                            className={`absolute h-4 rounded border text-[9px] font-bold px-1.5 flex items-center truncate ${taskBarColor} shadow-xs hover:shadow-sm cursor-pointer`}
-                                            style={{
-                                              left: `${taskBarLeft}%`,
-                                              width: `${taskBarWidth}%`,
-                                            }}
-                                            title={`Task: ${task.title}\nStatus: ${task.status}\nAssigned: ${task.assignedUserName || task.assignedOrgCode || "Gov"}`}
-                                          >
-                                            <span className="truncate">{task.title}</span>
-                                          </Link>
-                                        </div>
-                                      ) : (
-                                        <div className="flex items-center gap-2 text-[11px] text-slate-400 italic px-2">
-                                          <span>Not scheduled</span>
-                                          <Link href={`/admin/workflows?template=${ws.permitTypeId || "all"}`} className="text-teal-700 hover:underline text-[10px] not-italic font-bold">
-                                            Configure schedule
-                                          </Link>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
                         </div>
                       );
                     })}

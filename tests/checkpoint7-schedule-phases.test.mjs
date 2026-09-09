@@ -55,7 +55,7 @@ test("Checkpoint 7: schedule links are not intercepted into the project shell", 
   assert.match(page, /desiredPathBase.*phase-\$\{encodeURIComponent\(selectedProjectPhase\)\}/s);
 });
 
-test("Checkpoint 7: schedule renders chronological list and expandable workflow tasks", async () => {
+test("Checkpoint 7: schedule renders a flat stage track without expansion controls", async () => {
   const { WorkstreamGraphGantt } = await vite.ssrLoadModule("/components/cockpits/WorkstreamGraphGantt.tsx");
   const html = renderToStaticMarkup(React.createElement(WorkstreamGraphGantt));
 
@@ -71,8 +71,8 @@ test("Checkpoint 7: schedule renders chronological list and expandable workflow 
   // Contains Today control
   assert.match(html, />Today</);
 
-  // Expand controls exist for workstreams
-  assert.match(html, /(?:Expand|Collapse) WS-LA82-HEAVYHAUL stages and tasks|aria-label="(?:Expand|Collapse)/);
+  assert.doesNotMatch(html, /aria-expanded|stages and tasks|\d+ stages ·/);
+  assert.match(html, /data-testid="gantt-track-WS-LA82-HEAVYHAUL"/);
 });
 
 test("Checkpoint 7: block/unblock changes schedule variance and critical path health", async () => {

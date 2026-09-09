@@ -43,7 +43,7 @@ test("Gantt Schedule Bars [Feature]: Renders readable project and stage schedule
   }
 
   // 2. Render WorkstreamGraphGantt to static markup
-  const html = renderToStaticMarkup(React.createElement(WorkstreamGraphGantt));
+  const html = renderToStaticMarkup(React.createElement(WorkstreamGraphGantt, { asOfDate: "2026-09-09" }));
 
   // 3. Verify Gantt Header and Title
   assert.match(html, /Project Delivery Schedule &amp; Schedule analysis|Project Delivery Schedule & Schedule analysis/);
@@ -58,8 +58,6 @@ test("Gantt Schedule Bars [Feature]: Renders readable project and stage schedule
   assert.match(html, /Today \([A-Za-z]{3} \d{1,2}\)/);
 
   // 5. Verify Timeline Month Headers
-  assert.match(html, /May 2026/);
-  assert.match(html, /Jun 2026/);
   assert.match(html, /Jul 2026/);
   assert.match(html, /Aug 2026/);
   assert.match(html, /Sep 2026/);
