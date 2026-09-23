@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "check:offline": "npm run typecheck && npm run lint -- --quiet && npm test",
     "check:connected": "node scripts/run-connected-tests.mjs",
+    "check:deployment": "node scripts/check-deployment.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vercel --ignore-pattern scripts/reviewer2-exhaustive-audit.mjs",
     "supabase:probe": "node scripts/supabase-probe.mjs",
     "supabase:rls": "node scripts/test-supabase-rls-isolation.mjs",

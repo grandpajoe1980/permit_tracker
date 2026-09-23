@@ -731,12 +731,13 @@ class ProjectDeliveryRepository {
 
     const client = getSupabaseBrowser();
     if (client) {
-      const { error } = await client.rpc("rpc_replace_workflow_draft_stages", {
+      const { data, error } = await client.rpc("rpc_replace_workflow_draft_stages", {
         p_version_id: params.draftVersionId,
         p_stages: normalizedStages,
       });
-      if (error) {
-        if (!allowsFixtureData()) return { data: null, error: new Error(error.message) };
+      const receipt = data as { id?: string; status?: string; stageCount?: number } | null;
+      if (error || receipt?.id !== params.draftVersionId || receipt.status !== "draft" || receipt.stageCount !== normalizedStages.length) {
+        if (!allowsFixtureData()) return { data: null, error: new Error(error?.message ?? "The database did not confirm the workflow draft stage save.") };
         // In fixture mode a configured-but-unavailable backend is allowed to
         // fall back to the deterministic in-memory repository.
       }
