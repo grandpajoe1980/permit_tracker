@@ -1,5 +1,16 @@
 # PATH Progress
 
+## Filing provenance and least-privilege acceptance — September 23, 2026
+
+- The customer authorization portfolio now connects a filing to its actual customer request ID and permit type. It no longer assigns PATH status from an unrelated request merely because an agency handles both. The external status is labeled as a PATH entry, with its recorded source, agency system, update date, and a secure agency-record link when present. The screen explicitly says the agency status is not synchronized. Resource links no longer carry a blanket "Verified" heading.
+- The connected document acceptance test no longer initializes a service-role client or deletes an immutable document version and its audit events after success. Each upload has a unique `document-lifecycle-` filename retained in the isolated demo project and reported in the test annotation. `npm run check:connected` requires the public URL/key configuration and fails closed when either is absent; a privileged key is not needed for this browser suite.
+- Restored the existing `DOS` Supabase demo project (`zomzacaxwqfwjstkxbpv`) from inactive to `ACTIVE_HEALTHY`. Read-only verification found 70 remote migration versions matching all 70 repository migrations and three external filings (none yet linked to customer requests). External filings have RLS enabled, no anonymous SELECT privilege, and authenticated project-access SELECT policies. No database schema or data was changed by this checkpoint.
+- Supabase security advisors currently flag 35 authenticated `SECURITY DEFINER` functions for individual authorization review and one leaked-password-protection configuration warning. These are existing findings, not proof that each RPC is unsafe. See the [function advisor](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable) and [password-protection guidance](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+
+`npm run check:offline` passes TypeScript, lint, production build, secret scan, and 472 Node tests (445 passed, zero failed, 27 credential-dependent skips). Connected browser acceptance remains open: this checkout has no public Supabase configuration, and the restored demo project is also used by the deployed demonstration site. Run write-producing browser suites only against an isolated acceptance project; keep the new tagged files as audit evidence or clean them through an explicit test-data retention policy.
+
+Open provenance issue: the current `rpc_create_external_filing` writes `last_status_verified_at` when a customer supplies any status other than `not_started`. That timestamp is therefore not independent proof from the agency. The portfolio deliberately calls it a PATH entry. A later migration should separate customer status entry from an authorized verification action with evidence and an audit trail.
+
 ## Market roadmap Phase 0 — September 23, 2026 (in progress)
 
 The reviewed [market benchmark and roadmap](market-benchmark-roadmap-2026-09.md) is published on `main`. This checkpoint starts PATH-001 and PATH-002:

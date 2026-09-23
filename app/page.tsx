@@ -80,6 +80,7 @@ import {
   supabaseConfigured,
 } from "@/lib/supabase-browser";
 import { repository } from "@/lib/repository";
+import { agencyRecordUrl, filingForPermit, requestForPermit } from "@/lib/filing-provenance";
 import { allowsFixtureData } from "@/lib/data-mode";
 import { membershipRoleForRoleId, teamUsersFromMemberships } from "@/lib/admin-users";
 import { downloadDocumentFile, mutateUploadDocumentVersion } from "@/lib/supabase/storage";
@@ -2393,25 +2394,35 @@ export default function Home() {
           </CardHeader>
           <CardContent className="space-y-3">
             {catalog.map((permit) => {
-              const filing = filings.find((entry) => entry.permitTypeId === permit.id);
-              const request = userPermits.find((entry) => entry.leadAgencyCode.includes(permit.responsibleOrgCode));
+              const filing = filingForPermit(permit.id, filings);
+              const pathRequest = requestForPermit(permit.id, filing, visibleCustomerRequests);
+              const demoPermit = !pathRequest && !filing && allowsFixtureData()
+                ? userPermits.find((entry) => entry.leadAgencyCode.includes(permit.responsibleOrgCode))
+                : undefined;
+              const recordUrl = agencyRecordUrl(filing);
+              const pathStatus = pathRequest?.status.replaceAll("_", " ") ?? demoPermit?.statusLabel ?? (filing ? "No linked request shown" : "Not started");
               return (
                 <div key={permit.id} className="rounded-xl border border-slate-200 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-black text-[#00284d]">{permit.name}</p>
-                      <p className="mt-1 text-xs font-semibold text-slate-500">{permit.responsibleOrgCode} · {request?.title ?? "Catalog authorization"} · {filingModeLabel(permit.filingMode)}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">{permit.responsibleOrgCode} · {pathRequest?.title ?? demoPermit?.title ?? "Catalog authorization"} · {filingModeLabel(permit.filingMode)}</p>
                     </div>
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase text-slate-700">PATH: {request?.statusLabel ?? "Not started"}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase text-slate-700">PATH request: {pathStatus}</span>
                   </div>
                   <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-4">
-                    <span>External ref: <strong>{filing?.externalReferenceNumber ?? "Not recorded"}</strong></span>
-                    <span>External status: <strong>{filing?.externalStatus?.replaceAll("_", " ") ?? "Not filed"}</strong></span>
+                    <span>Agency record ID: <strong>{filing?.externalReferenceNumber ?? "Not recorded"}</strong></span>
+                    <span>PATH-entered external status: <strong>{filing?.externalStatus?.replaceAll("_", " ") ?? "No filing recorded"}</strong></span>
                     <span>Submitted: <strong>{formatDate(filing?.submittedAt)}</strong></span>
-                    <span>Decision target: <strong>{formatDate(request?.targetDate)}</strong></span>
+                    <span>PATH target: <strong>{formatDate(pathRequest?.desiredDate ?? demoPermit?.targetDate)}</strong></span>
                   </div>
+                  {filing && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+                    <p><strong>Source:</strong> Entered in PATH by {filing.submittedByName ?? "a project participant"}. Agency system: {filing.authoritativeSystemName ?? permit.responsibleOrgCode}. PATH record updated {formatDate(filing.updatedAt)}.</p>
+                    <p className="mt-1">PATH does not synchronize this status with the agency. Confirm the current decision in the agency record or with the issuing authority.</p>
+                    {recordUrl && <a href={recordUrl} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 font-bold text-amber-950 underline">Open agency record <ExternalLink className="size-3" /></a>}
+                  </div>}
                   <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs">
-                    <p className="font-black uppercase tracking-wider text-slate-500">Verified resources</p>
+                    <p className="font-black uppercase tracking-wider text-slate-500">Reference resources</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {(permit.resources ?? []).slice(0, 3).map((resource) => (
                         <a key={resource.id} href={resource.url} target="_blank" rel="noreferrer" className="font-bold text-teal-800 underline-offset-2 hover:underline">{resource.resourceName} · {resource.versionTag}</a>

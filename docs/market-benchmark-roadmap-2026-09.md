@@ -3,7 +3,7 @@
 **Reviewed:** September 23, 2026. **Repository:** `grandpajoe1980/permit_tracker`, `main` at `712c010e13d02e38078fe4530d037ce9a1dde964`.
 **Scope:** Source and migration review, existing PRD and backlog, focused local checks, and public product documentation. No authenticated production walkthrough or independent vendor trial was performed.
 
-**Implementation:** Phase 0 is in progress; see [the current progress checkpoint](progress.md). The gap findings below record the reviewed starting point, not a claim that every finding remains unfixed.
+**Implementation:** Phase 0 is in progress, and a first PATH-005 filing-provenance slice has begun; see [the current progress checkpoint](progress.md). The gap findings below record the reviewed starting point, not a claim that every finding remains unfixed.
 
 ## Recommendation
 
