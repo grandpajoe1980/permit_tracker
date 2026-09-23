@@ -741,6 +741,13 @@ export interface StageRunRecord {
   completionNotes?: string;
 }
 
+export interface WorkstreamBlockerRecord {
+  id?: string;
+  title?: string;
+  source?: string;
+  severity?: string;
+}
+
 export interface WorkstreamRecord {
   id: string;
   projectId: string;
@@ -804,6 +811,7 @@ export interface WorkstreamRecord {
   escalationSummary?: string;
   
   // Nested execution data
+  activeBlockers?: WorkstreamBlockerRecord[];
   tasks: TaskRecord[];
   stageRuns?: StageRunRecord[];
   commitments: CommitmentRecord[];
@@ -1100,4 +1108,3 @@ export interface OperationalRecordProjection {
   customerSafeSummary: string;
   updatedAt?: string;
 }
-

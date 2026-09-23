@@ -56,6 +56,32 @@ test("available actions are permission-aware and customer-safe", () => {
   assert.deepEqual(ux.getAvailableActions(stage, ux.getOperationalPersona(customerPersona)), []);
 });
 
+test("an open applicant RFI explains the hold and hides stage transition actions", () => {
+  const reviewer = ux.getOperationalWorkItems({ persona: reviewerPersona });
+  const stage = reviewer.items.find((item) => item.sourceId === "TASK-T003");
+  assert.ok(stage?.sourceWorkstream);
+  const waitingStage = {
+    ...stage,
+    statusTone: "amber",
+    statusLabel: "Waiting on applicant",
+    sourceWorkstream: {
+      ...stage.sourceWorkstream,
+      operationalState: "waiting_applicant",
+      waitingReason: "Waiting for response to RFI-TEST-001.",
+      waitingOnEntity: "SPACEX",
+      activeBlockers: [{ id: "rfi-blocker", title: "Applicant response to RFI", source: "RFI-TEST-001" }],
+      rfis: [{ id: "rfi-1", code: "RFI-TEST-001", status: "issued" }],
+    },
+  };
+
+  const actions = ux.getAvailableActions(waitingStage, reviewer.persona);
+  const reason = ux.getWorkflowCompletionBlockReason(waitingStage);
+  assert.ok(!actions.includes("complete_step"));
+  assert.ok(!actions.includes("advance_stage"));
+  assert.ok(!actions.includes("clear_blocker"));
+  assert.match(reason, /RFI-TEST-001.*applicant must respond.*agency must accept/i);
+});
+
 test("linked staff intake projects into the workflow stage instead of resolving the request", () => {
   const workstream = repository.getWorkstreams().find((entry) => entry.id === "WS-LA82-HEAVYHAUL");
   assert.ok(workstream, "The linked workstream fixture must exist");
@@ -95,7 +121,8 @@ test("linked staff intake projects into the workflow stage instead of resolving 
   assert.equal(staffItem.kind, "workflow");
   assert.equal(staffItem.title, workstream.currentStageName);
   assert.equal(staffItem.sourceWorkstream?.id, workstream.id);
-  assert.ok(ux.getAvailableActions(staffItem, ux.getOperationalPersona(staff)).includes("complete_step"));
+  assert.ok(!ux.getAvailableActions(staffItem, ux.getOperationalPersona(staff)).includes("complete_step"));
+  assert.match(ux.getWorkflowCompletionBlockReason(staffItem), /RFI-2026-0042.*applicant must respond/i);
 
   const supervisor = data.demoPersonas.find((persona) => persona.id === "maya-chen");
   const supervisorItem = ux.getOperationalWorkItems({

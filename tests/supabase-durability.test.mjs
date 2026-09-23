@@ -79,6 +79,7 @@ test("Supabase Mappings: workstreamRowToDomain and domainToWorkstreamRow bidirec
     schedule_variance_days: 7,
     waiting_reason: "Awaiting axle loading specs.",
     waiting_on_entity: "SPACEX",
+    active_blockers: [{ id: "rfi-blocker", title: "Applicant response to RFI", source: "RFI-TEST-001" }],
     current_action_summary: "Reviewing bridge capacities.",
     escalation_level: 1,
     state_concierge: { name: "Sarah Johnson", email: "sarah.johnson@la.gov", agency: "Project Office" },
@@ -92,6 +93,7 @@ test("Supabase Mappings: workstreamRowToDomain and domainToWorkstreamRow bidirec
   assert.equal(domain.isCriticalPath, true);
   assert.equal(domain.scheduleVarianceDays, 7);
   assert.equal(domain.regulatoryLead.orgCode, "DOTD");
+  assert.deepEqual(domain.activeBlockers, row.active_blockers);
 
   const backRow = mappings.domainToWorkstreamRow(domain);
   assert.equal(backRow.code, "WS-TEST-HAUL");
