@@ -1,7 +1,8 @@
 name: Production deployment smoke
 
 on:
-  deployment_status:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -9,9 +10,8 @@ permissions:
 
 jobs:
   public-smoke:
-    if: github.event_name == 'workflow_dispatch' || (github.event.deployment_status.state == 'success' && contains(fromJSON('["Production","production"]'), github.event.deployment.environment))
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -19,4 +19,6 @@ jobs:
           node-version: "24"
       - run: npm run check:deployment -- https://permit-tracker-iota.vercel.app
         env:
-          EXPECTED_COMMIT: ${{ github.event.deployment.sha }}
+          EXPECTED_COMMIT: ${{ github.event_name == 'push' && github.sha || '' }}
+          SMOKE_ATTEMPTS: '60'
+          SMOKE_RETRY_MS: '10000'

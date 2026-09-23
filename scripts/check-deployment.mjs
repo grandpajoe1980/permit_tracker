@@ -26,13 +26,16 @@ async function check() {
 }
 
 let lastError;
-for (let attempt = 1; attempt <= 6; attempt++) {
+const attempts = Number(process.env.SMOKE_ATTEMPTS || 6);
+const retryMs = Number(process.env.SMOKE_RETRY_MS || 5_000);
+for (let attempt = 1; attempt <= attempts; attempt++) {
   try {
     await check();
     process.exit(0);
   } catch (error) {
     lastError = error;
-    if (attempt < 6) await new Promise((resolve) => setTimeout(resolve, 5_000));
+    console.error(`Attempt ${attempt}/${attempts}: ${error.message}`);
+    if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, retryMs));
   }
 }
 console.error(`Deployment smoke failed: ${lastError?.message}`);
