@@ -90,7 +90,10 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => {
       // Node-loaded React instance instead of mixing optimized and external
       // React modules in the Nitro SSR environment.
       ssr: { external: true },
-      plugins: [vinext(), nitro()],
+      // Vercel invokes this as a Node function. Use Nitro's Node handler
+      // explicitly so the deployment does not rely on its experimental web
+      // Request adapter for every page and API route.
+      plugins: [vinext(), nitro({ vercel: { entryFormat: "node" } })],
     };
   }
 
