@@ -1,5 +1,7 @@
 # Critical Path — SpaceX Louisiana Project Operations
 
+For the current market comparison, code-level gap review, and next-phase roadmap, see [PATH market benchmark and roadmap](docs/market-benchmark-roadmap-2026-09.md).
+
 ## Operational UX
 
 PATH now opens authenticated users into a role-aware workspace instead of a cockpit selector. Reviewers land on **My Work**, where prioritized cards explain why a work item is assigned, what action is required, the due date, wait time, schedule impact, and what removes it from the queue. The reusable Work Action Bar keeps **Complete Step**, **Request Information**, **Mark Blocked**, **Ask for Help / Transfer**, **Escalate**, and **Add Note** visible at the point of work.
