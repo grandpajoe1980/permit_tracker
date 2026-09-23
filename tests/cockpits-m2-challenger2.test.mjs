@@ -521,9 +521,13 @@ test("Root View Router [Stress]: Rapid 1,000-Cycle View Switch Simulation (Memor
   assert.ok(projectDocumentsData.length >= 2, "Documents count must be at least 2");
   assert.equal(projectDecisionsData.length, 2, "Decisions count must remain 2");
 
+  // React's transient render allocations are collectible. Compare retained
+  // heap after collection, as we did before the loop, rather than measuring
+  // whichever GC phase the runner happens to reach on this machine.
+  if (global.gc) global.gc();
   const finalMemory = process.memoryUsage().heapUsed;
   const memoryDeltaMB = (finalMemory - initialMemory) / (1024 * 1024);
-  assert.ok(memoryDeltaMB < 100, `Memory delta after 8,000 renders (${memoryDeltaMB.toFixed(2)} MB) must be bounded (<100 MB)`);
+  assert.ok(memoryDeltaMB < 100, `Retained heap after 1,000 renders (${memoryDeltaMB.toFixed(2)} MB) must be bounded (<100 MB)`);
 });
 
 // =========================================================================
