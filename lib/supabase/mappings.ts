@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 11017)
-Total output lines: 878
-
 import type {
   AssignmentGroupRecord,
   AssignmentGroupMembershipRecord,
@@ -332,7 +329,246 @@ export function taskRowToDomain(row: Row): TaskRecord {
     status: (str(row.status, "pending")) as TaskRecord["status"],
     isMilestone: bool(row.is_milestone),
     isCriticalPath: bool(row.is_critical_path),
-    baselin…3017 tokens truncated…ittedDate: str(row.committed_date),
+    baselineStartDate: str(row.baseline_start_date || row.early_start) || undefined,
+    baselineDueDate: str(row.baseline_due_date || row.early_finish) || undefined,
+    forecastStartDate: str(row.forecast_start_date || row.late_start) || undefined,
+    forecastDueDate: str(row.forecast_due_date || row.late_finish) || undefined,
+    actualCompletionDate: str(row.actual_completion_date) || undefined,
+    durationDays: num(row.duration_days, 1),
+    floatDays: num(row.float_days, 0),
+    predecessorTaskIds: arr<string>(row.predecessors),
+
+    // Milestone 1 ITSM Extensions
+    assignmentGroupId: str(row.assignment_group_id) || undefined,
+    assignmentGroupName: str(row.assignment_group_name) || undefined,
+    itsmState: (str(row.itsm_state) || undefined) as TaskRecord["itsmState"],
+    priority: (str(row.priority) || undefined) as TaskRecord["priority"],
+    statutoryDeadline: str(row.statutory_deadline) || undefined,
+    clockStatus: (str(row.clock_status) || undefined) as TaskRecord["clockStatus"],
+    clockPausedReason: str(row.clock_paused_reason) || undefined,
+    clockPausedAt: str(row.clock_paused_at) || undefined,
+    clockTotalPausedSeconds: num(row.clock_total_paused_seconds, 0),
+  };
+}
+
+// ====================================================================
+// 3. COORDINATION REQUESTS (CR-00xxx)
+// ====================================================================
+
+export function coordinationRequestRowToDomain(row: Row): CoordinationRequestRecord {
+  return {
+    id: str(row.id),
+    code: str(row.code),
+    workstreamId: str(row.workstream_id),
+    workstreamTitle: str(row.workstream_title),
+    requestingOrgId: str(row.requesting_org_id),
+    requestingOrgCode: str(row.requesting_org_code),
+    targetOrgId: str(row.target_org_id),
+    targetOrgCode: str(row.target_org_code),
+    requestingUserName: str(row.requesting_user_name),
+    assignedToUserName: str(row.assigned_to_user_name) || undefined,
+    title: str(row.title),
+    needDescription: str(row.need_description),
+    requestedDate: str(row.requested_date),
+    dueDate: str(row.due_date),
+    responseDate: str(row.response_date) || undefined,
+    concurredAt: str(row.concurred_at) || undefined,
+    attachedDocumentVersionIds: arr<string>(row.attached_document_version_ids),
+    blocksWorkstreamTitle: str(row.blocks_workstream_title || row.workstream_title),
+    priority: (str(row.priority, "normal")) as CoordinationRequestRecord["priority"],
+    status: (str(row.status, "pending")) as CoordinationRequestRecord["status"],
+    responseSummary: str(row.response_summary) || undefined,
+    responseNotificationRecipientCount: num(row.notification_recipient_count, 0),
+  };
+}
+
+export function domainToCoordinationRequestRow(domain: Partial<CoordinationRequestRecord>): Row {
+  return {
+    ...(domain.id && { id: domain.id }),
+    ...(domain.code && { code: domain.code }),
+    ...(domain.workstreamId && { workstream_id: domain.workstreamId }),
+    ...(domain.workstreamTitle && { workstream_title: domain.workstreamTitle }),
+    ...(domain.requestingOrgId && { requesting_org_id: domain.requestingOrgId }),
+    ...(domain.requestingOrgCode && { requesting_org_code: domain.requestingOrgCode }),
+    ...(domain.targetOrgId && { target_org_id: domain.targetOrgId }),
+    ...(domain.targetOrgCode && { target_org_code: domain.targetOrgCode }),
+    ...(domain.requestingUserName && { requesting_user_name: domain.requestingUserName }),
+    ...(domain.assignedToUserName !== undefined && { assigned_to_user_name: domain.assignedToUserName }),
+    ...(domain.title && { title: domain.title }),
+    ...(domain.needDescription && { need_description: domain.needDescription }),
+    ...(domain.requestedDate && { requested_date: domain.requestedDate }),
+    ...(domain.dueDate && { due_date: domain.dueDate }),
+    ...(domain.responseDate !== undefined && { response_date: domain.responseDate }),
+    ...(domain.concurredAt !== undefined && { concurred_at: domain.concurredAt }),
+    ...(domain.attachedDocumentVersionIds && { attached_document_version_ids: domain.attachedDocumentVersionIds }),
+    ...(domain.blocksWorkstreamTitle && { blocks_workstream_title: domain.blocksWorkstreamTitle }),
+    ...(domain.priority && { priority: domain.priority }),
+    ...(domain.status && { status: domain.status }),
+    ...(domain.responseSummary !== undefined && { response_summary: domain.responseSummary }),
+  };
+}
+
+// ====================================================================
+// 4. RFIs & RESPONSES
+// ====================================================================
+
+export function rfiResponseRowToDomain(row: Row): RFIResponseRecord {
+  return {
+    id: str(row.id),
+    rfiId: str(row.rfi_id),
+    submittedByName: str(row.submitted_by_user_name || row.submitted_by_name),
+    responseText: str(row.response_text),
+    attachedDocumentVersionIds: arr<string>(row.attached_document_version_ids),
+    submittedAt: str(row.submitted_date || row.created_at || new Date().toISOString()),
+    reviewedByName: str(row.reviewed_by_name) || undefined,
+    reviewDecision: (str(row.review_status || row.review_decision) || undefined) as RFIResponseRecord["reviewDecision"],
+    reviewNotes: str(row.reviewer_feedback || row.review_notes) || undefined,
+    reviewedAt: str(row.reviewed_at) || undefined,
+  };
+}
+
+export function rfiRowToDomain(row: Row, responses: RFIResponseRecord[] = []): RFIRecord {
+  return {
+    id: str(row.id),
+    code: str(row.code),
+    workstreamId: str(row.workstream_id),
+    workstreamTitle: str(row.workstream_title),
+    requestingOrgId: str(row.requesting_org_id),
+    requestingOrgCode: str(row.requesting_org_code),
+    recipientOrgId: str(row.recipient_org_id),
+    recipientOrgCode: str(row.recipient_org_code),
+    title: str(row.title),
+    questionText: str(row.question_text),
+    technicalReason: str(row.technical_reason),
+    requiredDocumentTypes: arr<string>(row.required_document_types),
+    issuedDate: str(row.issued_date),
+    responseDeadline: str(row.response_deadline),
+    clockImpact: (str(row.clock_impact, "clock_paused")) as RFIRecord["clockImpact"],
+    scheduleImpactDays: num(row.schedule_impact_days, 0),
+    status: (str(row.status, "issued")) as RFIRecord["status"],
+    isConsolidatedCycle: bool(row.is_consolidated_cycle),
+    consolidatedBatchId: str(row.consolidated_batch_id) || undefined,
+    leadReviewerApprovedAt: str(row.lead_reviewer_approved_at) || undefined,
+    responses,
+  };
+}
+
+export function domainToRfiRow(domain: Partial<RFIRecord>): Row {
+  return {
+    ...(domain.id && { id: domain.id }),
+    ...(domain.code && { code: domain.code }),
+    ...(domain.workstreamId && { workstream_id: domain.workstreamId }),
+    ...(domain.workstreamTitle && { workstream_title: domain.workstreamTitle }),
+    ...(domain.requestingOrgId && { requesting_org_id: domain.requestingOrgId }),
+    ...(domain.requestingOrgCode && { requesting_org_code: domain.requestingOrgCode }),
+    ...(domain.recipientOrgId && { recipient_org_id: domain.recipientOrgId }),
+    ...(domain.recipientOrgCode && { recipient_org_code: domain.recipientOrgCode }),
+    ...(domain.title && { title: domain.title }),
+    ...(domain.questionText && { question_text: domain.questionText }),
+    ...(domain.technicalReason && { technical_reason: domain.technicalReason }),
+    ...(domain.requiredDocumentTypes && { required_document_types: domain.requiredDocumentTypes }),
+    ...(domain.issuedDate && { issued_date: domain.issuedDate }),
+    ...(domain.responseDeadline && { response_deadline: domain.responseDeadline }),
+    ...(domain.clockImpact && { clock_impact: domain.clockImpact }),
+    ...(domain.scheduleImpactDays !== undefined && { schedule_impact_days: domain.scheduleImpactDays }),
+    ...(domain.status && { status: domain.status }),
+    ...(domain.isConsolidatedCycle !== undefined && { is_consolidated_cycle: domain.isConsolidatedCycle }),
+  };
+}
+
+// ====================================================================
+// 5. DOCUMENTS, VERSIONS, & REVIEWS
+// ====================================================================
+
+export function documentAgencyReviewRowToDomain(row: Row): DocumentAgencyReviewRecord {
+  return {
+    id: str(row.id),
+    documentVersionId: str(row.document_version_id),
+    workstreamId: str(row.workstream_id),
+    reviewingOrgId: str(row.reviewing_org_id) || undefined,
+    reviewingOrgCode: str(row.reviewing_org_code),
+    reviewStatus: (str(row.review_status || row.status, "under_review")) as DocumentAgencyReviewRecord["reviewStatus"],
+    reviewedByName: str(row.reviewed_by_user_name || row.reviewed_by_name) || undefined,
+    decisionDate: str(row.decision_date || row.reviewed_at) || undefined,
+    reviewComments: str(row.comments || row.review_comments) || undefined,
+    status: str(row.status || "under_review"),
+    reviewedByUserName: str(row.reviewed_by_user_name || row.reviewed_by_name) || undefined,
+    reviewedAt: str(row.reviewed_at) || undefined,
+    comments: str(row.comments) || undefined,
+  };
+}
+
+export function documentVersionRowToDomain(row: Row, reviews: DocumentAgencyReviewRecord[] = []): DocumentVersionRecord {
+  return {
+    id: str(row.id),
+    documentId: str(row.document_id || row.document_ref_id),
+    versionTag: str(row.version_label || row.version_tag || `v${row.version_number || 1}.0`),
+    versionNumber: num(row.version_number, 1),
+    versionLabel: str(row.version_label || `v${row.version_number || 1}.0`),
+    fileName: str(row.file_name || str(row.storage_path).split("/").pop() || "document.pdf"),
+    fileSizeBytes: num(row.file_size_bytes, 0),
+    mimeType: str(row.mime_type, "application/pdf"),
+    storagePath: str(row.storage_path),
+    storageUri: str(row.storage_uri || row.storage_path),
+    sha256Hash: str(row.sha256_hash),
+    uploadedByName: str(row.uploaded_by_name),
+    uploadedByOrgName: str(row.uploaded_by_org_name || "SpaceX"),
+    changeNotes: str(row.change_notes || row.change_summary),
+    changeSummary: str(row.change_notes || row.change_summary),
+    isMalwareClean: bool(row.is_malware_clean, true),
+    status: (str(row.status, "under_review")) as DocumentVersionRecord["status"],
+    uploadedAt: str(row.uploaded_at || row.created_at || new Date().toISOString()),
+    agencyReviews: reviews.length > 0 ? reviews : arr<DocumentAgencyReviewRecord>(row.agency_reviews),
+  };
+}
+
+export function documentRowToDomain(
+  row: Row,
+  versions: DocumentVersionRecord[] = [],
+  allReviews: DocumentAgencyReviewRecord[] = []
+): DocumentRecord {
+  const highestVersionNumber = versions.reduce(
+    (highest, version) => Math.max(highest, version.versionNumber ?? 0),
+    0,
+  );
+  const declaredVersionNumber = Math.max(
+    num(row.current_version_number, 0),
+    num(row.version, 0),
+  );
+  const currentVersionNumber = Math.max(highestVersionNumber, declaredVersionNumber, 1);
+  const currentVersion = versions.find(
+    (version) => (version.versionNumber ?? 0) === currentVersionNumber,
+  ) ?? versions[0];
+
+  return {
+    id: str(row.id),
+    projectId: str(row.project_id),
+    title: str(row.title || row.document_type || "Project Document"),
+    category: str(row.category || row.document_type || "Technical Spec"),
+    ownerOrgCode: str(row.owner_org_code || "SPACEX"),
+    currentVersionNumber,
+    currentVersionId: currentVersion?.id,
+    isConfidential: bool(row.is_confidential || (row.visibility === "restricted")),
+    versions,
+    agencyReviews: allReviews,
+  };
+}
+
+// ====================================================================
+// 6. COMMITMENTS
+// ====================================================================
+
+export function commitmentRowToDomain(row: Row): CommitmentRecord {
+  return {
+    id: str(row.id),
+    workstreamId: str(row.workstream_id),
+    workstreamTitle: str(row.workstream_title) || undefined,
+    committingOrgId: str(row.committing_org_id),
+    committingOrgCode: str(row.committing_org_code),
+    madeByPersonName: str(row.made_by_person_name),
+    committedAction: str(row.committed_action),
+    originContext: str(row.origin_context),
+    committedDate: str(row.committed_date),
     promisedDueDate: str(row.promised_due_date),
     fulfilledDate: str(row.fulfilled_date) || undefined,
     status: (str(row.status, "on_track")) as CommitmentRecord["status"],
