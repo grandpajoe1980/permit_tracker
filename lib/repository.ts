@@ -99,6 +99,7 @@ import {
   mutateUpdateCoordinationRequest,
   mutateCreateCustomerRequest,
   mutateCreateCustomerRequestWithDocument,
+  mutateSaveWorkflowAutomationConfig,
   mutateCreateExternalFiling,
   mutateCreateRFI,
   mutateCreateWorkstreamFromRequest,
@@ -121,6 +122,8 @@ import {
   mutateUpdateTask,
   mutateCompleteTask,
 } from "./supabase/mutations";
+import { validateWorkflowAutomationConfig } from "./workflow-rules";
+import type { WorkflowAutomationConfig } from "./workflow-rules";
 import { mutateReviewDocumentVersion, mutateUploadDocumentVersion } from "./supabase/storage";
 import { getSupabaseBrowser, isSupabaseConfigured } from "./supabase/client";
 import { allowsFixtureData } from "./data-mode";
@@ -240,7 +243,7 @@ class ProjectDeliveryRepository {
         fetchAuditEvents(projectId),
         fetchCatalog(),
         fetchOrganizations(),
-        fetchWorkflowTemplates(),
+        fetchWorkflowTemplates(projectId),
         fetchAssignmentGroups(),
         fetchAssignmentGroupMemberships(),
       ]);
@@ -804,6 +807,37 @@ class ProjectDeliveryRepository {
     return { success: true, error: null };
   }
 
+  async saveWorkflowAutomationConfigPersisted(params: {
+    templateId: string;
+    draftVersionId: string;
+    intakeQuestions: WorkflowAutomationConfig["intakeQuestions"];
+    routingRules: WorkflowAutomationConfig["routingRules"];
+    stageBranches: WorkflowAutomationConfig["stageBranches"];
+    noticeTemplates: WorkflowAutomationConfig["noticeTemplates"];
+    autoRouteEnabled: boolean;
+  }): Promise<{ data: WorkflowAutomationConfig | null; error: Error | null }> {
+    const template = this.workflowTemplates.find((candidate) => candidate.id === params.templateId);
+    if (!template) return { data: null, error: new Error("Workflow template not found.") };
+    const draft = template.versions.find((version) => version.id === params.draftVersionId);
+    if (!draft || draft.status !== "draft") return { data: null, error: new Error("Draft version not found.") };
+
+    const config: WorkflowAutomationConfig = {
+      intakeQuestions: params.intakeQuestions,
+      routingRules: params.routingRules,
+      stageBranches: params.stageBranches,
+      noticeTemplates: params.noticeTemplates,
+      autoRouteEnabled: params.autoRouteEnabled,
+    };
+    const client = getSupabaseBrowser();
+    if (client) {
+      const result = await mutateSaveWorkflowAutomationConfig({ draftVersionId: params.draftVersionId, config }, client);
+      if (result.error && !allowsFixtureData()) return { data: null, error: result.error };
+    }
+
+    Object.assign(draft, config);
+    return { data: config, error: null };
+  }
+
   async validateWorkflowDraftPersisted(params: {
     templateId: string;
     draftVersionId: string;
@@ -813,11 +847,27 @@ class ProjectDeliveryRepository {
     const draft = template.versions.find((v) => v.id === params.draftVersionId);
     if (!draft || draft.status !== "draft") return { valid: false, errors: ["Draft version not found."], warnings: [] };
 
-    return validateWorkflowDraft({
+    const stageValidation = validateWorkflowDraft({
       stages: draft.stages,
       organizations: this.organizations,
       assignmentGroups: this.assignmentGroups,
     });
+    const automationValidation = validateWorkflowAutomationConfig({
+      stages: draft.stages,
+      intakeQuestions: draft.intakeQuestions,
+      routingRules: draft.routingRules,
+      stageBranches: draft.stageBranches,
+      noticeTemplates: draft.noticeTemplates,
+      autoRouteEnabled: draft.autoRouteEnabled,
+      organizations: this.organizations,
+      assignmentGroups: this.assignmentGroups,
+    });
+    return {
+      ...stageValidation,
+      valid: stageValidation.valid && automationValidation.valid,
+      errors: [...stageValidation.errors, ...automationValidation.errors],
+      warnings: [...stageValidation.warnings, ...automationValidation.warnings],
+    };
   }
 
   async publishWorkflowVersionPersisted(params: {
@@ -831,11 +881,25 @@ class ProjectDeliveryRepository {
     const draft = template.versions.find((v) => v.id === params.draftVersionId);
     if (!draft || draft.status !== "draft") return { data: null, error: new Error("Draft version not found.") };
 
-    const validation = validateWorkflowDraft({
+    const stageValidation = validateWorkflowDraft({
       stages: draft.stages,
       organizations: this.organizations,
       assignmentGroups: this.assignmentGroups,
     });
+    const automationValidation = validateWorkflowAutomationConfig({
+      stages: draft.stages,
+      intakeQuestions: draft.intakeQuestions,
+      routingRules: draft.routingRules,
+      stageBranches: draft.stageBranches,
+      noticeTemplates: draft.noticeTemplates,
+      autoRouteEnabled: draft.autoRouteEnabled,
+      organizations: this.organizations,
+      assignmentGroups: this.assignmentGroups,
+    });
+    const validation = {
+      valid: stageValidation.valid && automationValidation.valid,
+      errors: [...stageValidation.errors, ...automationValidation.errors],
+    };
     if (!validation.valid) {
       return { data: null, error: new Error(`Validation failed: ${validation.errors.join("; ")}`) };
     }
@@ -846,11 +910,21 @@ class ProjectDeliveryRepository {
       if (valRes.error && !allowsFixtureData()) {
         return { data: null, error: new Error(valRes.error.message) };
       }
+      const serverValidation = valRes.data as { valid?: boolean; errors?: string[] } | null;
+      if (!valRes.error && serverValidation?.valid !== true) {
+        const details = serverValidation?.errors?.filter((error) => typeof error === "string").join("; ");
+        return { data: null, error: new Error(details ? `Validation failed: ${details}` : "The database did not confirm this workflow version is valid.") };
+      }
       const pubRes = await client.rpc("rpc_publish_workflow_version", { p_version_id: params.draftVersionId });
       if (pubRes.error && !allowsFixtureData()) {
         return { data: null, error: new Error(pubRes.error.message) };
       }
       if (!pubRes.error) {
+        const serverPublish = pubRes.data as { id?: string; status?: string; valid?: boolean; errors?: string[] } | null;
+        if (serverPublish?.status !== "published") {
+          const details = serverPublish?.errors?.filter((error) => typeof error === "string").join("; ");
+          return { data: null, error: new Error(details ? `Validation failed: ${details}` : "The database did not confirm workflow publication.") };
+        }
         await this.refreshFromSupabase();
         return { data: draft, error: null };
       }
@@ -1263,6 +1337,8 @@ class ProjectDeliveryRepository {
       blocksActiveWork: params.blocksActiveWork,
       status: params.status ?? "submitted",
       attachmentDocumentVersionIds: params.attachmentDocumentVersionIds,
+      intakeWorkflowVersionId: params.intakeWorkflowVersionId,
+      intakeAnswers: params.intakeAnswers,
     };
     const result = params.attachmentFile
       ? await mutateCreateCustomerRequestWithDocument({ ...requestParams, file: params.attachmentFile })

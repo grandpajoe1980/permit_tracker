@@ -25,6 +25,7 @@ import { coordinationRequestRowToDomain, customerRequestRowToDomain, externalFil
 import { allowsFixtureData, requiresSupabase } from "../data-mode";
 import { canonicalProjectReference } from "../project-identifiers";
 import { calculateSHA256, uploadDocumentFile } from "./storage-primitives";
+import type { WorkflowAutomationConfig } from "../workflow-rules";
 
 export interface MutationResult<T> {
   data: T | null;
@@ -118,6 +119,13 @@ function customerRequestFromRow(row: Record<string, unknown>): CustomerRequestRe
     relatedWorkstreamId: (row.related_workstream_id as string) || undefined,
     blocksActiveWork: Boolean(row.blocks_active_work),
     status: String(row.status) as CustomerRequestRecord["status"],
+    intakeWorkflowVersionId: (row.intake_workflow_version_id as string) || undefined,
+    intakeAnswers: row.intake_answers && typeof row.intake_answers === "object" && !Array.isArray(row.intake_answers)
+      ? row.intake_answers as Record<string, string | boolean>
+      : {},
+    autoRouteReceipt: row.auto_route_receipt && typeof row.auto_route_receipt === "object" && !Array.isArray(row.auto_route_receipt)
+      ? row.auto_route_receipt as CustomerRequestRecord["autoRouteReceipt"]
+      : undefined,
     attachmentDocumentVersionIds: (row.attachment_document_version_ids as string[]) || [],
     createdAt: String(row.created_at || new Date().toISOString()),
     updatedAt: String(row.updated_at || new Date().toISOString()),
@@ -260,6 +268,8 @@ export type CustomerRequestMutationParams = {
   blocksActiveWork: boolean;
   status: CustomerRequestRecord["status"];
   attachmentDocumentVersionIds?: string[];
+  intakeWorkflowVersionId?: string;
+  intakeAnswers?: Record<string, string | boolean>;
 };
 
 export async function mutateCreateCustomerRequest(params: CustomerRequestMutationParams, requestClient?: SupabaseClient): Promise<MutationResult<CustomerRequestRecord>> {
@@ -307,6 +317,8 @@ export async function mutateCreateCustomerRequest(params: CustomerRequestMutatio
     p_blocks_active_work: params.blocksActiveWork,
     p_status: params.status,
     p_attachment_document_version_ids: params.attachmentDocumentVersionIds ?? [],
+    p_intake_workflow_version_id: params.intakeWorkflowVersionId ?? null,
+    p_intake_answers: params.intakeAnswers ?? {},
   };
 
   const { data: rpcData, error: rpcError } = await client.rpc("rpc_create_customer_request", rpcPayload);
@@ -365,6 +377,8 @@ export async function mutateCreateCustomerRequest(params: CustomerRequestMutatio
     blocks_active_work: params.blocksActiveWork,
     status: params.status,
     attachment_document_version_ids: params.attachmentDocumentVersionIds ?? [],
+    intake_workflow_version_id: params.intakeWorkflowVersionId ?? null,
+    intake_answers: params.intakeAnswers ?? {},
     created_at: now,
     updated_at: now,
   };
@@ -416,6 +430,9 @@ export async function mutateCreateCustomerRequest(params: CustomerRequestMutatio
       relatedWorkstreamId: params.relatedWorkstreamId,
       blocksActiveWork: params.blocksActiveWork,
       status: params.status,
+      intakeWorkflowVersionId: params.intakeWorkflowVersionId,
+      intakeAnswers: params.intakeAnswers ?? {},
+      autoRouteReceipt: { status: "manual" },
       attachmentDocumentVersionIds: params.attachmentDocumentVersionIds ?? [],
       createdAt: now,
       updatedAt: now,
@@ -476,6 +493,8 @@ export async function mutateCreateCustomerRequestWithDocument(
       relatedWorkstreamId: params.relatedWorkstreamId ?? null,
       blocksActiveWork: params.blocksActiveWork,
       status: params.status,
+      intakeWorkflowVersionId: params.intakeWorkflowVersionId ?? null,
+      intakeAnswers: params.intakeAnswers ?? {},
     },
     p_document: {
       documentId,
@@ -601,6 +620,20 @@ export async function mutateLinkCustomerRequestToWorkstream(params: {
   });
   if (error || !data) return { data: null, error: new Error(error?.message ?? "Existing workstream link was not confirmed by the database.") };
   return { data: customerRequestFromRow(data as Record<string, unknown>), error: null };
+}
+
+export async function mutateSaveWorkflowAutomationConfig(params: {
+  draftVersionId: string;
+  config: WorkflowAutomationConfig;
+}, requestClient?: SupabaseClient): Promise<MutationResult<WorkflowAutomationConfig>> {
+  const client = requestClient ?? getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data, error } = await client.rpc("rpc_update_workflow_draft_automation", {
+    p_version_id: params.draftVersionId,
+    p_config: params.config,
+  });
+  if (error || !data) return { data: null, error: new Error(error?.message ?? "Workflow automation settings were not saved.") };
+  return { data: data as WorkflowAutomationConfig, error: null };
 }
 
 export async function mutateCreateExternalFiling(params: {
@@ -1084,6 +1117,7 @@ export async function mutateCompleteWorkstreamStage(params: {
   providedDocs?: string[];
   actorName: string;
   actorOrgName: string;
+  reviewOutcome?: string;
 }): Promise<MutationResult<{ nextStageName: string }>> {
   const client = getSupabaseBrowser();
   if (!client) return { data: null, error: new Error("Supabase client unavailable") };
@@ -1098,6 +1132,7 @@ export async function mutateCompleteWorkstreamStage(params: {
     p_provided_document_categories: params.providedDocs ?? [],
     p_actor_name: params.actorName,
     p_completion_notes: `Completed configured stage requirements: ${params.completedChecklists.join(", ")}`,
+    p_review_outcome: params.reviewOutcome ?? null,
   });
   if (!rpcError && rpcData) {
     const result = rpcData as Record<string, unknown>;

@@ -27,21 +27,50 @@ import { mutateCreatePermitType, mutateRegisterOrganization } from "@/lib/supaba
 import { repository } from "@/lib/repository";
 import { validateWorkflowDraft, type WorkflowDraftValidationResult } from "@/lib/engines/workflow-engine";
 import type { OrganizationRecord, PermitTypeRecord, WorkflowTemplateRecord, WorkflowStageRecord } from "@/lib/domain-models";
+import type { WorkflowAutomationConfig } from "@/lib/workflow-rules";
+import { validateWorkflowAutomationConfig } from "@/lib/workflow-rules";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
+import { ConfiguredIntakeFields } from "./ConfiguredIntakeFields";
+import { WorkflowBranchNoticeEditor } from "./WorkflowBranchNoticeEditor";
+import { RuleBuilder } from "./WorkflowRuleBuilder";
+
+type WorkflowEditorSection = "stages" | "intake" | "routing" | "paths";
+type WorkflowDraftState = { draftVersionId: string | null; draftStages: WorkflowStageRecord[]; automation?: WorkflowAutomationConfig };
+
+const EMPTY_AUTOMATION_CONFIG: WorkflowAutomationConfig = {
+  intakeQuestions: [],
+  routingRules: [],
+  stageBranches: [],
+  noticeTemplates: [],
+  autoRouteEnabled: false,
+};
+
+function automationForVersion(version: WorkflowTemplateRecord["versions"][number] | undefined): WorkflowAutomationConfig {
+  return {
+    intakeQuestions: version?.intakeQuestions ?? [],
+    routingRules: version?.routingRules ?? [],
+    stageBranches: version?.stageBranches ?? [],
+    noticeTemplates: version?.noticeTemplates ?? [],
+    autoRouteEnabled: version?.autoRouteEnabled ?? false,
+  };
+}
 
 export function WorkflowDesignerPanel({
   catalog: catalogProp,
   organizations: organizationsProp,
   templates: templatesProp,
+  onWorkflowChanged,
 }: {
   catalog?: PermitTypeRecord[];
   organizations?: OrganizationRecord[];
   templates?: WorkflowTemplateRecord[];
+  onWorkflowChanged?: () => void;
 } = {}) {
   const templates = templatesProp ?? getWorkflowTemplates();
   const [catalogAdds, setCatalogAdds] = useState<PermitTypeRecord[]>([]);
   const [organizationAdds, setOrganizationAdds] = useState<OrganizationRecord[]>([]);
   const [activeTab, setActiveTab] = useState<"workflows" | "catalog" | "agencies">("workflows");
+  const [editorSection, setEditorSection] = useState<WorkflowEditorSection>("stages");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(templates[0]?.id || "");
   const [expandedStageKey, setExpandedStageKey] = useState<string | null>(null);
   const [designerMessage, setDesignerMessage] = useState("");
@@ -50,6 +79,8 @@ export function WorkflowDesignerPanel({
   const [draftSaveState, setDraftSaveState] = useState<"clean" | "dirty" | "saving" | "saved" | "error">("clean");
   const [draftSaveError, setDraftSaveError] = useState("");
   const draftSaveQueue = React.useRef(Promise.resolve(true));
+  const draftEditGeneration = React.useRef(0);
+  const [publishedAutomationOverride, setPublishedAutomationOverride] = useState<{ templateId: string; config: WorkflowAutomationConfig } | null>(null);
   const [permitForm, setPermitForm] = useState({ code: "", name: "", responsibleOrgCode: "LDEQ", statutoryCitation: "", triggerExplanation: "" });
   const [organizationForm, setOrganizationForm] = useState({ code: "", name: "", generalContactEmail: "" });
 
@@ -64,55 +95,79 @@ export function WorkflowDesignerPanel({
   const profiles = repository.getProfiles();
   const previewDialogRef = useDialogFocus(showPreviewModal, () => setShowPreviewModal(false));
 
-  function getInitialDraft(template: WorkflowTemplateRecord | undefined): { draftVersionId: string | null; draftStages: WorkflowStageRecord[] } {
-    if (!template) return { draftVersionId: null, draftStages: [] };
+  function getInitialDraft(template: WorkflowTemplateRecord | undefined): { draftVersionId: string | null; draftStages: WorkflowStageRecord[]; automation: WorkflowAutomationConfig } {
+    if (!template) return { draftVersionId: null, draftStages: [], automation: EMPTY_AUTOMATION_CONFIG };
     const existingDraft = template.versions.find((v) => v.status === "draft");
-    if (existingDraft) {
-      return { draftVersionId: existingDraft.id, draftStages: existingDraft.stages };
-    }
     const repoDraft = repository.getWorkflowDraft(template.id);
-    if (repoDraft) {
-      return { draftVersionId: repoDraft.id, draftStages: repoDraft.stages };
-    }
+    const persistedDraft = existingDraft ?? repoDraft;
+    let storedDraft: { draftVersionId: string; stages: WorkflowStageRecord[]; automation?: WorkflowAutomationConfig } | null = null;
     if (typeof window !== "undefined") {
       try {
         const stored = localStorage.getItem(`path_draft_${template.id}`);
         if (stored) {
-          const parsed = JSON.parse(stored) as { draftVersionId: string; stages: WorkflowStageRecord[] };
-          if (parsed?.draftVersionId && Array.isArray(parsed.stages)) {
-            return { draftVersionId: parsed.draftVersionId, draftStages: parsed.stages };
-          }
+          const parsed = JSON.parse(stored) as { draftVersionId: string; stages: WorkflowStageRecord[]; automation?: WorkflowAutomationConfig };
+          if (parsed?.draftVersionId && Array.isArray(parsed.stages)) storedDraft = parsed;
         }
       } catch {}
     }
-    return { draftVersionId: null, draftStages: [] };
+    if (storedDraft && (!persistedDraft || storedDraft.draftVersionId === persistedDraft.id)) {
+      return {
+        draftVersionId: storedDraft.draftVersionId,
+        draftStages: storedDraft.stages,
+        automation: storedDraft.automation ?? automationForVersion(persistedDraft ?? template.versions.find((version) => version.status === "published")),
+      };
+    }
+    if (persistedDraft) {
+      return { draftVersionId: persistedDraft.id, draftStages: persistedDraft.stages, automation: automationForVersion(persistedDraft) };
+    }
+    return { draftVersionId: null, draftStages: [], automation: automationForVersion(template.versions.find((version) => version.status === "published") ?? template.versions[0]) };
   }
 
-  const [draftState, setDraftState] = useState(() => getInitialDraft(selectedTemplate));
+  const [draftState, setDraftState] = useState<WorkflowDraftState>(() => getInitialDraft(selectedTemplate));
   const draftVersionId = draftState.draftVersionId;
   const draftStages = draftState.draftStages;
+  const activeAutomation = selectedTemplate && publishedAutomationOverride?.templateId === selectedTemplate.id
+    ? publishedAutomationOverride.config
+    : automationForVersion(activeVersion);
+  const draftAutomation = draftState.automation ?? activeAutomation;
   const draftVersionNumber = draftVersionId
     ? (selectedTemplate?.versions.find((version) => version.id === draftVersionId)?.versionNumber ?? nextVersionNumber - 1)
     : nextVersionNumber;
+  const visibleAutomation = draftVersionId ? draftAutomation : activeAutomation;
 
   function handleSelectTemplate(templateId: string) {
     setSelectedTemplateId(templateId);
     const tmpl = templates.find((t) => t.id === templateId) || templates[0];
     setDraftState(getInitialDraft(tmpl));
+    setPublishedAutomationOverride(null);
+    draftEditGeneration.current += 1;
     setDraftSaveState("clean");
     setDraftSaveError("");
     setExpandedStageKey(null);
+    setEditorSection("stages");
   }
 
   // Persist draft changes
-  function persistDraftChanges(stages: WorkflowStageRecord[], draftId: string) {
-    setDraftState({ draftVersionId: draftId, draftStages: stages });
+  function persistDraftChanges(stages: WorkflowStageRecord[], draftId: string, automation = draftAutomation) {
+    draftEditGeneration.current += 1;
+    setDraftState({ draftVersionId: draftId, draftStages: stages, automation });
     setDraftSaveState("dirty");
     setDraftSaveError("");
     try {
       if (selectedTemplate) {
-        localStorage.setItem(`path_draft_${selectedTemplate.id}`, JSON.stringify({ draftVersionId: draftId, stages }));
+        localStorage.setItem(`path_draft_${selectedTemplate.id}`, JSON.stringify({ draftVersionId: draftId, stages, automation }));
       }
+    } catch {}
+  }
+
+  function updateAutomation(nextAutomation: WorkflowAutomationConfig) {
+    if (!draftVersionId) return;
+    draftEditGeneration.current += 1;
+    setDraftState((current) => ({ ...current, automation: nextAutomation }));
+    setDraftSaveState("dirty");
+    setDraftSaveError("");
+    try {
+      if (selectedTemplate) localStorage.setItem(`path_draft_${selectedTemplate.id}`, JSON.stringify({ draftVersionId, stages: draftStages, automation: nextAutomation }));
     } catch {}
   }
 
@@ -120,10 +175,12 @@ export function WorkflowDesignerPanel({
     stages = draftStages,
     draftId = draftVersionId,
     notify = true,
+    automation = draftAutomation,
   ): Promise<boolean> {
     if (!draftId || !selectedTemplate) return Promise.resolve(false);
     const templateId = selectedTemplate.id;
     const versionNumber = draftVersionNumber;
+    const saveGeneration = draftEditGeneration.current;
     const saveOperation = draftSaveQueue.current.then(async () => {
       setDraftSaveState("saving");
       setDraftSaveError("");
@@ -139,10 +196,23 @@ export function WorkflowDesignerPanel({
         setDesignerMessage(`Draft save failed: ${message}`);
         return false;
       }
-      setDraftSaveState("saved");
+      const automationResult = await repository.saveWorkflowAutomationConfigPersisted({
+        templateId,
+        draftVersionId: draftId,
+        ...automation,
+      });
+      if (automationResult.error || !automationResult.data) {
+        const message = automationResult.error?.message ?? "Workflow settings were not saved.";
+        setDraftSaveState("error");
+        setDraftSaveError(message);
+        setDesignerMessage(`Workflow settings save failed: ${message}`);
+        return false;
+      }
+      const hasNewerEdits = draftEditGeneration.current !== saveGeneration;
+      setDraftSaveState(hasNewerEdits ? "dirty" : "saved");
       setDraftSaveError("");
       if (notify) {
-        setDesignerMessage(`Draft v${versionNumber}.0 saved with ${result.data.length} stage${result.data.length === 1 ? "" : "s"}.`);
+        setDesignerMessage(`Draft v${versionNumber}.0 saved with ${result.data.length} stage${result.data.length === 1 ? "" : "s"} and its workflow settings.`);
       }
       return true;
     });
@@ -170,6 +240,24 @@ export function WorkflowDesignerPanel({
     });
   }, [draftVersionId, visibleStages, orgs, assignmentGroups]);
 
+  const automationValidation = React.useMemo(
+    () => validateWorkflowAutomationConfig({ ...visibleAutomation, stages: visibleStages, organizations: orgs, assignmentGroups }),
+    [visibleAutomation, visibleStages, orgs, assignmentGroups],
+  );
+  const validationErrors = [...validationResult.errors, ...automationValidation.errors];
+  const isDraftValid = validationResult.valid && automationValidation.valid;
+
+  async function handleValidateDraft() {
+    if (!draftVersionId || !selectedTemplate) return;
+    if (!(await saveDraftChanges(draftStages, draftVersionId, false, draftAutomation))) return;
+    setDesignerBusy(true);
+    const result = await repository.validateWorkflowDraftPersisted({ templateId: selectedTemplate.id, draftVersionId });
+    setDesignerBusy(false);
+    setDesignerMessage(result.valid
+      ? `Validation passed for draft v${draftVersionNumber}.0. The version is ready for review and publication.`
+      : `Validation found ${result.errors.length} issue(s): ${result.errors.join(" · ")}`);
+  }
+
   async function createDraft() {
     if (!activeVersion || !selectedTemplate) return;
     setDesignerBusy(true);
@@ -192,14 +280,17 @@ export function WorkflowDesignerPanel({
       workflowVersionId: newDraftId,
       sequenceOrder: idx + 1,
     }));
-
+    const clonedAutomation = automationForVersion(activeVersion);
     persistDraftChanges(clonedStages, newDraftId);
-    setDraftSaveState("saved");
-    setDesignerMessage(`Draft ${newDraftId} (v${res.data.versionNumber}.0) created. You can now add, reorder, and configure stages.`);
+    const saved = await saveDraftChanges(clonedStages, newDraftId, false, clonedAutomation);
+    setDesignerMessage(saved
+      ? `Draft ${newDraftId} (v${res.data.versionNumber}.0) created and saved from the published version. You can now configure its stages, intake, and routing.`
+      : `Draft ${newDraftId} was created, but its initial settings did not save. Use Save Draft to retry.`);
   }
 
   function discardDraft() {
     if (!selectedTemplate) return;
+    draftEditGeneration.current += 1;
     setDraftState({ draftVersionId: null, draftStages: [] });
     setDraftSaveState("clean");
     setDraftSaveError("");
@@ -277,8 +368,8 @@ export function WorkflowDesignerPanel({
 
   async function handlePublishDraft() {
     if (!draftVersionId || !selectedTemplate) return;
-    if (!validationResult.valid) {
-      setDesignerMessage(`Cannot publish: Draft contains ${validationResult.errors.length} validation errors.`);
+    if (!isDraftValid) {
+      setDesignerMessage(`Cannot publish: Draft contains ${validationErrors.length} validation errors.`);
       return;
     }
 
@@ -302,11 +393,14 @@ export function WorkflowDesignerPanel({
     try {
       localStorage.removeItem(`path_draft_${selectedTemplate.id}`);
     } catch {}
+    draftEditGeneration.current += 1;
     setDraftState({ draftVersionId: null, draftStages: [] });
+    setPublishedAutomationOverride({ templateId: selectedTemplate.id, config: automationForVersion(res.data) });
     setDraftSaveState("clean");
     setDraftSaveError("");
     setShowPreviewModal(false);
     setDesignerMessage(`Workflow published as v${res.data.versionNumber}.0! Existing workstreams remain pinned to prior versions. New workstreams will use this version.`);
+    onWorkflowChanged?.();
   }
 
   async function registerOrganization() {
@@ -449,6 +543,16 @@ export function WorkflowDesignerPanel({
                     type="button"
                     variant="outline"
                     size="sm"
+                    onClick={() => void handleValidateDraft()}
+                    disabled={designerBusy || draftSaveState === "saving"}
+                    className="text-xs font-bold gap-1"
+                  >
+                    Validate
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
                     onClick={handleAddStage}
                     disabled={designerBusy}
                     className="text-xs font-bold gap-1"
@@ -468,7 +572,7 @@ export function WorkflowDesignerPanel({
                     type="button"
                     size="sm"
                     onClick={() => setShowPreviewModal(true)}
-                    disabled={designerBusy || !validationResult.valid}
+                    disabled={designerBusy || !isDraftValid}
                     className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs gap-1.5"
                   >
                     <Check className="size-3.5" /> Review & Publish
@@ -500,21 +604,21 @@ export function WorkflowDesignerPanel({
           {/* Validation Feedback Banner in Draft Mode */}
           {draftVersionId && (
             <div>
-              {validationResult.valid ? (
+              {isDraftValid ? (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs text-emerald-900 flex items-center gap-2">
                   <CheckCircle2 className="size-4 text-emerald-700 shrink-0" />
                   <span>
-                    <strong>Draft validation passed:</strong> All {draftStages.length} stages are reachable, ownership is complete, and constraints are verified.
+                    <strong>Draft validation passed:</strong> Stages, intake questions, routes, stage paths, and notices are ready to publish.
                   </span>
                 </div>
               ) : (
                 <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-950 space-y-2">
                   <div className="flex items-center gap-2 font-bold text-amber-900">
                     <AlertTriangle className="size-4 text-amber-700 shrink-0" />
-                    <span>Draft contains {validationResult.errors.length} validation issue(s) that must be corrected before publishing:</span>
+                    <span>Draft contains {validationErrors.length} validation issue(s) that must be corrected before publishing:</span>
                   </div>
                   <ul className="list-disc list-inside space-y-1 text-amber-900 pl-2">
-                    {validationResult.errors.map((err, i) => (
+                    {validationErrors.map((err, i) => (
                       <li key={i}>{err}</li>
                     ))}
                   </ul>
@@ -532,8 +636,21 @@ export function WorkflowDesignerPanel({
             </div>
           </div>
 
+          <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3" role="tablist" aria-label="Workflow configuration">
+            {([
+              ["stages", `Stages (${visibleStages.length})`],
+              ["intake", `Customer questions (${visibleAutomation.intakeQuestions.length})`],
+              ["routing", `Routing (${visibleAutomation.routingRules.length})`],
+              ["paths", `Stage paths & notices (${visibleAutomation.stageBranches.length} / ${visibleAutomation.noticeTemplates.length})`],
+            ] as const).map(([section, label]) => (
+              <button key={section} type="button" role="tab" aria-selected={editorSection === section} onClick={() => setEditorSection(section)} className={`rounded-full px-3 py-2 text-xs font-bold transition ${editorSection === section ? "bg-[#00284d] text-white" : "bg-white text-slate-600 hover:bg-teal-50 hover:text-teal-900"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+
           {/* Stages List (Ordered Process List with Expandable Settings) */}
-          <div className="space-y-4">
+          {editorSection === "stages" && <div className="space-y-4">
             {visibleStages.map((stage, index) => {
               const isExpanded = expandedStageKey === stage.stageKey;
               const isUnreachable = validationResult.unreachableStages.includes(stage.stageKey);
@@ -987,7 +1104,34 @@ export function WorkflowDesignerPanel({
                 </Card>
               );
             })}
-          </div>
+          </div>}
+          {editorSection === "intake" && <ConfiguredIntakeFields
+            questions={visibleAutomation.intakeQuestions}
+            readOnly={!draftVersionId}
+            onChange={(intakeQuestions) => updateAutomation({ ...draftAutomation, intakeQuestions })}
+          />}
+          {editorSection === "routing" && <RuleBuilder
+            rules={visibleAutomation.routingRules}
+            questions={visibleAutomation.intakeQuestions}
+            workflows={templates.flatMap((template) => template.versions.filter((version) => version.status === "published").map((version) => ({ id: version.id, label: `${template.name} · v${version.versionNumber}` })))}
+            permitTypes={catalog.map((permit) => ({ id: permit.id, label: permit.name }))}
+            organizations={orgs}
+            assignmentGroups={assignmentGroups.filter((group) => group.active).map((group) => ({ id: group.id, name: group.name, orgCode: group.orgCode }))}
+            people={profiles.filter((profile) => profile.isActive).map((profile) => ({ id: profile.userId, name: profile.fullName }))}
+            autoRouteEnabled={visibleAutomation.autoRouteEnabled}
+            onAutoRouteEnabledChange={(autoRouteEnabled) => updateAutomation({ ...draftAutomation, autoRouteEnabled })}
+            readOnly={!draftVersionId}
+            onChange={(routingRules) => updateAutomation({ ...draftAutomation, routingRules })}
+          />}
+          {editorSection === "paths" && <WorkflowBranchNoticeEditor
+            stages={visibleStages}
+            questions={visibleAutomation.intakeQuestions}
+            branches={visibleAutomation.stageBranches}
+            noticeTemplates={visibleAutomation.noticeTemplates}
+            readOnly={!draftVersionId}
+            onBranchesChange={(stageBranches) => updateAutomation({ ...draftAutomation, stageBranches })}
+            onNoticeTemplatesChange={(noticeTemplates) => updateAutomation({ ...draftAutomation, noticeTemplates })}
+          />}
         </div>
       )}
 
@@ -1040,6 +1184,12 @@ export function WorkflowDesignerPanel({
                   <span className="font-bold text-emerald-900 block">New Version to Publish (v{draftVersionNumber}.0)</span>
                   <p className="mt-1 text-emerald-800">{draftStages.length} workflow stages</p>
                 </div>
+              </div>
+              <div className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-2">
+                <p><strong className="text-slate-800">Customer intake:</strong> {draftAutomation.intakeQuestions.length} question(s)</p>
+                <p><strong className="text-slate-800">Routing:</strong> {draftAutomation.routingRules.length} rule(s) · {draftAutomation.autoRouteEnabled ? "automatic routing on" : "manual routing"}</p>
+                <p><strong className="text-slate-800">Stage branches:</strong> {draftAutomation.stageBranches.length}</p>
+                <p><strong className="text-slate-800">In-app notices:</strong> {draftAutomation.noticeTemplates.length}</p>
               </div>
 
               <div className="space-y-1.5 pt-2">

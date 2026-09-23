@@ -97,8 +97,15 @@ test("Gantt Schedule Bars [Feature]: Renders readable project and stage schedule
 
 test("Gantt Schedule Bars [Customer Safe]: Renders Customer-Safe Project Schedule with Interactive Bars", async () => {
   const { WorkstreamGraphGantt } = await vite.ssrLoadModule("/components/cockpits/WorkstreamGraphGantt.tsx");
+  const { getFullProjectRecord } = await vite.ssrLoadModule("/lib/permit-utils.ts");
+  const project = getFullProjectRecord();
 
-  const html = renderToStaticMarkup(React.createElement(WorkstreamGraphGantt, { customerSafe: true }));
+  const html = renderToStaticMarkup(React.createElement(WorkstreamGraphGantt, {
+    project,
+    projectReference: project.code,
+    customerOrganizationName: "SpaceX",
+    customerSafe: true,
+  }));
 
   assert.match(html, /SpaceX project schedule/);
   assert.match(html, /Customer-safe project schedule/);

@@ -204,7 +204,7 @@ export type DemoPersona = {
   password?: string;
   badge: string;
   scenario: string;
-  group: "SpaceX Louisiana Program" | "Applicant Scenarios" | "Louisiana Governor's Office of Major Projects & Delivery";
+  group: string;
   displayTitle?: string;
   organization?: string;
   organizationalUnit?: string;

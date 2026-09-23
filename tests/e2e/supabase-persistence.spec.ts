@@ -541,6 +541,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await expect(coordinationCard).toBeVisible({ timeout: 15_000 });
     await coordinationCard.getByRole("button", { name: "Open Work", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Confirm coastal concurrence conditions", exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveURL(/[?&]projectId=PRJ-PECAN-2026(?:&|$)/);
     await expect(page.getByText("objection raised", { exact: true })).toBeVisible();
     await expect(page.getByText("Waiting on CPRA", { exact: true })).toBeVisible();
 
@@ -647,7 +648,6 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     test.setTimeout(180_000);
     const requestTitle = `E2E Complete Workflow ${Date.now()}`;
     const requestDescription = "Full persisted acceptance story from customer clarification through all configured workflow stages.";
-    const workflowVersionId = "workflow-version-d412c02d1de74798b7a20824bed70406";
     const stateOfficeGroupId = "28e4ef60-48ad-45e0-b391-38188cfbdb5b";
     const sarahUserId = "031dc622-0885-42bb-9c84-1f9b6cb18a1d";
     const targetDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -741,7 +741,15 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     await labeledControl(/^Team/, "select").selectOption(stateOfficeGroupId);
     await labeledControl(/^Assigned person/, "select").selectOption(sarahUserId);
     await labeledControl(/^Target date/, "input").fill(targetDate);
-    await labeledControl(/^Published workflow/, "select").selectOption(workflowVersionId);
+    const workflowSelector = labeledControl(/^Published workflow/, "select");
+    const workflowOptions = await workflowSelector.locator("option").evaluateAll((options) =>
+      options.map((option) => ({ value: (option as HTMLOptionElement).value, label: option.textContent ?? "" }))
+    );
+    const routeWorkflow = workflowOptions
+      .filter((option) => option.value && /spaceport_request/i.test(option.label))
+      .sort((left, right) => Number(right.label.match(/v(\d+)/i)?.[1] ?? 0) - Number(left.label.match(/v(\d+)/i)?.[1] ?? 0))[0];
+    expect(routeWorkflow, "a published spaceport_request workflow is available for the complete journey").toBeDefined();
+    await workflowSelector.selectOption(routeWorkflow!.value);
     await triageDialog.getByRole("button", { name: "Confirm routing and create work", exact: true }).click();
     await expect(triageDialog).not.toBeVisible();
     await expect(stateOfficePage.getByRole("status").filter({ hasText: "workstream" })).toBeVisible({ timeout: 20_000 });

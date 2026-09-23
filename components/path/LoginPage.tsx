@@ -124,7 +124,7 @@ export function LoginPage({
           </CardHeader>
           <CardContent className="space-y-5 p-6">
             <form onSubmit={onLogin} className="space-y-4">
-              <div><Label htmlFor="project-reference">Project number or ID</Label><Input id="project-reference" name="projectId" type="text" value={projectReference} required onChange={(event) => onProjectReferenceChange(event.target.value)} className="mt-1 h-11" placeholder="PRJ-2026-001" autoComplete="off" /><p className="mt-1 text-xs text-slate-500">Your account must have access to this project.</p></div>
+              <div><Label htmlFor="project-reference">Project number (optional)</Label><Input id="project-reference" name="projectId" type="text" value={projectReference} onChange={(event) => onProjectReferenceChange(event.target.value)} className="mt-1 h-11" placeholder="Use a shared project link or choose after sign-in" autoComplete="off" /><p className="mt-1 text-xs text-slate-500">After sign-in, PATH shows the projects available to your account.</p></div>
               <div><Label htmlFor="username">Email address / username</Label><Input ref={usernameRef} id="username" name="username" type="text" value={username} required onChange={(event) => onUsernameChange(event.target.value)} className="mt-1 h-11" placeholder="jordan.lee@la.gov" /></div>
               <div><Label htmlFor="password">Password</Label><Input id="password" name="password" type="password" value={password} required onChange={(event) => onPasswordChange(event.target.value)} className="mt-1 h-11" placeholder="demo1234" /></div>
               <Button id="login-submit" type="submit" disabled={loadingData} className="h-11 w-full bg-[#00284d] font-bold hover:bg-[#003c70]">{loadingData ? "Signing in…" : "Sign In"}<ArrowRight className="size-4" aria-hidden="true" /></Button>
@@ -159,7 +159,7 @@ export function LoginPage({
                 {customerGroup.length > 0 && (
                   <div className="space-y-1.5">
                     <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                      Customer (SpaceX)
+                      Customer accounts
                     </p>
                     <div className="space-y-1.5">
                       {customerGroup.map((p) => renderPersonaButton(p))}

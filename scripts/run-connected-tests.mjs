@@ -14,6 +14,8 @@ if (missing.length > 0) {
   const executable = process.platform === "win32" ? "npx.cmd" : "npx";
   const result = spawnSync(executable, [
     "playwright", "test", "--project=chromium",
+    "tests/e2e/project-access-isolation.spec.ts",
+    "tests/e2e/workflow-designer-connected.spec.ts",
     "tests/e2e/supabase-persistence.spec.ts",
     "tests/e2e/document-management.spec.ts",
   ], { stdio: "inherit", env: process.env });

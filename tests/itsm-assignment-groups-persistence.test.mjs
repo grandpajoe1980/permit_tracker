@@ -82,6 +82,8 @@ test("Stage-run mapping preserves persisted workflow history without inventing d
     completedAt: "2026-09-03T00:00:00Z",
     completionNotes: "Evidence accepted",
   });
+
+  assert.equal(stageRunRowToDomain({ id: "run-2", review_outcome: "approved" }).reviewOutcome, "approved");
 });
 
 test("ITSM Assignment Groups: 15 multi-agency queues spanning 8 distinct organizations", () => {

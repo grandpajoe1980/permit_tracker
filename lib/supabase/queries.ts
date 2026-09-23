@@ -8,6 +8,7 @@ import {
   meetingRowToDomain, notificationRowToDomain, organizationRowToDomain, permitTypeRowToDomain, workflowStageRowToDomain,
   projectParticipantRowToDomain, requirementResourceRowToDomain, rfiResponseRowToDomain,
   rfiRowToDomain, stageRunRowToDomain, taskRowToDomain, userProfileRowToDomain, workstreamRowToDomain, organizationMembershipRowToDomain,
+  workflowVersionRowToDomain,
 } from "./mappings";
 import type {
   AssignmentGroupRecord,
@@ -35,6 +36,119 @@ export type ProjectSummary = {
   customerOrganizationId: string;
   leadOrganizationId: string;
 };
+
+export type AccessibleProject = {
+  id: string;
+  number: string;
+  name: string;
+  projectType: string | null;
+  leadOrganizationId: string | null;
+  customerOrganizationId: string | null;
+  customerOrganizationName: string | null;
+};
+
+/** Project rows are filtered by the signed-in caller's RLS policies. */
+export async function fetchAccessibleProjects(queryClient?: QueryClient): Promise<AccessibleProject[]> {
+  const client = queryClient ?? getSupabaseBrowser();
+  if (!client) return noClient("list accessible projects");
+  const { data, error } = await client.from("projects")
+    .select("id, number, name, project_type, lead_organization_id, customer_organization_id, customer_organizations(name)")
+    .order("name", { ascending: true });
+  if (error) {
+    recordQueryFailure("list accessible projects", error);
+    return [];
+  }
+  return (data ?? []).map((project) => ({
+    id: String(project.id),
+    number: String(project.number),
+    name: String(project.name),
+    projectType: project.project_type == null ? null : String(project.project_type),
+    leadOrganizationId: project.lead_organization_id == null ? null : String(project.lead_organization_id),
+    customerOrganizationId: project.customer_organization_id == null ? null : String(project.customer_organization_id),
+    customerOrganizationName: project.customer_organizations?.[0]?.name == null ? null : String(project.customer_organizations[0].name),
+  }));
+}
+
+export type ProjectCreationOrganization = { id: string; code: string; name: string };
+export type ProjectCreationCustomerOrganization = { id: string; name: string };
+export type CreatedProject = {
+  id: string;
+  number: string;
+  name: string;
+  customerOrganizationId?: string;
+  customerOrganizationName?: string;
+};
+
+export async function fetchProjectCreationOptions(): Promise<{
+  organizations: ProjectCreationOrganization[];
+  customerOrganizations: ProjectCreationCustomerOrganization[];
+  error: string | null;
+}> {
+  const client = getSupabaseBrowser();
+  if (!client) {
+    const error = "Supabase is unavailable. Sign in with a configured PATH account to create a project.";
+    recordQueryFailure("load project creation options", error);
+    return { organizations: [], customerOrganizations: [], error };
+  }
+
+  const [organizations, customers] = await Promise.all([
+    client.from("organizations").select("id, code, name").eq("active", true).order("name", { ascending: true }),
+    client.from("customer_organizations").select("id, name").eq("active", true).order("name", { ascending: true }),
+  ]);
+  const queryError = organizations.error ?? customers.error;
+  if (queryError) {
+    recordQueryFailure("load project creation options", queryError);
+    return { organizations: [], customerOrganizations: [], error: queryError.message };
+  }
+
+  return {
+    organizations: (organizations.data ?? []).map((row) => ({ id: String(row.id), code: String(row.code), name: String(row.name) })),
+    customerOrganizations: (customers.data ?? []).map((row) => ({ id: String(row.id), name: String(row.name) })),
+    error: null,
+  };
+}
+
+export async function createProjectForSystemAdmin(input: {
+  number: string;
+  name: string;
+  customerOrganizationId: string | null;
+  newCustomerOrganizationName: string;
+  newCustomerOrganizationLegalName: string;
+  customerUserEmailOrId: string;
+  leadOrganizationId: string;
+  participantOrganizationIds: string[];
+}): Promise<{ data: CreatedProject | null; error: string | null }> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: "Supabase is unavailable. Try again after reconnecting." };
+
+  const { data, error } = await client.rpc("rpc_create_project", {
+    p_number: input.number,
+    p_name: input.name,
+    p_customer_organization_id: input.customerOrganizationId,
+    p_lead_organization_id: input.leadOrganizationId,
+    p_participant_organization_ids: input.participantOrganizationIds,
+    p_new_customer_organization_name: input.newCustomerOrganizationName || null,
+    p_new_customer_organization_legal_name: input.newCustomerOrganizationLegalName || null,
+    p_customer_user_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.customerUserEmailOrId) ? input.customerUserEmailOrId : null,
+    p_customer_user_email: input.customerUserEmailOrId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.customerUserEmailOrId) ? input.customerUserEmailOrId : null,
+  });
+  if (error) return { data: null, error: error.message };
+
+  const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
+  if (!row || typeof row.id !== "string" || typeof row.number !== "string" || typeof row.name !== "string") {
+    return { data: null, error: "The database did not return a confirmed project receipt." };
+  }
+  return {
+    data: {
+      id: row.id,
+      number: row.number,
+      name: row.name,
+      customerOrganizationId: typeof row.customer_organization_id === "string" ? row.customer_organization_id : undefined,
+      customerOrganizationName: typeof row.customer_organization_name === "string" ? row.customer_organization_name : undefined,
+    },
+    error: null,
+  };
+}
 
 export type QueryDiagnostic = {
   operation: string;
@@ -396,19 +510,80 @@ export async function fetchOrganizations(): Promise<OrganizationRecord[]> {
   return data.map(organizationRowToDomain);
 }
 
-export async function fetchWorkflowTemplates(): Promise<WorkflowTemplateRecord[]> {
+export async function fetchWorkflowTemplates(projectReference?: string): Promise<WorkflowTemplateRecord[]> {
   const client = getSupabaseBrowser();
   if (!client) return noClient("fetch workflow templates");
-  const [definitionsRes, versionsRes, stagesRes] = await Promise.all([
-    client.from("workflow_definitions").select("*").order("case_type", { ascending: true }),
-    client.from("workflow_versions").select("*").order("version_number", { ascending: false }),
-    client.from("workflow_version_stages").select("*").order("sequence_order", { ascending: true }),
-  ]);
-  if (definitionsRes.error || versionsRes.error || stagesRes.error || !definitionsRes.data || !versionsRes.data || !stagesRes.data) {
-    recordQueryFailure(
-      "fetch workflow templates",
-      definitionsRes.error ?? versionsRes.error ?? stagesRes.error ?? "Incomplete workflow data returned",
-    );
+
+  // Scope template hydration before reading versions and stages. The RLS
+  // policies remain authoritative, while this avoids scanning every workflow
+  // row and evaluating the project visibility policy for unrelated tenants.
+  let organizationIds: string[] | null = null;
+  if (projectReference) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(projectReference);
+    const projectQuery = client.from("projects").select("id, lead_organization_id");
+    const { data: project, error: projectError } = await (isUuid
+      ? projectQuery.eq("id", projectReference)
+      : projectQuery.eq("number", projectReference)).maybeSingle();
+    if (projectError || !project) {
+      recordQueryFailure("resolve project workflow visibility", projectError ?? "Project was not visible to the signed-in user");
+      return [];
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date().toISOString();
+    const { data: participants, error: participantsError } = await client.from("project_participants")
+      .select("organization_id, is_active, starts_on, ends_on, expires_at")
+      .eq("project_id", project.id)
+      .eq("is_active", true);
+    if (participantsError) {
+      recordQueryFailure("resolve project workflow participants", participantsError);
+      return [];
+    }
+    organizationIds = [...new Set([
+      String(project.lead_organization_id),
+      ...(participants ?? [])
+        .filter((participant) => (!participant.starts_on || String(participant.starts_on) <= today)
+          && (!participant.ends_on || String(participant.ends_on) >= today)
+          && (!participant.expires_at || String(participant.expires_at) > now))
+        .map((participant) => String(participant.organization_id)),
+    ].filter(Boolean))];
+    if (organizationIds.length === 0) return [];
+  }
+
+  let definitionsQuery = client.from("workflow_definitions").select("*").order("case_type", { ascending: true });
+  if (organizationIds) definitionsQuery = definitionsQuery.in("organization_id", organizationIds);
+  const definitionsRes = await definitionsQuery;
+  if (definitionsRes.error || !definitionsRes.data) {
+    recordQueryFailure("fetch workflow definitions", definitionsRes.error ?? "No workflow definition data returned");
+    return [];
+  }
+  if (definitionsRes.data.length === 0) return [];
+
+  const workflowIds = definitionsRes.data.map((definition) => String(definition.id));
+  const versionsRes = await client.from("workflow_versions").select("*")
+    .in("workflow_id", workflowIds)
+    .order("version_number", { ascending: false });
+  if (versionsRes.error || !versionsRes.data) {
+    recordQueryFailure("fetch workflow versions", versionsRes.error ?? "No workflow version data returned");
+    return [];
+  }
+  if (versionsRes.data.length === 0) {
+    return definitionsRes.data.map((definition) => ({
+      id: String(definition.id),
+      organizationId: definition.organization_id == null ? undefined : String(definition.organization_id),
+      permitTypeId: String(definition.case_type ?? definition.id),
+      name: String(definition.name ?? definition.case_type ?? "Workflow"),
+      description: definition.description ? String(definition.description) : undefined,
+      activeVersionNumber: 1,
+      versions: [],
+    }));
+  }
+  const versionIds = versionsRes.data.map((version) => String(version.id));
+  const stagesRes = await client.from("workflow_version_stages").select("*")
+    .in("workflow_version_id", versionIds)
+    .order("sequence_order", { ascending: true });
+  if (stagesRes.error || !stagesRes.data) {
+    recordQueryFailure("fetch workflow stages", stagesRes.error ?? "No workflow stage data returned");
     return [];
   }
   return definitionsRes.data.map((definition) => {
@@ -417,20 +592,13 @@ export async function fetchWorkflowTemplates(): Promise<WorkflowTemplateRecord[]
       .filter((version) => String(version.workflow_id) === definitionId)
       .map((version) => {
         const versionId = String(version.id);
-        return {
-          id: versionId,
-          templateId: definitionId,
-          versionNumber: Number(version.version_number ?? 1),
-          status: (String(version.lifecycle_status ?? (version.is_active ? "published" : "retired"))) as "draft" | "published" | "retired",
-          effectiveDate: version.effective_date ? String(version.effective_date) : undefined,
-          publishedAt: version.published_at ? String(version.published_at) : undefined,
-          changeSummary: version.change_summary ? String(version.change_summary) : undefined,
-          stages: stagesRes.data.filter((stage) => String(stage.workflow_version_id) === versionId).map(workflowStageRowToDomain),
-        };
+        const stages = stagesRes.data.filter((stage) => String(stage.workflow_version_id) === versionId).map(workflowStageRowToDomain);
+        return workflowVersionRowToDomain(version, stages);
       });
     const activeVersion = versions.find((version) => version.status === "published") ?? versions[0];
     return {
       id: definitionId,
+      organizationId: definition.organization_id == null ? undefined : String(definition.organization_id),
       permitTypeId: String(definition.case_type ?? definitionId),
       name: String(definition.name ?? definition.case_type ?? "Workflow"),
       description: definition.description ? String(definition.description) : undefined,

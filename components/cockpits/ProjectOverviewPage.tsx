@@ -205,6 +205,7 @@ function FocusedWorkstreamWorkspace({
 
 export function ProjectOverviewPage({
   project,
+  customerOrganizationName = "Customer organization",
   projectReference,
   customerSafe = false,
   workflowTemplates = [],
@@ -213,6 +214,7 @@ export function ProjectOverviewPage({
   onOpenSchedule,
 }: {
   project: ProjectRecord;
+  customerOrganizationName?: string;
   projectReference?: string;
   customerSafe?: boolean;
   workflowTemplates?: WorkflowTemplateRecord[];
@@ -517,7 +519,7 @@ export function ProjectOverviewPage({
                     onClick={() => setActiveTab("people")}
                     className="mt-1 font-bold text-teal-900 hover:underline cursor-pointer text-left"
                   >
-                    {project.applicantOrgCode} (SpaceX)
+                    {customerOrganizationName}
                   </button>
                 </div>
                 <div>
@@ -930,7 +932,7 @@ export function ProjectOverviewPage({
             </p>
           </CardHeader>
           <CardContent className="p-0 sm:p-2">
-            <WorkstreamGraphGantt project={project} projectReference={projectReference} customerSafe={customerSafe} onSelectWorkstream={onFocusWorkstream} />
+            <WorkstreamGraphGantt project={project} projectReference={projectReference} customerOrganizationName={customerOrganizationName} customerSafe={customerSafe} onSelectWorkstream={onFocusWorkstream} />
           </CardContent>
         </Card>
       )}
@@ -985,7 +987,7 @@ export function ProjectOverviewPage({
               <Users className="size-5 text-teal-700" /> Project Directory & Participants
             </CardTitle>
             <p className="text-sm text-slate-600">
-              SpaceX team leads, State concierges, and regulatory agency reviewers.
+              Customer contacts, State concierges, and regulatory agency reviewers.
             </p>
           </CardHeader>
           <CardContent className="space-y-3">

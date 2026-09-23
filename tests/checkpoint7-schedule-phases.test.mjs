@@ -54,8 +54,8 @@ test("Checkpoint 7: schedule links preserve project scope and remain native link
   assert.match(gantt, /buildDetailShellPath\("task", taskId, projectReference\)/);
   assert.doesNotMatch(gantt, /href=\{`\/workstreams\//);
   assert.doesNotMatch(gantt, /href=\{`\/work\/task\//);
-  assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} projectReference=\{activeProjectReference\(\) \?\? undefined\} customerSafe=\{activePersona\.isCustomer\} focusedWorkstreamId=/);
-  assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} projectReference=\{activeProjectReference\(\) \?\? undefined\} customerSafe focusedWorkstreamId=/);
+  assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} projectReference=\{activeProjectReference\(\) \?\? undefined\} customerOrganizationName=\{customerOrganizationName\} customerSafe=\{activePersona\.isCustomer\} focusedWorkstreamId=/);
+  assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} projectReference=\{activeProjectReference\(\) \?\? undefined\} customerOrganizationName=\{customerOrganizationName\} customerSafe focusedWorkstreamId=/);
   assert.match(page, /desiredPathBase.*phase-\$\{encodeURIComponent\(selectedProjectPhase\)\}/s);
 });
 

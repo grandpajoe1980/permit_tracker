@@ -3,6 +3,8 @@
 // DOMAIN MODELS & ENUMS
 // ==========================================
 
+import type { WorkflowAutomationConfig } from "./workflow-rules";
+
 export type JurisdictionLevel =
   | "State"
   | "Federal"
@@ -402,6 +404,9 @@ export interface CustomerRequestRecord {
   status: "draft" | "submitted" | "triage" | "in_progress" | "resolved" | "closed" | ITSMState;
   /** Plain-language clarification requested by the project office, when a request is waiting on the customer. */
   triageNotes?: string;
+  intakeWorkflowVersionId?: string;
+  intakeAnswers?: Record<string, string | boolean>;
+  autoRouteReceipt?: CustomerRequestAutoRouteReceipt;
   attachmentDocumentVersionIds: string[];
   createdAt: string;
   updatedAt: string;
@@ -421,6 +426,20 @@ export interface CustomerRequestRecord {
   clockPausedAt?: string;
   clockTotalPausedSeconds?: number;
   statutoryClock?: StatutoryClockState;
+}
+
+export interface CustomerRequestAutoRouteReceipt {
+  status: "routed" | "manual";
+  reason?: "no_matching_rule" | "auto_route_disabled" | "no_published_workflow" | "existing_workstream" | "draft_request" | "route_unavailable";
+  workflowVersionId?: string;
+  destinationWorkflowVersionId?: string;
+  ruleId?: string;
+  workstreamId?: string;
+  workstreamCode?: string;
+  leadOrgCode?: string;
+  leadOrgName?: string;
+  assignmentGroupId?: string;
+  targetDate?: string;
 }
 
 export interface WorkflowStageRecord {
@@ -461,10 +480,16 @@ export interface WorkflowVersionRecord {
   publishedByName?: string;
   changeSummary?: string;
   stages: WorkflowStageRecord[];
+  intakeQuestions?: WorkflowAutomationConfig["intakeQuestions"];
+  routingRules?: WorkflowAutomationConfig["routingRules"];
+  stageBranches?: WorkflowAutomationConfig["stageBranches"];
+  noticeTemplates?: WorkflowAutomationConfig["noticeTemplates"];
+  autoRouteEnabled?: boolean;
 }
 
 export interface WorkflowTemplateRecord {
   id: string;
+  organizationId?: string;
   permitTypeId: string;
   name: string;
   description?: string;
@@ -739,6 +764,7 @@ export interface StageRunRecord {
   startedAt?: string;
   completedAt?: string;
   completionNotes?: string;
+  reviewOutcome?: string;
 }
 
 export interface WorkstreamBlockerRecord {

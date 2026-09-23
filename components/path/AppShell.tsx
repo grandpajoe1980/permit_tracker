@@ -5,6 +5,7 @@ import { Zap, Bell, LogOut, Menu, User, ArrowRight, Settings2, X } from "lucide-
 import type { OperationalPersona } from "@/lib/operational-ux";
 import type { AppRoute } from "@/lib/navigation";
 import { Button } from "@/components/ui/button";
+import type { AccessibleProject } from "@/lib/supabase/queries";
 
 export interface NavItem {
   id: AppRoute;
@@ -21,6 +22,10 @@ export interface AppShellProps {
   unreadNotifications: number;
   projectName?: string;
   projectSubtitle?: string;
+  projects?: AccessibleProject[];
+  activeProjectNumber?: string;
+  projectSwitching?: boolean;
+  onSelectProject?: (number: string) => void;
   onNavigate: (route: AppRoute) => void;
   onOpenProject: () => void;
   onSignOut: () => void;
@@ -36,6 +41,10 @@ export function AppShell({
   unreadNotifications,
   projectName = "Starbase Louisiana Launch Complex",
   projectSubtitle = "Vermilion Parish · Louisiana",
+  projects = [],
+  activeProjectNumber,
+  projectSwitching = false,
+  onSelectProject,
   onNavigate,
   onOpenProject,
   onSignOut,
@@ -109,14 +118,20 @@ export function AppShell({
           {/* Brand and current context */}
           <div className="site-header-context min-w-0 flex-1">
             <p className="text-xs font-black text-white sm:text-sm tracking-wide">PATH</p>
-            <button
-              type="button"
-              onClick={onOpenProject}
-              className="block max-w-[130px] sm:max-w-xs md:max-w-none truncate text-left text-[11px] font-semibold text-slate-300 hover:text-white hover:underline transition-colors cursor-pointer"
-              title="Go to project overview"
-            >
-              {projectName}
-            </button>
+            {projects.length > 1 && onSelectProject ? (
+              <select
+                aria-label="Current project"
+                value={activeProjectNumber}
+                onChange={(event) => onSelectProject(event.target.value)}
+                disabled={projectSwitching}
+                aria-busy={projectSwitching}
+                className="block max-w-[160px] truncate rounded border border-white/30 bg-[#00284d] px-1 py-0.5 text-[11px] font-semibold text-white sm:max-w-xs"
+              >
+                {projects.map((project) => <option key={project.id} value={project.number}>{project.name}</option>)}
+              </select>
+            ) : (
+              <button type="button" onClick={onOpenProject} className="block max-w-[130px] truncate text-left text-[11px] font-semibold text-slate-300 hover:text-white hover:underline sm:max-w-xs" title="Go to project overview">{projectName}</button>
+            )}
           </div>
 
           {/* User identity button (Clickable per step 7) */}

@@ -109,7 +109,6 @@ import {
   type WorkspaceMode,
 } from "@/lib/operational-ux";
 import {
-  CUSTOMER_ORGANIZATION_NAME,
   customerVisibleProfiles,
   filingModeLabel,
   getProjectOverview,
@@ -134,11 +133,16 @@ import { CustomerRequestList } from "@/components/path/customer/CustomerRequestL
 import { SubmitRequestLauncher, type CustomerRequestIntent } from "@/components/path/customer/SubmitRequestLauncher";
 import { WorkItemPage } from "@/components/path/work/WorkItemPage";
 import { AppShell } from "@/components/path/AppShell";
+import { ProjectAdminPanel } from "@/components/path/ProjectAdminPanel";
 import { WorkInboxView } from "@/components/path/work/WorkInboxView";
 import { TeamWorkView } from "@/components/path/work/TeamWorkView";
 import { TriageRoutingDialog, type TriageRoutingGroupOption, type TriageRoutingOrganizationOption, type TriageRoutingRow } from "@/components/path/intake/TriageRoutingDialog";
 import { buildShellPath, buildWorkItemPath, NAVIGATION_DEFINITIONS, parseShellPath, parseWorkItemPath, type AppRoute } from "@/lib/navigation";
 import { DEFAULT_PROJECT_NUMBER, normalizeProjectReference, projectReferenceFromUrl } from "@/lib/project-identifiers";
+import { fetchAccessibleProjects, type AccessibleProject, type CreatedProject } from "@/lib/supabase/queries";
+import { WorkflowIntakeForm } from "@/components/cockpits/WorkflowIntakeForm";
+import { validateWorkflowIntakeAnswers, type WorkflowIntakeAnswers } from "@/lib/workflow-intake";
+import { evaluateRoutingRules } from "@/lib/workflow-rules";
 import {
   clearCustomerSubmissionRecovery,
   customerSubmissionFingerprint,
@@ -184,6 +188,19 @@ function userIdForPersona(id: string) {
 
 function makeAuthenticatedPersona(email: string, name: string, userId?: string): DemoPersona {
   const profile = userId ? repository.getProfileByUserId(userId) : undefined;
+  if (profile?.projectRole.toLowerCase().includes("customer")) {
+    return {
+      id: userId ?? profile.userId,
+      name: profile.fullName || name,
+      role: "Customer Project Participant",
+      roleDescription: "Customer access scoped to the assigned project organization",
+      email,
+      badge: "Customer",
+      scenario: "Customer project workspace",
+      group: profile.organizationName || "Customer project workspace",
+      organization: profile.organizationName,
+    };
+  }
   const knownPersona = getPersonaFromEmail(email);
   if (knownPersona) {
     return {
@@ -228,7 +245,7 @@ function makeAuthenticatedPersona(email: string, name: string, userId?: string):
     email,
     badge: "Authenticated",
     scenario: "Project workspace",
-    group: "SpaceX Louisiana Program",
+    group: "Project participant",
   };
 }
 
@@ -323,7 +340,7 @@ function kindIcon(item: OperationalWorkItem) {
 }
 
 function workspaceTitle(workspace: WorkspaceMode) {
-  if (workspace === "customer") return "SpaceX Project Workspace";
+  if (workspace === "customer") return "Customer Project Workspace";
   if (workspace === "supervisor") return "Supervisor Work Queue";
   if (workspace === "state_office") return "State Project Office";
   if (workspace === "agency") return "Agency Queue";
@@ -389,6 +406,7 @@ function suggestedTriageRows(request: CustomerRequestRecord): TriageRoutingRow[]
 
 export default function Home() {
   const [projectReference, setProjectReference] = useState("");
+  const [accessibleProjects, setAccessibleProjects] = useState<AccessibleProject[]>([]);
   const [route, setRoute] = useState<Route>("my-work");
   const [secondaryTool, setSecondaryTool] = useState<SecondaryTool>("schedule");
   const [projectSection, setProjectSection] = useState<ProjectSection>("overview");
@@ -456,6 +474,9 @@ export default function Home() {
   const [requestDescription, setRequestDescription] = useState("");
   const [requestFile, setRequestFile] = useState<File | null>(null);
   const [lastSubmittedRequest, setLastSubmittedRequest] = useState<CustomerRequestRecord | null>(null);
+  const [intakeWorkflowVersionId, setIntakeWorkflowVersionId] = useState("");
+  const [intakeAnswers, setIntakeAnswers] = useState<WorkflowIntakeAnswers>({});
+  const [intakeValidationErrors, setIntakeValidationErrors] = useState<string[]>([]);
   const [pendingFilingRecovery, setPendingFilingRecovery] = useState<CustomerSubmissionRecovery | null>(null);
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [triageRequest, setTriageRequest] = useState<CustomerRequestRecord | null>(null);
@@ -514,6 +535,58 @@ export default function Home() {
   const intakePreview = intakeText.trim() ? parsePlainEnglishIntake(intakeText) : null;
   const loggedIn = Boolean(currentUser && currentPersona);
   const projectRecord = repository.getProject();
+  const activeProjectOption = accessibleProjects.find((project) => project.number === projectReference);
+  const customerOrganizationName = activeProjectOption?.customerOrganizationName
+    || (activePersona.isCustomer && activePersona.organization ? activePersona.organization : "Customer organization");
+  const intakeProjectContext = {
+    projectId: activeProjectOption?.id ?? projectRecord.id,
+    projectNumber: activeProjectOption?.number ?? projectRecord.code,
+    projectType: activeProjectOption?.projectType ?? undefined,
+    customerOrganizationId: activeProjectOption?.customerOrganizationId ?? undefined,
+    leadOrganizationId: activeProjectOption?.leadOrganizationId ?? undefined,
+  };
+  const today = new Date().toISOString().slice(0, 10);
+  const projectOrganizationIds = new Set([
+    activeProjectOption?.leadOrganizationId,
+    ...repository.getParticipants().filter((participant) => participant.isActive
+      && (!participant.startsOn || participant.startsOn <= today)
+      && (!participant.endsOn || participant.endsOn >= today)).map((participant) => participant.organizationId),
+  ].filter((id): id is string => Boolean(id)));
+  const projectIntakeWorkflows = repository.getWorkflowTemplates()
+    .filter((template) => allowsFixtureData() || Boolean(template.organizationId && projectOrganizationIds.has(template.organizationId)))
+    .flatMap((template) => template.versions
+      .filter((version) => version.status === "published")
+      .map((version) => ({ template, version })))
+    .sort((left, right) => left.template.name.localeCompare(right.template.name));
+  const selectedIntakeWorkflow = projectIntakeWorkflows.find(({ version }) => version.id === intakeWorkflowVersionId)
+    ?? projectIntakeWorkflows[0]
+    ?? null;
+  const selectedRoutingRule = selectedIntakeWorkflow?.version.autoRouteEnabled
+    ? evaluateRoutingRules(selectedIntakeWorkflow.version.routingRules ?? [], intakeAnswers, intakeProjectContext)
+    : null;
+  const intakeQuestionErrors = selectedIntakeWorkflow
+    ? validateWorkflowIntakeAnswers(
+        selectedIntakeWorkflow.version.intakeQuestions ?? [],
+        intakeAnswers,
+        intakeProjectContext,
+      )
+    : [];
+  const routingDestinationOrganization = selectedRoutingRule
+    ? repository.getOrganizations().find((organization) => organization.code.toUpperCase() === selectedRoutingRule.destination.leadOrgCode.toUpperCase())
+    : undefined;
+  const routingDestinationGroup = selectedRoutingRule?.destination.assignmentGroupId
+    ? repository.getAssignmentGroups().find((group) => group.id === selectedRoutingRule.destination.assignmentGroupId)
+    : undefined;
+  const routingDestinationWorkflow = selectedRoutingRule
+    ? projectIntakeWorkflows.find(({ version }) => version.id === selectedRoutingRule.destination.workflowVersionId)
+    : undefined;
+  const routingPreviewDescription = selectedRoutingRule
+    ? `Answers match “${selectedRoutingRule.name}.” If submitted, PATH will route this request to ${selectedRoutingRule.destination.leadOrgName ?? routingDestinationOrganization?.name ?? selectedRoutingRule.destination.leadOrgCode}${routingDestinationGroup ? ` · ${routingDestinationGroup.name}` : ""}${routingDestinationWorkflow ? ` using ${routingDestinationWorkflow.template.name}` : ""}.`
+    : selectedIntakeWorkflow?.version.autoRouteEnabled && (selectedIntakeWorkflow.version.routingRules?.length ?? 0) > 0
+      ? intakeQuestionErrors.length > 0
+        ? "Complete the required workflow questions to preview an automatic route. If no rule matches, the project office will review and route the request."
+        : "No routing rule matches these answers. The project office will review and route the request."
+      : "No automatic routing rule is published for this workflow. The project office will review and route the request.";
   const projectOverview: ProjectOverview = getProjectOverview(projectRecord, repository.getWorkstreams(), repository.getCustomerRequests(), repository.getExternalFilings());
   const currentProfile = repository.getProfileByUserId(userIdForPersona(activePersona.id)) ?? (allowsFixtureData() ? projectProfiles.find((profile) => profile.fullName === activePersona.name) : undefined);
 
@@ -591,8 +664,11 @@ export default function Home() {
   }, [mobileNavOpen]);
 
   useEffect(() => {
-    const fromUrl = projectReferenceFromUrl(new URL(window.location.href));
-    setProjectReference(fromUrl ?? (allowsFixtureData() ? DEFAULT_PROJECT_NUMBER : ""));
+    const frame = window.requestAnimationFrame(() => {
+      const fromUrl = projectReferenceFromUrl(new URL(window.location.href));
+      setProjectReference(fromUrl ?? (allowsFixtureData() ? DEFAULT_PROJECT_NUMBER : ""));
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
@@ -610,19 +686,15 @@ export default function Home() {
     }
     void getBrowserUser().then(async (user) => {
       if (!active || !user) return;
-      const scope = projectReferenceFromUrl(new URL(window.location.href))
-        ?? (allowsFixtureData() ? DEFAULT_PROJECT_NUMBER : normalizeProjectReference(projectReference));
-      if (!scope) {
+      const preferred = projectReferenceFromUrl(new URL(window.location.href));
+      const selection = await loadAccessibleProject(preferred);
+      if (!selection) {
         setUsername(user.email ?? "");
-        setLoginError("Enter the project number or ID you are authorized to access.");
+        setLoginError("No accessible project could be loaded for this account.");
         return;
       }
-      const hydratedFromDb = await repository.hydrateFromSupabase(scope);
-      if (!hydratedFromDb && !allowsFixtureData()) {
-        setHydrationError("The operational workspace could not load from Supabase. Retry or contact an administrator.");
-      }
       if (!allowsFixtureData()) setTeamUsers(persistedTeamUsers());
-      const loaded = await loadRequestsForUser(scope);
+      const loaded = await loadRequestsForUser(selection.number);
       const persona = makeAuthenticatedPersona(user.email ?? "authenticated@path.local", String(user.user_metadata?.full_name ?? user.email ?? "Authenticated User"), user.id);
       const permits = loaded.permits.length > 0 || !allowsFixtureData() ? loaded.permits : pecanIslandRequests;
       setCurrentPersona(persona);
@@ -634,6 +706,7 @@ export default function Home() {
       if (event === "SIGNED_OUT") {
         setCurrentUser(null);
         setCurrentPersona(null);
+        setAccessibleProjects([]);
         setUserPermits(allowsFixtureData() ? pecanIslandRequests : []);
       }
     });
@@ -703,6 +776,19 @@ export default function Home() {
     if (!loggedIn || typeof window === "undefined") return;
 
     const restore = (state?: ShellHistoryState | null) => {
+      // A canonical record URL is the durable address for an open work item.
+      // Resolve it against the freshly hydrated project data before restoring
+      // an in-memory history snapshot that may contain an old derived item ID.
+      const workPath = parseWorkItemPath(window.location.pathname);
+      if (workPath) {
+        const item = workItems.find((candidate) => candidate.kind === workPath.kind && (candidate.sourceId === workPath.id || candidate.id === workPath.id));
+        setRoute("detail");
+        setSelectedItemId(item?.id ?? null);
+        setSelectedProjectWorkstreamId(null);
+        setRequestedWorkItemPath(item ? null : window.location.pathname);
+        return;
+      }
+
       if (state?.route) {
         const restoredRoute = state.route === "secondary" ? "project" : state.route;
         const restoredSection = isProjectSection(state.projectSection)
@@ -728,16 +814,6 @@ export default function Home() {
         setRequestedWorkItemPath(null);
         restoringScrollRef.current = state.scrollY;
         restoringFocusRef.current = state.focusId ?? null;
-        return;
-      }
-
-      const workPath = parseWorkItemPath(window.location.pathname);
-      if (workPath) {
-        const item = workItems.find((candidate) => candidate.kind === workPath.kind && (candidate.sourceId === workPath.id || candidate.id === workPath.id));
-        setRoute("detail");
-        setSelectedItemId(item?.id ?? null);
-        setSelectedProjectWorkstreamId(null);
-        setRequestedWorkItemPath(item ? null : window.location.pathname);
         return;
       }
 
@@ -905,7 +981,11 @@ export default function Home() {
   }
 
   function openItem(item: OperationalWorkItem) {
-    pushNavigation(buildWorkItemPath(item.kind, item.sourceId, projectReference), { ...currentHistoryState(), route: "detail", selectedItemId: item.id, selectedProjectWorkstreamId: null, scrollY: 0 });
+    const projectFromUrl = typeof window === "undefined"
+      ? null
+      : projectReferenceFromUrl(new URL(window.location.href));
+    const projectForItem = projectFromUrl ?? normalizeProjectReference(projectReference) ?? undefined;
+    pushNavigation(buildWorkItemPath(item.kind, item.sourceId, projectForItem), { ...currentHistoryState(), route: "detail", selectedItemId: item.id, selectedProjectWorkstreamId: null, scrollY: 0 });
     setSelectedItemId(item.id);
     setRequestedWorkItemPath(null);
     setRoute("detail");
@@ -952,7 +1032,79 @@ export default function Home() {
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
     url.searchParams.set("projectId", reference);
-    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+    window.history.replaceState(window.history.state, "", nextUrl);
+  }
+
+  async function loadAccessibleProject(preferred: string | null): Promise<AccessibleProject | null> {
+    const projects = await fetchAccessibleProjects();
+    setAccessibleProjects(projects);
+    const selected = projects.find((project) => project.number === preferred || project.id === preferred) ?? projects[0];
+    if (!selected) return null;
+    const loaded = await repository.hydrateFromSupabase(selected.number);
+    if (!loaded) return null;
+    setProjectReference(selected.number);
+    persistProjectReferenceInUrl(selected.number);
+    setHydrationError("");
+    return selected;
+  }
+
+  async function switchProject(number: string) {
+    const nextProject = accessibleProjects.find((project) => project.number === number);
+    if (number === projectReference || !nextProject) return;
+    const previous = projectReference;
+    setLoadingData(true);
+    setHydrationError("");
+    setSelectedItemId(null);
+    setSelectedProjectWorkstreamId(null);
+    setSelectedProjectPhase(null);
+    setLastSubmittedRequest(null);
+    setQueueSearch("");
+    setQueueKind("all");
+    setQueueState("all");
+    setQueueGroup("all");
+    setQueueAgencyFilter("all");
+    setWorkInboxTab("needs_action");
+    setWorkInboxSearch("");
+    setTeamWorkTab("unassigned");
+    setTeamWorkSearch("");
+    setIntakeText("");
+    setIntakeFile(null);
+    setIntakeStatus("");
+    setRequestCenterMode("menu");
+    setRequestTitle("");
+    setRequestOutcome("");
+    setRequestDescription("");
+    setRequestFile(null);
+    setIntakeWorkflowVersionId("");
+    setIntakeAnswers({});
+    setIntakeValidationErrors([]);
+    setRequestFileInputKey((value) => value + 1);
+    const recovery = readCustomerSubmissionRecovery();
+    setPendingFilingRecovery(recovery?.projectId === nextProject.id ? recovery : null);
+    const loaded = await repository.hydrateFromSupabase(number);
+    if (!loaded) {
+      const restored = previous ? await repository.hydrateFromSupabase(previous) : false;
+      if (!restored) setHydrationError("The selected project could not load. Refresh the page or contact an administrator.");
+      else setHydrationError("The selected project could not load. Your prior project is still selected.");
+      setLoadingData(false);
+      return;
+    }
+    const requests = await loadRequestsForUser(number);
+    setUserPermits(requests.permits);
+    setProjectReference(number);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("projectId", number);
+      window.history.pushState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+    if (recovery?.projectId === nextProject.id) {
+      setLastSubmittedRequest(repository.getCustomerRequests().find((request) => request.id === recovery.requestId || request.confirmationNumber === recovery.confirmationNumber) ?? null);
+    }
+    setRoute(activePersona.isCustomer ? "customer-home" : "my-work");
+    setProjectSection("overview");
+    setMutationVersion((value) => value + 1);
+    setLoadingData(false);
   }
 
   async function notify(message: string) {
@@ -973,13 +1125,6 @@ export default function Home() {
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const scope = normalizeProjectReference(projectReference);
-    if (!scope) {
-      setLoginError("Enter the project number or ID you are authorized to access.");
-      return;
-    }
-    setProjectReference(scope);
-    persistProjectReferenceInUrl(scope);
     setLoadingData(true);
     const { user, error } = await signInWithPassword(username, password);
     if (error || !user) {
@@ -988,14 +1133,20 @@ export default function Home() {
       usernameRef.current?.focus();
       return;
     }
-    const hydratedFromDb = await repository.hydrateFromSupabase(scope);
-    if (!hydratedFromDb && !allowsFixtureData()) {
-      setHydrationError("The operational workspace could not load from Supabase. Retry or contact an administrator.");
-    } else {
-      setHydrationError("");
+    // Read the deep link directly from the URL. The initial project-reference
+    // state is populated asynchronously, so a fast sign-in can otherwise fall
+    // back to the first project the user can access and lose the requested scope.
+    const requestedProject = typeof window === "undefined"
+      ? null
+      : projectReferenceFromUrl(new URL(window.location.href));
+    const selection = await loadAccessibleProject(requestedProject ?? normalizeProjectReference(projectReference));
+    if (!selection) {
+      setLoadingData(false);
+      setLoginError("Your account has no accessible project, or the project list could not be loaded.");
+      return;
     }
     if (!allowsFixtureData()) setTeamUsers(persistedTeamUsers());
-    const loaded = await loadRequestsForUser(scope);
+    const loaded = await loadRequestsForUser(selection.number);
     const persona = makeAuthenticatedPersona(user.email ?? username, String(user.user_metadata?.full_name ?? user.email ?? "Authenticated User"), user.id);
     const permits = loaded.permits.length > 0 || !allowsFixtureData() ? loaded.permits : pecanIslandRequests;
     setLoadingData(false);
@@ -1014,16 +1165,11 @@ export default function Home() {
     setHydrationError("");
     setLoadingData(true);
     setShowDemoPeople(false);
-    const scope = normalizeProjectReference(projectReference);
-    if (supabaseConfigured() && !scope) {
-      setLoginError("Enter the project number or ID you are authorized to access before signing in.");
-      setLoadingData(false);
-      return;
-    }
-    if (scope) {
-      setProjectReference(scope);
-      persistProjectReferenceInUrl(scope);
-    }
+    // Demo sign-in can begin before the initial URL-to-state effect has run.
+    // Keep authorized project deep links intact during that short startup race.
+    const preferredScope = (typeof window === "undefined"
+      ? null
+      : projectReferenceFromUrl(new URL(window.location.href))) ?? normalizeProjectReference(projectReference);
     const demoPassword = persona.password;
     if (supabaseConfigured() && !demoPassword) {
       // A demo persona without a seeded password must never bypass production auth.
@@ -1047,8 +1193,8 @@ export default function Home() {
           setLoadingData(false);
           return;
         }
-        const hydratedFromDb = await repository.hydrateFromSupabase(scope ?? "");
-        if (!hydratedFromDb && !allowsFixtureData()) {
+        const selection = await loadAccessibleProject(preferredScope);
+        if (!selection) {
           setCurrentPersona(null);
           setCurrentUser(null);
           setUserPermits([]);
@@ -1057,7 +1203,7 @@ export default function Home() {
           setLoadingData(false);
           return;
         }
-        const loaded = await loadRequestsForUser(scope ?? "");
+        const loaded = await loadRequestsForUser(selection.number);
         const hydratedPermits = loaded.permits.length > 0 || !allowsFixtureData() ? loaded.permits : pecanIslandRequests;
         const authenticatedPersona = makeAuthenticatedPersona(user.email ?? persona.email, String(user.user_metadata?.full_name ?? persona.name), user.id);
         setCurrentPersona(authenticatedPersona);
@@ -1089,6 +1235,7 @@ export default function Home() {
     await signOutBrowser();
     setCurrentUser(null);
     setCurrentPersona(null);
+    setAccessibleProjects([]);
     setUserPermits(allowsFixtureData() ? pecanIslandRequests : []);
     setSelectedItemId(null);
     setRoute("my-work");
@@ -1248,6 +1395,13 @@ export default function Home() {
       const inferredServiceType = requestTitle === "Project question" ? "project_question" : requestTitle === "Project blocker or coordination problem" ? "blocker_coordination" : requestTitle === "Concierge help" ? "concierge" : "government_help";
       const effectiveRequestType = requestType === "government_help" && requestCenterMode === "service" ? inferredServiceType : requestType;
       const selectedPermit = repository.getCatalog().find((permit) => permit.id === selectedCatalogPermitId);
+      const selectedWorkflowVersion = effectiveRequestType === "permit_authorization" ? selectedIntakeWorkflow?.version : undefined;
+      const intakeQuestions = selectedWorkflowVersion?.intakeQuestions ?? [];
+      if (selectedWorkflowVersion) {
+        const errors = validateWorkflowIntakeAnswers(intakeQuestions, intakeAnswers, intakeProjectContext);
+        setIntakeValidationErrors(errors);
+        if (errors.length > 0) return;
+      }
       const title = requestTitle.trim() || selectedPermit?.name || "Customer project request";
       const description = requestDescription.trim() || requestOutcome.trim() || "Customer request submitted through PATH.";
       const permitTypeId = effectiveRequestType === "permit_authorization" ? selectedCatalogPermitId : undefined;
@@ -1261,6 +1415,8 @@ export default function Home() {
         desiredDate: requestDate || undefined,
         knownAgencyCode: requestAgency || selectedPermit?.responsibleOrgCode,
         permitTypeId,
+        intakeWorkflowVersionId: selectedWorkflowVersion?.id,
+        intakeAnswers: selectedWorkflowVersion ? intakeAnswers : {},
         blocksActiveWork: requestBlocksWork,
       });
       const previousRecovery = readCustomerSubmissionRecovery();
@@ -1296,6 +1452,8 @@ export default function Home() {
         scheduleImportance: requestBlocksWork ? "critical" : "normal",
         knownAgencyCode: requestAgency || selectedPermit?.responsibleOrgCode,
         knownPermitTypeId: permitTypeId,
+        intakeWorkflowVersionId: selectedWorkflowVersion?.id,
+        intakeAnswers: selectedWorkflowVersion ? intakeAnswers : {},
         submittedByUserId: actorUserId(),
         submittedByName: activePersona.name,
         blocksActiveWork: requestBlocksWork,
@@ -1323,6 +1481,9 @@ export default function Home() {
       setRequestTitle("");
       setRequestOutcome("");
       setRequestDescription("");
+      setIntakeAnswers({});
+      setIntakeValidationErrors([]);
+      setIntakeWorkflowVersionId("");
       setRequestFile(null);
       setIntakeFile(null);
       setRequestFileInputKey((value) => value + 1);
@@ -1330,7 +1491,9 @@ export default function Home() {
       setExternalRecordUrl("");
       setRequestCenterMode("menu");
       navigate("customer-home");
-      showToast(`${request.confirmationNumber} submitted. The State Project Office triage queue was notified.`);
+      showToast(request.autoRouteReceipt?.status === "routed"
+        ? `${request.confirmationNumber} routed to ${request.autoRouteReceipt.leadOrgName ?? request.autoRouteReceipt.leadOrgCode ?? "the configured agency"}.`
+        : `${request.confirmationNumber} submitted to the project office for review.`);
       setMutationVersion((value) => value + 1);
     } finally {
       setIsSubmittingRequest(false);
@@ -1453,7 +1616,7 @@ export default function Home() {
     showToast(`Verified ${version.fileName} and started the download.`);
   }
 
-  async function uploadProjectRevision(documentId: string, event: ChangeEvent<HTMLInputElement>, uploadedByOrgName = CUSTOMER_ORGANIZATION_NAME) {
+  async function uploadProjectRevision(documentId: string, event: ChangeEvent<HTMLInputElement>, uploadedByOrgName = customerOrganizationName) {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -1514,7 +1677,7 @@ export default function Home() {
   async function uploadCustomerRevision(event: ChangeEvent<HTMLInputElement>) {
     const documentId = repository.getDocuments()[0]?.id;
     if (!documentId) return;
-    await uploadProjectRevision(documentId, event, CUSTOMER_ORGANIZATION_NAME);
+    await uploadProjectRevision(documentId, event, customerOrganizationName);
   }
 
   async function handleConfirmAction(event: FormEvent<HTMLFormElement>) {
@@ -1660,7 +1823,7 @@ export default function Home() {
       }
       const rfi = rfiResult.data;
       applyRepositoryWorkstream(item);
-      notify(`${rfi.code} created. SpaceX Regulatory Engineering and the project concierge were notified.`);
+      notify(`${rfi.code} created. ${customerOrganizationName} reviewers and the project concierge were notified.`);
       return;
     }
 
@@ -1670,7 +1833,7 @@ export default function Home() {
         return;
       }
       let createdLabel = "Structured blocker";
-      const target = blockReason === "customer" ? "SpaceX Regulatory Engineering" : blockReason === "another_agency" ? blockAgency : blockReason === "statutory" ? "Statutory waiting period" : "Internal agency team";
+      const target = blockReason === "customer" ? `${customerOrganizationName} Regulatory Engineering` : blockReason === "another_agency" ? blockAgency : blockReason === "statutory" ? "Statutory waiting period" : "Internal agency team";
       if (blockReason === "customer") {
         const requestingOrgId = persistedOrganizationId(activePersona.agencyCode.split(" /")[0]);
         const recipientOrgId = persistedOrganizationId("SPACEX");
@@ -1946,7 +2109,7 @@ export default function Home() {
       }
 
       if (!item.sourceRfi || !questionText.trim()) {
-        setDialogError("Tell SpaceX what needs clarification.");
+        setDialogError("Tell the customer what needs clarification.");
         return;
       }
       const requestingOrgId = persistedOrganizationId(activePersona.agencyCode.split(" /")[0]);
@@ -2056,6 +2219,13 @@ export default function Home() {
 
   const canAdmin = isAdministrator(activePersona);
   const canTriage = activePersona.workspace === "state_office";
+  const now = new Date().toISOString();
+  const canCreateProjects = repository.getOrganizationMemberships().some((membership) =>
+    membership.userId === actorUserId()
+    && membership.role === "system_admin"
+    && membership.status === "active"
+    && membership.effectiveFrom <= now
+    && (!membership.effectiveTo || membership.effectiveTo > now));
   const notificationRecipientIds = new Set([activePersona.id, activePersona.email, actorUserId(), userIdForPersona(activePersona.id)]);
   const unreadNotificationCount = repository.getNotifications().filter((notification) => !notification.isRead && notificationRecipientIds.has(notification.userId)).length;
   const primaryNav: Array<{ id: Route; label: string; icon: ReactNode; count?: number }> = activePersona.isCustomer
@@ -2102,7 +2272,7 @@ export default function Home() {
                 Group: {assignmentGroupLabel}
               </span>}
               <span className="rounded bg-slate-100 border border-slate-200 px-1.5 py-0.2 text-[10px] font-sans font-bold text-slate-700">
-                Customer: SpaceX
+                Customer: {customerOrganizationName}
               </span>
               <span className={`rounded px-1.5 py-0.2 text-[10px] font-sans font-black ${item.isCriticalPath ? "bg-red-100 text-red-800 border border-red-200" : "bg-blue-50 text-blue-800 border border-blue-200"}`}>
         {priorityLabel} {item.isCriticalPath ? "Critical Path" : "Standard"}
@@ -2158,7 +2328,7 @@ export default function Home() {
 
   function queueLabel(group: { id: QueueSectionId; label: string }) {
     if (!activePersona.isCustomer) return group.label;
-    if (group.id === "needs_action") return "Needs SpaceX";
+    if (group.id === "needs_action") return `Needs ${customerOrganizationName}`;
     if (group.id === "waiting") return "Needs Government";
     if (group.id === "due_soon") return "Due soon";
     return group.label;
@@ -2249,9 +2419,13 @@ export default function Home() {
     const filings = repository.getExternalFilings();
     const catalog = repository.getCatalog();
     const customerActionItems = queueGroups.find((g) => g.id === "needs_action")?.items ?? [];
+    const receiptRoute = lastSubmittedRequest?.autoRouteReceipt;
+    const receiptRouteDescription = receiptRoute?.status === "routed"
+      ? `Automatically routed to ${receiptRoute.leadOrgName ?? receiptRoute.leadOrgCode ?? "the configured agency"}${receiptRoute.workstreamCode ? ` as ${receiptRoute.workstreamCode}` : ""}.`
+      : `The project office will review and route this request. Current assignment: ${lastSubmittedRequest?.assignmentGroupName ?? "Pending assignment"}.`;
 
     return (
-      <CustomerHome projectName={PROJECT_DISPLAY_NAME} onSubmitRequest={() => openRequestCenter()} onViewRequests={() => navigate("requests")}>
+      <CustomerHome projectName={projectRecord.name || PROJECT_DISPLAY_NAME} onSubmitRequest={() => openRequestCenter()} onViewRequests={() => navigate("requests")}>
         {lastSubmittedRequest && (
           <Card className={`${pendingFilingRecovery ? "border-amber-300 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
             <CardHeader>
@@ -2264,8 +2438,9 @@ export default function Home() {
               <div>
                 <p className={`font-bold ${pendingFilingRecovery ? "text-amber-950" : "text-emerald-950"}`}>{lastSubmittedRequest.title}</p>
                 <p className={`mt-1 text-sm ${pendingFilingRecovery ? "text-amber-900" : "text-emerald-900"}`}>
-                  {pendingFilingRecovery ? "The PATH request and any attachment are saved. Only the external filing tracker still needs to be recorded." : `The State Project Office will review and route this request. Current assignment: ${lastSubmittedRequest.assignmentGroupName ?? "Pending assignment"}.`}
+                  {pendingFilingRecovery ? "The PATH request and any attachment are saved. Only the external filing tracker still needs to be recorded." : receiptRouteDescription}
                 </p>
+                {!pendingFilingRecovery && <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-emerald-800">Status: {lastSubmittedRequest.status.replaceAll("_", " ")} · {receiptRoute?.status === "routed" ? "Automatically routed" : "Waiting for project office review"}</p>}
               </div>
               <div className="flex flex-wrap gap-2">
                 {pendingFilingRecovery && (
@@ -2291,8 +2466,8 @@ export default function Home() {
                   </CardTitle>
                   <p className="mt-1 text-xs text-slate-600">
                     {customerActionItems.length > 0
-                      ? "Outstanding RFIs and clarification requests from government reviewers that require SpaceX action."
-                      : "All caught up! No actions or responses are currently required from SpaceX."}
+                      ? "Outstanding RFIs and clarification requests from government reviewers that require your response."
+                      : "All caught up! No actions or responses are currently required from you."}
                   </p>
                 </div>
                 <span className={`rounded-full px-2.5 py-0.5 text-xs font-black ${customerActionItems.length > 0 ? "bg-amber-200 text-amber-900" : "bg-emerald-100 text-emerald-800"}`}>
@@ -2356,7 +2531,7 @@ export default function Home() {
             <div>
               <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-800">Customer project command center</p>
               <button type="button" onClick={() => openProject()} className="mt-2 text-left group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 rounded-lg" title="Open project page">
-                <h1 className="max-w-4xl text-3xl font-black tracking-tight text-[#00284d] group-hover:text-teal-900 group-hover:underline sm:text-4xl">{PROJECT_DISPLAY_NAME}</h1>
+                <h1 className="max-w-4xl text-3xl font-black tracking-tight text-[#00284d] group-hover:text-teal-900 group-hover:underline sm:text-4xl">{projectRecord.name || PROJECT_DISPLAY_NAME}</h1>
               </button>
               <p className="mt-2 text-sm font-semibold text-slate-600">{projectRecord.code} · {projectRecord.locationDescription}</p>
             </div>
@@ -2404,7 +2579,7 @@ export default function Home() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Building2 className="size-5 text-teal-700" /> Government workstreams</CardTitle>
-              <p className="text-sm text-slate-600">Customer-visible stage, next milestone, owner, and whether SpaceX action is required.</p>
+              <p className="text-sm text-slate-600">Customer-visible stage, next milestone, owner, and whether {customerOrganizationName} action is required.</p>
             </CardHeader>
             <CardContent className="space-y-3">
               {projectOverview.governmentActions.map((action) => (
@@ -2415,7 +2590,7 @@ export default function Home() {
                       <p className="mt-1 text-xs font-semibold text-slate-500">{action.agency} · {action.stage}</p>
                     </div>
                     <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${action.hasCustomerAction ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"}`}>
-                      {action.hasCustomerAction ? "SpaceX action" : "Government-led"}
+                      {action.hasCustomerAction ? `${customerOrganizationName} action` : "Government-led"}
                     </span>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
@@ -2514,7 +2689,7 @@ export default function Home() {
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserRound className="size-5 text-teal-700" /> Project contacts</CardTitle></CardHeader>
           <CardContent className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-slate-600">Your State concierge, lead agencies, SpaceX team, and customer-visible reviewers are in one directory.</p>
+            <p className="text-sm text-slate-600">Your project office, customer contacts, lead agencies, and customer-visible reviewers are in one directory.</p>
             <Button type="button" onClick={() => navigate("contacts")} className="bg-[#00284d] text-xs font-bold">Open Contact Directory</Button>
           </CardContent>
         </Card>
@@ -2529,7 +2704,7 @@ export default function Home() {
     // auth ids are UUIDs while demo personas use stable fixture ids.
     const recent = visibleCustomerRequests;
     const choice = (label: string, detail: string, icon: ReactNode, onClick: () => void) => <button type="button" onClick={onClick} className="rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-teal-400 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><span className="flex size-10 items-center justify-center rounded-lg bg-teal-50 text-teal-800">{icon}</span><span className="mt-4 block text-base font-black text-[#00284d]">{label}</span><span className="mt-1 block text-sm leading-6 text-slate-600">{detail}</span></button>;
-    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer intake</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Requests & permits</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Start with the outcome you need. PATH creates a trackable request, routes it to the State Project Office, and keeps authoritative agency filings clearly identified.</p></div>{requestCenterMode === "menu" && <><div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{choice("Submit / track a permit or authorization", "Select an authorization, review prerequisites and official resources, then create a PATH tracking record.", <FilePlus2 className="size-5" />, () => setRequestCenterMode("permit"))}{choice("Request government help / service", "Tell the project office the service or outcome you need, including date and schedule impact.", <HelpCircle className="size-5" />, () => { setRequestTitle("Government service request"); setRequestCenterMode("service"); })}{choice("Ask a project question", "Send a structured question to the project office with the context needed for a useful answer.", <MessageSquare className="size-5" />, () => { setRequestTitle("Project question"); setRequestCenterMode("service"); })}{choice("Report a blocker / coordination problem", "Identify what is blocked, who may need to act, and the date that matters.", <AlertOctagon className="size-5" />, () => { setRequestTitle("Project blocker or coordination problem"); setRequestBlocksWork(true); setRequestCenterMode("service"); })}{choice("Request escalation", "Ask for assistance when a critical-path risk or delayed dependency needs project-office attention.", <ShieldAlert className="size-5" />, () => setRequestCenterMode("escalation"))}{choice("I'm not sure what I need", "Use the PATH concierge to describe the situation in plain English and receive a suggested route.", <Sparkles className="size-5" />, () => { setRequestCenterMode("service"); setRequestTitle("Concierge help"); })}</div><Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Track my PATH requests</CardTitle></CardHeader><CardContent className="space-y-3">{recent.length > 0 ? recent.map((request) => <button key={request.id} type="button" onClick={() => openCustomerRequest(request)} className="flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3 text-left transition hover:border-teal-400 hover:bg-teal-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><div><p className="text-sm font-black text-[#00284d]">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-slate-500">{request.status.replaceAll("_", " ")} · {request.description}</p></div><span className="text-xs font-bold text-teal-800">{formatDate(request.updatedAt)}</span></button>) : <p className="text-sm text-slate-600">No requests submitted from this profile yet.</p>}</CardContent></Card></>}{requestCenterMode === "permit" && permit && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">Permit / authorization submission wizard</CardTitle><p className="mt-1 text-sm text-slate-600">Step 2 of 6 · Choose the authorization from the verified catalog.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent className="space-y-5"><div><Label htmlFor="permit-catalog">Authorization or permit</Label><select id="permit-catalog" value={permit.id} onChange={(event) => setSelectedCatalogPermitId(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm">{catalog.map((entry) => <option key={entry.id} value={entry.id}>{entry.name} · {entry.responsibleOrgCode}</option>)}</select></div><div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2"><div><p className="text-xs font-black uppercase text-slate-500">What triggers it</p><p className="mt-1 text-slate-700">{permit.triggerExplanation}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Expected duration</p><p className="mt-1 text-slate-700">{permit.expectedLeadTimeDays} days · statutory minimum {permit.minimumStatutoryDays} days</p></div><div><p className="text-xs font-black uppercase text-slate-500">Prerequisites</p><p className="mt-1 text-slate-700">{permit.prerequisites.join(" · ")}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Agency contact</p><p className="mt-1 text-slate-700">{permit.agencyContactName ?? permit.responsibleOrgCode} · {permit.agencyContactEmail ?? "Contact through official portal"}</p></div></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-black text-amber-950">Filing method: {filingModeLabel(permit.filingMode)}</p><p className="mt-1 text-sm leading-6 text-amber-900">{permit.filingMode === "EXTERNAL_PORTAL" ? `This application is submitted in the authoritative ${permit.responsibleOrgCode} system. PATH will track it as part of the SpaceX project.` : "PATH will show the next supported submission step before filing."}</p>{permit.officialFilingUrl && <a href={permit.officialFilingUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#00284d] px-3 py-2 text-xs font-bold text-white">Open official filing site <ExternalLink className="size-3.5" /></a>}</div><form onSubmit={(event) => submitCustomerRequest(event, "permit_authorization")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="permit-request-title">PATH tracking title</Label><Input id="permit-request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder={permit.name} required /></div><div><Label htmlFor="permit-submission-date">Submission date</Label><Input id="permit-submission-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="permit-request-description">Supporting context and requested outcome</Label><textarea id="permit-request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe the project scope, filing intent, and any known prerequisites." /></div>{permit.filingMode === "EXTERNAL_PORTAL" && <div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="external-reference">External case / application number</Label><Input id="external-reference" value={externalReference} onChange={(event) => setExternalReference(event.target.value)} placeholder="Enter after filing" /></div><div><Label htmlFor="external-record-url">External record URL</Label><Input id="external-record-url" type="url" value={externalRecordUrl} onChange={(event) => setExternalRecordUrl(event.target.value)} placeholder="https://..." /></div><div><Label htmlFor="external-status">Authoritative external status</Label><select id="external-status" value={externalStatus} onChange={(event) => setExternalStatus(event.target.value)} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="submitted">Submitted</option><option value="under_review">Under review</option><option value="additional_information">Additional information requested</option></select></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">PATH does not scrape or synchronize this system. Status is manually verified by a project participant.</div></div>}<div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 space-y-2 text-xs text-slate-700"><p className="font-black text-[#00284d] uppercase tracking-wider text-[11px]">Intake details &amp; routing preview</p><div className="grid gap-2 sm:grid-cols-2"><p><strong className="text-slate-800">Receiving team:</strong> {permit.responsibleOrgCode} · {permit.agencyContactName ?? "Designated Regulatory Authority"}</p><p><strong className="text-slate-800">Filing authority:</strong> Official Agency Jurisdiction: {permit.responsibleOrgCode}</p></div><p><strong className="text-slate-800">Expected process:</strong> Review lead time ~{permit.expectedLeadTimeDays} days (statutory minimum: {permit.minimumStatutoryDays} days). PATH tracks milestones against the SpaceX project schedule.</p><p><strong className="text-slate-800">After submission:</strong> A tracking record is created in PATH. If filing mode is external portal, ensure official agency reference is added once filed.</p></div><Button type="submit" disabled={isSubmittingRequest} className="bg-[#00284d] font-bold">{isSubmittingRequest ? "Saving request…" : "Create PATH tracking record"} <Send className="size-4" /></Button></form></CardContent></Card>}{(requestCenterMode === "service" || requestCenterMode === "escalation") && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">{requestCenterMode === "escalation" ? "Request escalation / assistance" : "Project help request"}</CardTitle><p className="mt-1 text-sm text-slate-600">Complete the structured intake so the right team can respond without a follow-up round trip.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent><form onSubmit={(event) => submitCustomerRequest(event, requestCenterMode === "escalation" ? "escalation" : "government_help")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="request-title">Request title</Label><Input id="request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder="What do you need?" required /></div><div><Label htmlFor="request-agency">Known agency (optional)</Label><Input id="request-agency" value={requestAgency} onChange={(event) => setRequestAgency(event.target.value)} placeholder="DOTD, CPRA, LDEQ..." /></div><div><Label htmlFor="request-outcome">Requested outcome</Label><Input id="request-outcome" value={requestOutcome} onChange={(event) => setRequestOutcome(event.target.value)} placeholder="A decision, meeting, review, or referral" /></div><div><Label htmlFor="request-date">Desired date</Label><Input id="request-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="request-area">Location / affected area</Label><Input id="request-area" value={requestArea} onChange={(event) => setRequestArea(event.target.value)} /></div><div><Label htmlFor="request-description">Describe the situation</Label><textarea id="request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={5} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder={requestCenterMode === "escalation" ? "Describe the critical-path risk, delayed dependency, or assistance needed." : "Include the context the project office needs to respond."} /></div><label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3"><input type="checkbox" checked={requestBlocksWork} onChange={(event) => setRequestBlocksWork(event.target.checked)} className="mt-1 size-4 accent-teal-700" /><span><span className="block text-sm font-bold text-[#00284d]">This blocks active project work</span><span className="block text-xs text-slate-500">Use this to help triage urgency; PATH will not infer a legal determination.</span></span></label><div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 space-y-2 text-xs text-slate-700"><p className="font-black text-[#00284d] uppercase tracking-wider text-[11px]">Intake details &amp; routing preview</p><div className="grid gap-2 sm:grid-cols-2"><p><strong className="text-slate-800">Receiving team:</strong> {requestAgency.trim() ? `${requestAgency.trim()} review team (via State Project Office)` : requestCenterMode === "escalation" ? "State Project Office · Governor's Office of Major Projects & Delivery" : "State Project Office · Triage & Inter-Agency Coordination"}</p><p><strong className="text-slate-800">Filing authority:</strong> Louisiana Project Delivery Office (PATH coordination framework)</p></div><p><strong className="text-slate-800">Expected process:</strong> State Project Office conducts intake review (1 business day), verifies completeness, and routes to the designated agency team. If clarification is needed, you will receive an action notification.</p><p><strong className="text-slate-800">After submission:</strong> A confirmation receipt (PATH-YYYY-XXXX) is issued immediately. You can track status, upload additional versions, and answer clarifications from &ldquo;My Requests&rdquo;.</p></div><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={saveCustomerDraft}>Save draft</Button><Button type="submit" disabled={isSubmittingRequest} className="bg-[#00284d] font-bold">{isSubmittingRequest ? "Saving request…" : "Submit request"} <Send className="size-4" /></Button></div></form></CardContent></Card>}</div>;
+    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer intake</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Requests & permits</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Start with the outcome you need. PATH creates a trackable request, applies a published permit workflow when available, and keeps authoritative agency filings clearly identified.</p></div>{requestCenterMode === "menu" && <><div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{choice("Submit / track a permit or authorization", "Select an authorization, review prerequisites and official resources, then create a PATH tracking record.", <FilePlus2 className="size-5" />, () => setRequestCenterMode("permit"))}{choice("Request government help / service", "Tell the project office the service or outcome you need, including date and schedule impact.", <HelpCircle className="size-5" />, () => { setRequestTitle("Government service request"); setRequestCenterMode("service"); })}{choice("Ask a project question", "Send a structured question to the project office with the context needed for a useful answer.", <MessageSquare className="size-5" />, () => { setRequestTitle("Project question"); setRequestCenterMode("service"); })}{choice("Report a blocker / coordination problem", "Identify what is blocked, who may need to act, and the date that matters.", <AlertOctagon className="size-5" />, () => { setRequestTitle("Project blocker or coordination problem"); setRequestBlocksWork(true); setRequestCenterMode("service"); })}{choice("Request escalation", "Ask for assistance when a critical-path risk or delayed dependency needs project-office attention.", <ShieldAlert className="size-5" />, () => setRequestCenterMode("escalation"))}{choice("I'm not sure what I need", "Use the PATH concierge to describe the situation in plain English and receive a suggested route.", <Sparkles className="size-5" />, () => { setRequestCenterMode("service"); setRequestTitle("Concierge help"); })}</div><Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Track my PATH requests</CardTitle></CardHeader><CardContent className="space-y-3">{recent.length > 0 ? recent.map((request) => <button key={request.id} type="button" onClick={() => openCustomerRequest(request)} className="flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3 text-left transition hover:border-teal-400 hover:bg-teal-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><div><p className="text-sm font-black text-[#00284d]">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-slate-500">{request.status.replaceAll("_", " ")} · {request.description}</p></div><span className="text-xs font-bold text-teal-800">{formatDate(request.updatedAt)}</span></button>) : <p className="text-sm text-slate-600">No requests submitted from this profile yet.</p>}</CardContent></Card></>}{requestCenterMode === "permit" && permit && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">Permit / authorization submission wizard</CardTitle><p className="mt-1 text-sm text-slate-600">Step 2 of 6 · Choose the authorization from the verified catalog.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent className="space-y-5"><div><Label htmlFor="permit-catalog">Authorization or permit</Label><select id="permit-catalog" value={permit.id} onChange={(event) => setSelectedCatalogPermitId(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm">{catalog.map((entry) => <option key={entry.id} value={entry.id}>{entry.name} · {entry.responsibleOrgCode}</option>)}</select></div><div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2"><div><p className="text-xs font-black uppercase text-slate-500">What triggers it</p><p className="mt-1 text-slate-700">{permit.triggerExplanation}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Expected duration</p><p className="mt-1 text-slate-700">{permit.expectedLeadTimeDays} days · statutory minimum {permit.minimumStatutoryDays} days</p></div><div><p className="text-xs font-black uppercase text-slate-500">Prerequisites</p><p className="mt-1 text-slate-700">{permit.prerequisites.join(" · ")}</p></div><div><p className="text-xs font-black uppercase text-slate-500">Agency contact</p><p className="mt-1 text-slate-700">{permit.agencyContactName ?? permit.responsibleOrgCode} · {permit.agencyContactEmail ?? "Contact through official portal"}</p></div></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-black text-amber-950">Filing method: {filingModeLabel(permit.filingMode)}</p><p className="mt-1 text-sm leading-6 text-amber-900">{permit.filingMode === "EXTERNAL_PORTAL" ? `This application is submitted in the authoritative ${permit.responsibleOrgCode} system. PATH will track it with the project record; the agency system remains authoritative.` : "PATH will show the next supported submission step before filing."}</p>{permit.officialFilingUrl && <a href={permit.officialFilingUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#00284d] px-3 py-2 text-xs font-bold text-white">Open official filing site <ExternalLink className="size-3.5" /></a>}</div><form onSubmit={(event) => submitCustomerRequest(event, "permit_authorization")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="permit-request-title">PATH tracking title</Label><Input id="permit-request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder={permit.name} required /></div><div><Label htmlFor="permit-submission-date">Submission date</Label><Input id="permit-submission-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="permit-request-description">Supporting context and requested outcome</Label><textarea id="permit-request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe the project scope, filing intent, and any known prerequisites." /></div>{projectIntakeWorkflows.length > 1 && <div><Label htmlFor="permit-intake-workflow">Intake workflow</Label><select id="permit-intake-workflow" value={selectedIntakeWorkflow?.version.id ?? ""} onChange={(event) => { setIntakeWorkflowVersionId(event.target.value); setIntakeAnswers({}); setIntakeValidationErrors([]); }} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="">Choose a published project workflow</option>{projectIntakeWorkflows.map(({ template, version }) => <option key={version.id} value={version.id}>{template.name} · v{version.versionNumber}</option>)}</select></div>}{selectedIntakeWorkflow && <WorkflowIntakeForm workflowVersionId={selectedIntakeWorkflow.version.id} questions={selectedIntakeWorkflow.version.intakeQuestions ?? []} answers={intakeAnswers} projectContext={intakeProjectContext} disabled={isSubmittingRequest} onAnswersChange={(answers) => { setIntakeAnswers(answers); setIntakeValidationErrors([]); }} />}{!selectedIntakeWorkflow && <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">No published workflow is available for this project yet. You can still submit; the project office will review and route it.</p>}{intakeValidationErrors.length > 0 && <ul role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-900">{intakeValidationErrors.map((error) => <li key={error}>{error}</li>)}</ul>}{permit.filingMode === "EXTERNAL_PORTAL" && <div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="external-reference">External case / application number</Label><Input id="external-reference" value={externalReference} onChange={(event) => setExternalReference(event.target.value)} placeholder="Enter after filing" /></div><div><Label htmlFor="external-record-url">External record URL</Label><Input id="external-record-url" type="url" value={externalRecordUrl} onChange={(event) => setExternalRecordUrl(event.target.value)} placeholder="https://..." /></div><div><Label htmlFor="external-status">Authoritative external status</Label><select id="external-status" value={externalStatus} onChange={(event) => setExternalStatus(event.target.value)} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="submitted">Submitted</option><option value="under_review">Under review</option><option value="additional_information">Additional information requested</option></select></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">PATH does not scrape or synchronize this system. Status is manually verified by a project participant.</div></div>}<div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 space-y-2 text-xs text-slate-700"><p className="font-black text-[#00284d] uppercase tracking-wider text-[11px]">Intake details &amp; routing preview</p><div className="grid gap-2 sm:grid-cols-2"><p><strong className="text-slate-800">PATH routing preview:</strong> {selectedRoutingRule ? <>{selectedRoutingRule.destination.leadOrgName ?? routingDestinationOrganization?.name ?? selectedRoutingRule.destination.leadOrgCode}{routingDestinationGroup ? " · " + routingDestinationGroup.name : ""}</> : "Project office review fallback"}</p><p><strong className="text-slate-800">Official filing authority:</strong> {permit.responsibleOrgCode} · {permit.agencyContactName ?? "Designated Regulatory Authority"}</p></div><p><strong className="text-slate-800">Routing:</strong> {routingPreviewDescription}</p><p><strong className="text-slate-800">Expected process:</strong> Review lead time ~{permit.expectedLeadTimeDays} days (statutory minimum: {permit.minimumStatutoryDays} days). PATH tracks milestones against this project schedule.</p><p><strong className="text-slate-800">After submission:</strong> PATH issues a receipt and shows whether the request routed automatically or needs project office review. For external portal filing, add the official agency reference after filing.</p></div><Button type="submit" disabled={isSubmittingRequest} className="bg-[#00284d] font-bold">{isSubmittingRequest ? "Saving request…" : "Submit request"} <Send className="size-4" /></Button></form></CardContent></Card>}{(requestCenterMode === "service" || requestCenterMode === "escalation") && <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="text-lg font-black text-[#00284d]">{requestCenterMode === "escalation" ? "Request escalation / assistance" : "Project help request"}</CardTitle><p className="mt-1 text-sm text-slate-600">Complete the structured intake so the right team can respond without a follow-up round trip.</p></div><Button type="button" variant="outline" onClick={() => setRequestCenterMode("menu")} className="text-xs font-bold">Back to request choices</Button></div></CardHeader><CardContent><form onSubmit={(event) => submitCustomerRequest(event, requestCenterMode === "escalation" ? "escalation" : "government_help")} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="request-title">Request title</Label><Input id="request-title" value={requestTitle} onChange={(event) => setRequestTitle(event.target.value)} placeholder="What do you need?" required /></div><div><Label htmlFor="request-agency">Known agency (optional)</Label><Input id="request-agency" value={requestAgency} onChange={(event) => setRequestAgency(event.target.value)} placeholder="DOTD, CPRA, LDEQ..." /></div><div><Label htmlFor="request-outcome">Requested outcome</Label><Input id="request-outcome" value={requestOutcome} onChange={(event) => setRequestOutcome(event.target.value)} placeholder="A decision, meeting, review, or referral" /></div><div><Label htmlFor="request-date">Desired date</Label><Input id="request-date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} /></div></div><div><Label htmlFor="request-area">Location / affected area</Label><Input id="request-area" value={requestArea} onChange={(event) => setRequestArea(event.target.value)} /></div><div><Label htmlFor="request-description">Describe the situation</Label><textarea id="request-description" value={requestDescription} onChange={(event) => setRequestDescription(event.target.value)} rows={5} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder={requestCenterMode === "escalation" ? "Describe the critical-path risk, delayed dependency, or assistance needed." : "Include the context the project office needs to respond."} /></div><label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3"><input type="checkbox" checked={requestBlocksWork} onChange={(event) => setRequestBlocksWork(event.target.checked)} className="mt-1 size-4 accent-teal-700" /><span><span className="block text-sm font-bold text-[#00284d]">This blocks active project work</span><span className="block text-xs text-slate-500">Use this to help triage urgency; PATH will not infer a legal determination.</span></span></label><div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 space-y-2 text-xs text-slate-700"><p className="font-black text-[#00284d] uppercase tracking-wider text-[11px]">Intake details &amp; routing preview</p><div className="grid gap-2 sm:grid-cols-2"><p><strong className="text-slate-800">Receiving team:</strong> {requestAgency.trim() ? `${requestAgency.trim()} review team (via State Project Office)` : requestCenterMode === "escalation" ? "State Project Office · Governor's Office of Major Projects & Delivery" : "State Project Office · Triage & Inter-Agency Coordination"}</p><p><strong className="text-slate-800">Filing authority:</strong> Louisiana Project Delivery Office (PATH coordination framework)</p></div><p><strong className="text-slate-800">Expected process:</strong> The project office reviews the request, confirms it is complete, and routes it to the designated agency team. If clarification is needed, you will receive an action notification.</p><p><strong className="text-slate-800">After submission:</strong> A confirmation receipt (PATH-YYYY-XXXX) is issued immediately. You can track status, upload additional versions, and answer clarifications from &ldquo;My Requests&rdquo;.</p></div><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={saveCustomerDraft}>Save draft</Button><Button type="submit" disabled={isSubmittingRequest} className="bg-[#00284d] font-bold">{isSubmittingRequest ? "Saving request…" : "Submit request"} <Send className="size-4" /></Button></div></form></CardContent></Card>}</div>;
   }
 
   function renderCustomerDocuments() {
@@ -2706,10 +2881,10 @@ export default function Home() {
       <nav aria-label="Project context" className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
         {tabs.map(([tab, label]) => <Button key={tab} type="button" variant={section === tab ? "default" : "ghost"} onClick={() => openProjectSection(tab)} className="text-xs font-bold">{label}</Button>)}
       </nav>
-      {section === "overview" && <ProjectOverviewPage project={projectRecord} customerSafe={activePersona.isCustomer} workflowTemplates={repository.getWorkflowTemplates()} focusedWorkstreamId={selectedProjectWorkstreamId} onFocusWorkstream={(workstreamId) => openProject(workstreamId ?? undefined)} onOpenSchedule={() => openProjectSection("schedule")} />}
-      {section === "schedule" && <div className="space-y-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Project context · Schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Baseline, forecast, dependencies, and parallel active stages for {projectRecord.name}. Open a workstream, stage, or task to view its canonical record.</p></div><WorkstreamGraphGantt project={projectRecord} projectReference={activeProjectReference() ?? undefined} customerSafe={activePersona.isCustomer} focusedWorkstreamId={selectedProjectWorkstreamId ?? undefined} focusedPhase={selectedProjectPhase ?? undefined} /></div>}
+      {section === "overview" && <ProjectOverviewPage project={projectRecord} customerOrganizationName={customerOrganizationName} customerSafe={activePersona.isCustomer} workflowTemplates={repository.getWorkflowTemplates()} focusedWorkstreamId={selectedProjectWorkstreamId} onFocusWorkstream={(workstreamId) => openProject(workstreamId ?? undefined)} onOpenSchedule={() => openProjectSection("schedule")} />}
+      {section === "schedule" && <div className="space-y-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Project context · Schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Baseline, forecast, dependencies, and parallel active stages for {projectRecord.name}. Open a workstream, stage, or task to view its canonical record.</p></div><WorkstreamGraphGantt project={projectRecord} projectReference={activeProjectReference() ?? undefined} customerOrganizationName={customerOrganizationName} customerSafe={activePersona.isCustomer} focusedWorkstreamId={selectedProjectWorkstreamId ?? undefined} focusedPhase={selectedProjectPhase ?? undefined} /></div>}
       {section === "vault" && <div className="space-y-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Project context · Documents</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Project documents</h1><p className="mt-2 text-sm text-slate-600">The same authorized project documents remain in context while you move between workstreams and the schedule.</p></div><DocumentVaultPanel project={projectRecord} onUploadRevision={(documentId, event) => void uploadProjectRevision(documentId, event, activePersona.organization)} onDownloadDocument={(docId, verId) => void downloadVersion(docId, verId)} onSelectWorkstream={(workstreamId) => openProject(workstreamId)} /></div>}
-      {section === "catalog" && <div className="space-y-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Services & permits</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Permit catalog</h1></div><PermitCatalogPanel catalog={repository.getCatalog()} templates={repository.getWorkflowTemplates()} onStartRequest={(permitId) => { setSelectedCatalogPermitId(permitId); if (activePersona.isCustomer) { setRequestCenterMode("permit"); navigate("requests"); } else { showToast("Permit selected. Switch to a SpaceX demo persona to start a request.", "info"); } }} /></div>}
+      {section === "catalog" && <div className="space-y-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Services & permits</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Permit catalog</h1></div><PermitCatalogPanel catalog={repository.getCatalog()} templates={repository.getWorkflowTemplates()} onStartRequest={(permitId) => { setSelectedCatalogPermitId(permitId); if (activePersona.isCustomer) { setRequestCenterMode("permit"); navigate("requests"); } else { showToast("Permit selected. Sign in with an authorized customer account to start a request.", "info"); } }} /></div>}
     </div>;
   }
 
@@ -2726,8 +2901,23 @@ export default function Home() {
   function renderAdmin() {
     const [firstUser] = teamUsers;
     if (activePersona.workspace === "state_office") return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">State project office</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Customer intake queue</h1><p className="mt-2 max-w-3xl text-sm text-slate-600">Review persisted customer requests, confirm the request details, and create the appropriate linked workstream(s) from the authorized project office queue.</p></div><CustomerRequestTriageQueue requests={repository.getCustomerRequests()} onTriage={(request) => setTriageRequest(request)} /></div>;
-    if (activePersona.workspace === "admin") return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Participants, profiles, workflows, and agencies</h1><p className="mt-2 text-sm text-slate-600">Manage people, permissions, workflow templates, authorization catalog records, and participating agencies from one audited administration area.</p></div><Card id="admin-directory"><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent><AdminDirectory teamUsers={teamUsers} roleDefinitions={roleDefinitions} repository={repository} actorUserId={actorUserId()} onRoleChange={async (userId, roleId) => { const user = teamUsers.find((member) => member.id === userId); if (!user?.organizationId) { if (!allowsFixtureData()) { setToast("This team member has no organization membership to update."); return; } setTeamUsers((current) => current.map((member) => member.id === userId ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user?.name ?? "user"} to ${roleDefinitions[roleId].name}.`); return; } const result = await repository.setOrganizationMemberRolePersisted({ userId, organizationId: user.organizationId, role: membershipRoleForRoleId(roleId) }); if (result.error) { setToast(`Role update failed: ${result.error.message}`); return; } setTeamUsers((current) => current.map((member) => member.id === userId ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user.name} to ${roleDefinitions[roleId].name}.`); }} onMutation={(message) => { setToast(message); setMutationVersion((value) => value + 1); }} /></CardContent></Card><div id="agency-registry"><WorkflowDesignerPanel catalog={repository.getCatalog()} organizations={repository.getOrganizations()} templates={repository.getWorkflowTemplates()} /></div><p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Changes are confirmed by Supabase and audit logged.</p></div>;
-    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Participants, profiles, and roles</h1><p className="mt-2 text-sm text-slate-600">Administrators can manage project participation, profile visibility, roles, workstream responsibility, and access. Ordinary users can edit only their own contact fields.</p></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent className="space-y-3">{teamUsers.map((user) => { const profile = repository.getProfileByUserId(user.id); const participant = repository.getParticipants().find((entry) => entry.userId === user.id); return <div key={user.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{user.name} {user.name === "Joe Skaggs" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] uppercase text-amber-900">Space Czar</span>}</p><p className="text-xs font-bold text-teal-800">{profile?.displayTitle ?? user.displayTitle ?? roleDefinitions[user.roleId].name}</p><p className="text-xs text-slate-500">{profile?.workEmail ?? user.workEmail ?? user.email} · {profile?.organizationName ?? user.organization}</p><p className="mt-1 max-w-xl text-xs text-slate-500">{profile?.organizationalUnit ?? user.organizationalUnit ?? user.agency} · {participant?.workstreamIds.length ?? 0} assigned workstream(s)</p></div><select aria-label={`Role for ${user.name}`} value={user.roleId} onChange={(event) => { const roleId = event.target.value as RoleId; setTeamUsers((current) => current.map((member) => member.id === user.id ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user.name} to ${roleDefinitions[roleId].name}.`); }} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800">{(Object.keys(roleDefinitions) as RoleId[]).map((role) => <option key={role} value={role}>{roleDefinitions[role].name}</option>)}</select></div>; })}<p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Joe Skaggs · joe.skaggs@la.gov · Louisiana Economic Development (LED) · Space Czar.</p></CardContent></Card>{repository.getCustomerRequests().length > 0 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-amber-700" /> Customer request triage</CardTitle><p className="text-sm text-slate-600">Escalations, blockers, service requests, and permit tracking records submitted by SpaceX appear here for government-side follow-up.</p></CardHeader><CardContent className="space-y-3">{repository.getCustomerRequests().slice(0, 8).map((request) => <div key={request.id} className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3"><div><p className="text-sm font-black text-amber-950">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-amber-900">{request.requestType.replaceAll("_", " ")} · {request.description}</p><p className="mt-1 text-xs text-amber-800">{request.submittedByName} · {request.locationOrAffectedArea ?? "Project-wide"}</p></div><span className="rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-900">{request.status}</span></div>)}</CardContent></Card>}</div>;
+    if (activePersona.workspace === "admin") return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Participants, profiles, workflows, and agencies</h1><p className="mt-2 text-sm text-slate-600">Manage people, permissions, workflow templates, authorization catalog records, and participating agencies from one audited administration area.</p></div>{canCreateProjects && <ProjectAdminPanel onProjectCreated={async (createdProject) => {
+      const projects = await fetchAccessibleProjects();
+      if (projects.some((project) => project.number === createdProject.number)) {
+        setAccessibleProjects(projects);
+      } else {
+        setAccessibleProjects((current) => current.some((project) => project.number === createdProject.number) ? current : [{
+          id: createdProject.id,
+          number: createdProject.number,
+          name: createdProject.name,
+          projectType: null,
+          leadOrganizationId: null,
+          customerOrganizationId: createdProject.customerOrganizationId ?? null,
+          customerOrganizationName: createdProject.customerOrganizationName ?? null,
+        }, ...current]);
+      }
+    }} onOpenProject={(number) => void switchProject(number)} />}<Card id="admin-directory"><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent><AdminDirectory teamUsers={teamUsers} roleDefinitions={roleDefinitions} repository={repository} actorUserId={actorUserId()} onRoleChange={async (userId, roleId) => { const user = teamUsers.find((member) => member.id === userId); if (!user?.organizationId) { if (!allowsFixtureData()) { setToast("This team member has no organization membership to update."); return; } setTeamUsers((current) => current.map((member) => member.id === userId ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user?.name ?? "user"} to ${roleDefinitions[roleId].name}.`); return; } const result = await repository.setOrganizationMemberRolePersisted({ userId, organizationId: user.organizationId, role: membershipRoleForRoleId(roleId) }); if (result.error) { setToast(`Role update failed: ${result.error.message}`); return; } setTeamUsers((current) => current.map((member) => member.id === userId ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user.name} to ${roleDefinitions[roleId].name}.`); }} onMutation={(message) => { setToast(message); setMutationVersion((value) => value + 1); }} /></CardContent></Card><div id="agency-registry"><WorkflowDesignerPanel catalog={repository.getCatalog()} organizations={repository.getOrganizations()} templates={repository.getWorkflowTemplates()} /></div><p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Changes are confirmed by Supabase and audit logged.</p></div>;
+    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Participants, profiles, and roles</h1><p className="mt-2 text-sm text-slate-600">Administrators can manage project participation, profile visibility, roles, workstream responsibility, and access. Ordinary users can edit only their own contact fields.</p></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent className="space-y-3">{teamUsers.map((user) => { const profile = repository.getProfileByUserId(user.id); const participant = repository.getParticipants().find((entry) => entry.userId === user.id); return <div key={user.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{user.name} {user.name === "Joe Skaggs" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] uppercase text-amber-900">Space Czar</span>}</p><p className="text-xs font-bold text-teal-800">{profile?.displayTitle ?? user.displayTitle ?? roleDefinitions[user.roleId].name}</p><p className="text-xs text-slate-500">{profile?.workEmail ?? user.workEmail ?? user.email} · {profile?.organizationName ?? user.organization}</p><p className="mt-1 max-w-xl text-xs text-slate-500">{profile?.organizationalUnit ?? user.organizationalUnit ?? user.agency} · {participant?.workstreamIds.length ?? 0} assigned workstream(s)</p></div><select aria-label={`Role for ${user.name}`} value={user.roleId} onChange={(event) => { const roleId = event.target.value as RoleId; setTeamUsers((current) => current.map((member) => member.id === user.id ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user.name} to ${roleDefinitions[roleId].name}.`); }} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800">{(Object.keys(roleDefinitions) as RoleId[]).map((role) => <option key={role} value={role}>{roleDefinitions[role].name}</option>)}</select></div>; })}<p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Joe Skaggs · joe.skaggs@la.gov · Louisiana Economic Development (LED) · Space Czar.</p></CardContent></Card>{repository.getCustomerRequests().length > 0 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-amber-700" /> Customer request triage</CardTitle><p className="text-sm text-slate-600">Escalations, blockers, service requests, and permit tracking records submitted for this project appear here for government-side follow-up.</p></CardHeader><CardContent className="space-y-3">{repository.getCustomerRequests().slice(0, 8).map((request) => <div key={request.id} className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3"><div><p className="text-sm font-black text-amber-950">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-amber-900">{request.requestType.replaceAll("_", " ")} · {request.description}</p><p className="mt-1 text-xs text-amber-800">{request.submittedByName} · {request.locationOrAffectedArea ?? "Project-wide"}</p></div><span className="rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-900">{request.status}</span></div>)}</CardContent></Card>}</div>;
   }
 
   function renderDetail() {
@@ -2761,7 +2951,7 @@ export default function Home() {
         );
       })}</div>}</section>
        {!customer && completionBlockReason && <div role="status" aria-live="polite" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-black">This stage is on hold</p><p className="mt-1">{completionBlockReason}</p></div>}
-       <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]"><div className="space-y-5">{linkedWorkstream && <WorkstreamTruthSummary workstream={linkedWorkstream} templates={repository.getWorkflowTemplates()} customerSafe={customer} />}<Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">{customer ? "What this means for SpaceX" : "What you need to do"}</CardTitle></CardHeader><CardContent><p className="text-sm leading-6 text-slate-700">{customer ? selectedItem.customerVisibleSummary : selectedItem.whatToDo}</p>{!customer && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600"><strong className="text-slate-800">Why you’re seeing this:</strong> {selectedItem.whyHere}<br /><strong className="text-slate-800">What removes it from your queue:</strong> {selectedItem.removesFromQueue}</p>}</CardContent></Card>{selectedItem.sourceRfi && <Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">{customer ? "Exact information requested" : "RFI record"}</CardTitle></CardHeader><CardContent className="space-y-3"><div><p className="text-xs font-black uppercase tracking-wider text-slate-500">{selectedItem.sourceRfi.code} · Question</p><p className="mt-1 text-sm leading-6 text-slate-700">{selectedItem.sourceRfi.questionText}</p></div>{selectedItem.sourceRfi.responses?.filter((response) => response.responseText).map((response) => <div key={response.id} className="rounded-lg border border-teal-200 bg-teal-50 p-3"><p className="text-xs font-black uppercase tracking-wider text-teal-800">Applicant response</p><p className="mt-1 text-sm leading-6 text-teal-950">{response.responseText}</p></div>)}</CardContent></Card>}
+       <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]"><div className="space-y-5">{linkedWorkstream && <WorkstreamTruthSummary workstream={linkedWorkstream} templates={repository.getWorkflowTemplates()} customerSafe={customer} />}<Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">{customer ? `What this means for ${customerOrganizationName}` : "What you need to do"}</CardTitle></CardHeader><CardContent><p className="text-sm leading-6 text-slate-700">{customer ? selectedItem.customerVisibleSummary : selectedItem.whatToDo}</p>{!customer && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600"><strong className="text-slate-800">Why you’re seeing this:</strong> {selectedItem.whyHere}<br /><strong className="text-slate-800">What removes it from your queue:</strong> {selectedItem.removesFromQueue}</p>}</CardContent></Card>{selectedItem.sourceRfi && <Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">{customer ? "Exact information requested" : "RFI record"}</CardTitle></CardHeader><CardContent className="space-y-3"><div><p className="text-xs font-black uppercase tracking-wider text-slate-500">{selectedItem.sourceRfi.code} · Question</p><p className="mt-1 text-sm leading-6 text-slate-700">{selectedItem.sourceRfi.questionText}</p></div>{selectedItem.sourceRfi.responses?.filter((response) => response.responseText).map((response) => <div key={response.id} className="rounded-lg border border-teal-200 bg-teal-50 p-3"><p className="text-xs font-black uppercase tracking-wider text-teal-800">Applicant response</p><p className="mt-1 text-sm leading-6 text-teal-950">{response.responseText}</p></div>)}</CardContent></Card>}
         {!customer && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ListChecks className="size-5 text-teal-700" /> Required inputs</CardTitle></CardHeader><CardContent><ul className="space-y-2">{selectedItem.requiredInputs.map((input) => <li key={input} className="flex items-start gap-2 text-sm text-slate-700"><Check className="mt-0.5 size-4 shrink-0 text-emerald-700" aria-hidden="true" />{input}</li>)}</ul></CardContent></Card>}
         {docsToDisplay.length > 0 && <Card><CardHeader><div className="flex items-center justify-between"><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Paperclip className="size-5 text-teal-700" /> Project Documents & Packages ({docsToDisplay.length})</CardTitle></div></CardHeader><CardContent className="space-y-3">{docsToDisplay.map((doc) => { const latestVer = doc.versions[0]; return <div key={doc.id} className="rounded-xl border border-slate-200 p-4 bg-white space-y-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><div className="flex items-center gap-2"><p className="text-sm font-black text-[#00284d]">{doc.title}</p><span className="rounded bg-teal-50 border border-teal-200 px-1.5 py-0.5 text-[10px] font-mono font-bold text-teal-800">{latestVer?.versionTag || `v${doc.currentVersionNumber}.0`}</span></div><p className="mt-1 text-xs text-slate-500">{doc.category.replace(/_/g, " ")} · {doc.ownerOrgCode} · {doc.versions.length} revision(s)</p></div><div className="flex items-center gap-2"><Button type="button" size="sm" onClick={() => { setViewerModalDoc(doc as DocumentRecord); setViewerModalVer(latestVer); }} className="bg-[#00284d] hover:bg-[#003c70] text-white text-xs font-bold gap-1 shadow-xs"><Eye className="size-3.5" /> View Document</Button><Button type="button" variant="outline" size="sm" onClick={() => void downloadVersion(doc.id, latestVer?.id || "")} className="text-xs font-bold gap-1"><Download className="size-3.5" /> Download</Button></div></div>{latestVer && <div className="rounded-lg bg-slate-50 p-2.5 flex flex-wrap items-center justify-between text-xs text-slate-600 gap-2 font-mono"><span className="text-[11px] truncate max-w-sm">SHA-256: {latestVer.sha256Hash.slice(0, 16)}…</span><span className="text-[11px] text-slate-500 font-sans">Uploaded by {latestVer.uploadedByName}</span></div>}</div>; })}</CardContent></Card>}
         {selectedItem.kind === "document" && selectedItem.sourceDocument && <Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">Version history</CardTitle></CardHeader><CardContent><p className="text-sm font-black text-[#00284d]">You are reviewing {selectedItem.exactDocumentVersionLabel}</p>{selectedItem.sourceDocument.versions.filter((version) => version.id !== selectedItem.exactDocumentVersionId).map((version) => <p key={version.id} className="mt-2 text-sm text-slate-600">Previously: {version.versionTag} uploaded {formatDate(version.uploadedAt)}.</p>)}</CardContent></Card>}
@@ -2785,7 +2975,7 @@ export default function Home() {
       {dialog.action === "update_status" && <><div><p className="text-xs font-black uppercase tracking-wider text-teal-800">Update Status</p><p className="mt-1 text-lg font-black text-[#00284d]">{selectedItem.title}</p><p className="mt-1 text-sm text-slate-600">Select the new status for this {selectedItem.kind === "commitment" ? "commitment" : "work item"}. The change will be recorded in the audit history and visible to all project participants.</p></div><div><Label htmlFor="status-update">New status</Label><select id="status-update" value={statusUpdate} onChange={(event) => setStatusUpdate(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="in_progress">In Progress — Actively being worked</option><option value="pending_review">Pending Review — Awaiting reviewer decision</option><option value="on_hold">On Hold — Paused, waiting on external dependency</option><option value="fulfilled">Fulfilled / Completed — Deliverable received or action done</option><option value="cancelled">Cancelled — No longer applicable</option></select></div><div><Label htmlFor="status-note">Notes (optional)</Label><textarea id="status-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe why this status is changing and any relevant context." /></div><div className="rounded-xl border border-teal-200 bg-teal-50 p-4"><p className="text-xs font-black uppercase tracking-wider text-teal-900">What happens</p><ul className="mt-2 space-y-1 text-sm text-teal-950"><li className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />Update the ticket status to the selected state</li><li className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />Record an audit event with your name and notes</li><li className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />Notify project participants of the status change</li>{statusUpdate === "fulfilled" && <li className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />Move the item to the completed queue</li>}</ul></div></>}
       {dialog.action === "coordination_response" && <><div><p className="text-xs font-black uppercase tracking-wider text-teal-800">Agency response</p><p className="mt-1 text-lg font-black text-[#00284d]">{selectedItem.title}</p><p className="mt-1 text-sm text-slate-600">Record the agency decision separately from dependency clearance. A response does not resume the linked workstream unless the blocker is explicitly cleared.</p></div><div><Label htmlFor="coordination-status">Response status</Label><select id="coordination-status" value={statusUpdate} onChange={(event) => setStatusUpdate(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="in_review">In review — more work remains</option><option value="concurred">Concurred — agency agrees</option><option value="objection_raised">Objection raised — conditions remain</option><option value="closed">Closed — no further coordination required</option></select></div><div><Label htmlFor="coordination-response">Response summary</Label><textarea id="coordination-response" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Record the agency response, conditions, and remaining decision." /></div></>}
       {dialog.action === "advance_stage" && <><div><p className="text-xs font-black uppercase tracking-wider text-teal-800">Advance to Next Stage</p><p className="mt-1 text-lg font-black text-[#00284d]">{selectedItem.title}</p><p className="mt-1 text-sm text-slate-600">This will close the current workflow stage and advance the workstream to the next configured stage. The next owner will be notified.</p></div><div className="rounded-xl border border-teal-200 bg-teal-50 p-4"><p className="text-xs font-black uppercase tracking-wider text-teal-900">What happens next</p><ul className="mt-2 space-y-1 text-sm text-teal-950">{completionPreview.effects.map((effect) => <li key={effect} className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{effect}</li>)}</ul></div><div><Label htmlFor="advance-note">Notes (optional)</Label><textarea id="advance-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Add context for the handoff to the next stage owner." /></div></>}
-      {dialog.action === "mark_blocked" && <><div><Label htmlFor="block-reason">What is preventing you from proceeding?</Label><select id="block-reason" value={blockReason} onChange={(event) => setBlockReason(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="customer">Waiting on SpaceX</option><option value="another_agency">Waiting on another agency</option><option value="internal">Missing internal decision</option><option value="statutory">Scheduled / statutory hold</option><option value="technical">Technical problem</option><option value="legal">Legal / policy question</option><option value="external">External third party</option><option value="other">Other</option></select></div>{blockReason === "another_agency" && <div><Label htmlFor="block-agency">Who needs to act?</Label><select id="block-agency" value={blockAgency} onChange={(event) => setBlockAgency(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>CPRA</option><option>USACE</option><option>DOTD</option><option>Vermilion Parish</option><option>LDEQ</option></select></div>}<div><Label htmlFor="block-need">What do you need from them?</Label><textarea id="block-need" value={blockNeed} onChange={(event) => setBlockNeed(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe the concurrence, document, or decision needed." /></div><div><Label htmlFor="block-due">When is it needed?</Label><Input id="block-due" type="date" value={blockDueDate} onChange={(event) => setBlockDueDate(event.target.value)} className="mt-1" /></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"><strong className="text-[#00284d]">Clock behavior:</strong> PATH derives the wait policy from the selected reason. You are not asked to make a legal/policy determination.</div></>}
+      {dialog.action === "mark_blocked" && <><div><Label htmlFor="block-reason">What is preventing you from proceeding?</Label><select id="block-reason" value={blockReason} onChange={(event) => setBlockReason(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option value="customer">Waiting on customer</option><option value="another_agency">Waiting on another agency</option><option value="internal">Missing internal decision</option><option value="statutory">Scheduled / statutory hold</option><option value="technical">Technical problem</option><option value="legal">Legal / policy question</option><option value="external">External third party</option><option value="other">Other</option></select></div>{blockReason === "another_agency" && <div><Label htmlFor="block-agency">Who needs to act?</Label><select id="block-agency" value={blockAgency} onChange={(event) => setBlockAgency(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>CPRA</option><option>USACE</option><option>DOTD</option><option>Vermilion Parish</option><option>LDEQ</option></select></div>}<div><Label htmlFor="block-need">What do you need from them?</Label><textarea id="block-need" value={blockNeed} onChange={(event) => setBlockNeed(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Describe the concurrence, document, or decision needed." /></div><div><Label htmlFor="block-due">When is it needed?</Label><Input id="block-due" type="date" value={blockDueDate} onChange={(event) => setBlockDueDate(event.target.value)} className="mt-1" /></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"><strong className="text-[#00284d]">Clock behavior:</strong> PATH derives the wait policy from the selected reason. You are not asked to make a legal/policy determination.</div></>}
       {(dialog.action === "request_information" || dialog.action === "request_clarification") && <><div><Label htmlFor="question-text">What do you need?</Label><textarea id="question-text" value={questionText} onChange={(event) => setQuestionText(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" /></div><div><Label htmlFor="question-due">When is it needed?</Label><Input id="question-due" type="date" value={questionDueDate} onChange={(event) => setQuestionDueDate(event.target.value)} required className="mt-1" /></div></>}
       {dialog.action === "transfer" && <><div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"><strong className="text-[#00284d]">Current owner:</strong> {selectedItem.ownerName || "Unassigned"} · {selectedItem.ownerOrganization || "Team not configured"}<br /><span className="text-xs">Ask for help keeps this assignment. Transfer assignment changes the persisted team and optional assignee.</span></div><div><Label htmlFor="transfer-type">What should happen?</Label><select id="transfer-type" value={transferType} onChange={(event) => setTransferType(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>Ask for Help</option><option>Transfer assignment</option><option>Request specialist consultation</option><option>Send to supervisor</option></select></div><div className="space-y-3 rounded-lg border border-teal-200 bg-teal-50 p-3"><div><Label htmlFor="transfer-target-group" className="text-xs font-bold text-teal-950">{transferType === "Transfer assignment" ? "New responsible team" : "Help recipient team"}</Label><select id="transfer-target-group" required value={transferTargetGroup} onChange={(event) => { setTransferTargetGroup(event.target.value); setTransferTargetUser(""); }} className="mt-1 w-full rounded-md border border-teal-300 bg-white px-3 py-2 text-sm"><option value="">Select an active team</option>{repository.getAssignmentGroups().filter((group) => group.active).map((group) => <option key={group.id} value={group.id}>{group.name} · {group.orgCode}</option>)}</select><p className="mt-1 text-xs text-teal-900">Teams and members come from the current assignment directory. The server checks that you can route this record.</p></div>{transferTargetGroup && <div><Label htmlFor="transfer-target-user" className="text-xs font-bold text-teal-950">{transferType === "Transfer assignment" ? "New assignee (optional)" : "Specific help recipient (optional)"}</Label><select id="transfer-target-user" value={transferTargetUser} onChange={(event) => setTransferTargetUser(event.target.value)} className="mt-1 w-full rounded-md border border-teal-300 bg-white px-3 py-2 text-sm"><option value="">{transferType === "Transfer assignment" ? "Leave in team queue" : "Send to team queue"}</option>{repository.getAssignmentGroupMembers(transferTargetGroup).map((member) => <option key={member.userId} value={member.userId}>{member.userName ?? member.userEmail ?? "Name unavailable"}</option>)}</select></div>}<div className="rounded-md border border-teal-200 bg-white/70 p-2 text-xs text-teal-950">{transferType === "Transfer assignment" ? <>After confirmation, the selected team owns the queue item{transferTargetUser ? " and the selected assignee receives an in-app assignment notification" : "."}</> : <>The selected recipient receives a help request; the current owner and team stay responsible for the work.</>}</div></div><div><Label htmlFor="transfer-note">What should the recipient know?</Label><textarea id="transfer-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder={transferType === "Transfer assignment" ? "Explain why this team or assignee should own the work." : "Describe the decision or assistance needed."} /></div></>}
       {dialog.action === "escalate" && <><div><Label htmlFor="escalation-type">What kind of help do you need?</Label><select id="escalation-type" value={escalationType} onChange={(event) => setEscalationType(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"><option>Supervisor decision</option><option>Cross-agency assistance</option><option>Deadline relief</option><option>Policy / legal determination</option><option>Project office assistance</option><option>Executive intervention</option><option>Other</option></select></div>{activePersona.isCustomer && <div><Label htmlFor="escalation-note">Describe the risk or assistance needed</Label><textarea id="escalation-note" value={actionNote} onChange={(event) => setActionNote(event.target.value)} rows={4} required className="mt-1 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Tell the project office what is delayed, why it matters, and what outcome would help." /></div>}<div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-black uppercase tracking-wider text-amber-900">Next escalation</p><p className="mt-1 text-sm font-black text-amber-950">{recipientPreview.recipients[0]?.name}</p><p className="text-sm text-amber-900">{recipientPreview.recipients[0]?.organization}</p><p className="mt-2 text-xs text-amber-800">The configured escalation recipient will be notified. No deadline is assumed unless one is recorded on this request.</p></div></>}
@@ -2821,7 +3011,7 @@ export default function Home() {
     else if (route === "customer-home") content = renderCustomerOverview();
     else if (route === "project") content = renderProject();
     else if (route === "requests") content = <>{renderCustomerRequestCenter()}{requestCenterMode !== "menu" && <div className="mx-auto mt-4 max-w-3xl rounded-xl border border-slate-200 bg-white p-4"><Label htmlFor="request-attachment">Supporting attachment (optional)</Label><Input key={requestFileInputKey} id="request-attachment" type="file" onChange={(event) => setRequestFile(event.target.files?.[0] ?? null)} className="mt-1 cursor-pointer" /><p className="mt-1 text-xs text-slate-500">Attach this file to the selected request before submitting.</p></div>}</>;
-    else if (route === "schedule") content = <div className="space-y-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Read-only project delivery schedule for SpaceX. Internal government notes and control actions are not shown.</p></div><WorkstreamGraphGantt project={projectRecord} projectReference={activeProjectReference() ?? undefined} customerSafe focusedWorkstreamId={selectedProjectWorkstreamId ?? undefined} focusedPhase={selectedProjectPhase ?? undefined} /></div>;
+    else if (route === "schedule") content = <div className="space-y-5"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Read-only customer view of the project delivery schedule. Internal government notes and control actions are not shown.</p></div><WorkstreamGraphGantt project={projectRecord} projectReference={activeProjectReference() ?? undefined} customerOrganizationName={customerOrganizationName} customerSafe focusedWorkstreamId={selectedProjectWorkstreamId ?? undefined} focusedPhase={selectedProjectPhase ?? undefined} /></div>;
     else if (route === "contacts" || route === "profile") content = renderContacts();
     else if (route === "help") content = renderHelp();
     else if (route === "notifications") content = renderNotifications();
@@ -2840,7 +3030,11 @@ export default function Home() {
       primaryNav={primaryNav}
       canAdmin={canAdmin}
       unreadNotifications={unreadNotificationCount}
-      projectName={PROJECT_DISPLAY_NAME}
+      projectName={projectRecord.name || PROJECT_DISPLAY_NAME}
+      projects={accessibleProjects}
+      activeProjectNumber={projectReference}
+      projectSwitching={loadingData}
+      onSelectProject={(number) => void switchProject(number)}
       projectSubtitle={`${workspaceTitle(activePersona.workspace)} · ${PROGRAM_SUBTITLE}`}
       onNavigate={(targetRoute) => navigate(targetRoute as Route)}
       onOpenProject={() => openProject()}
@@ -2848,7 +3042,7 @@ export default function Home() {
       footer={<SystemVersionFooter />}
     >
       {renderToast()}
-      {renderMain()}
+      {loadingData ? <div role="status" className="rounded-xl border bg-white p-6 text-sm font-semibold text-slate-700">Loading project…</div> : renderMain()}
       {renderDialog()}
       {viewerModalDoc && (
         <DocumentViewerModal

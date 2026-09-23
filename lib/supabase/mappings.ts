@@ -24,8 +24,10 @@ import type {
   TaskRecord,
   UserProfileRecord,
   WorkflowStageRecord,
+  WorkflowVersionRecord,
   WorkstreamRecord,
 } from "../domain-models";
+import type { WorkflowAutomationConfig } from "../workflow-rules";
 
 type Row = Record<string, unknown>;
 
@@ -162,7 +164,29 @@ export function workflowStageRowToDomain(row: Row): WorkflowStageRecord {
   };
 }
 
+export function workflowVersionRowToDomain(row: Row, stages: WorkflowStageRecord[] = []): WorkflowVersionRecord {
+  const automation: WorkflowAutomationConfig = {
+    intakeQuestions: arr<WorkflowAutomationConfig["intakeQuestions"][number]>(row.intake_questions),
+    routingRules: arr<WorkflowAutomationConfig["routingRules"][number]>(row.routing_rules),
+    stageBranches: arr<WorkflowAutomationConfig["stageBranches"][number]>(row.stage_branches),
+    noticeTemplates: arr<WorkflowAutomationConfig["noticeTemplates"][number]>(row.notice_templates),
+    autoRouteEnabled: bool(row.auto_route_enabled),
+  };
+  return {
+    id: str(row.id),
+    templateId: str(row.workflow_id),
+    versionNumber: num(row.version_number, 1),
+    status: str(row.lifecycle_status, row.is_active === false ? "retired" : "published") as WorkflowVersionRecord["status"],
+    effectiveDate: str(row.effective_date) || undefined,
+    publishedAt: str(row.published_at) || undefined,
+    changeSummary: str(row.change_summary) || undefined,
+    stages,
+    ...automation,
+  };
+}
+
 export function stageRunRowToDomain(row: Row): StageRunRecord {
+  const reviewOutcome = str(row.review_outcome);
   return {
     id: str(row.id),
     workstreamId: str(row.workstream_id),
@@ -173,6 +197,7 @@ export function stageRunRowToDomain(row: Row): StageRunRecord {
     startedAt: str(row.started_at) || undefined,
     completedAt: str(row.completed_at) || undefined,
     completionNotes: str(row.completion_notes) || undefined,
+    ...(reviewOutcome ? { reviewOutcome } : {}),
   };
 }
 
@@ -733,6 +758,9 @@ export function customerRequestRowToDomain(row: Row): CustomerRequestRecord {
     blocksActiveWork: bool(row.blocks_active_work),
     status: (str(row.status, "submitted")) as CustomerRequestRecord["status"],
     triageNotes: str(row.triage_notes) || undefined,
+    intakeWorkflowVersionId: str(row.intake_workflow_version_id) || undefined,
+    intakeAnswers: obj<Record<string, string | boolean>>(row.intake_answers, {}),
+    autoRouteReceipt: obj<CustomerRequestRecord["autoRouteReceipt"]>(row.auto_route_receipt, undefined),
     attachmentDocumentVersionIds: arr<string>(row.attachment_document_version_ids),
 
     // Milestone 1 ITSM & Assignment Extensions
@@ -775,6 +803,9 @@ export function domainToCustomerRequestRow(domain: Partial<CustomerRequestRecord
     ...(domain.blocksActiveWork !== undefined && { blocks_active_work: domain.blocksActiveWork }),
     ...(domain.status && { status: domain.status }),
     ...(domain.triageNotes !== undefined && { triage_notes: domain.triageNotes }),
+    ...(domain.intakeWorkflowVersionId !== undefined && { intake_workflow_version_id: domain.intakeWorkflowVersionId }),
+    ...(domain.intakeAnswers !== undefined && { intake_answers: domain.intakeAnswers }),
+    ...(domain.autoRouteReceipt !== undefined && { auto_route_receipt: domain.autoRouteReceipt }),
     ...(domain.attachmentDocumentVersionIds && { attachment_document_version_ids: domain.attachmentDocumentVersionIds }),
 
     // Milestone 1 ITSM Extensions

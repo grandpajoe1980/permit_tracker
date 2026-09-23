@@ -24,12 +24,18 @@ export function CustomerRequestList({ requests, onOpenRequest }: CustomerRequest
     {visibleRequests.length === 0 && <p className="text-sm text-slate-600">No requests match “{query}”. Clear the search to see all requests.</p>}
     {visibleRequests.length > 0 && <p className="text-xs text-slate-500">Showing {visibleRequests.length} of {requests.length} requests.</p>}
     {visibleRequests.map((request) => {
-      const receivingTeam = request.assignmentGroupName ?? request.knownAgencyCode ?? "State Project Office";
+      const receivingTeam = request.assignmentGroupName
+        ?? request.autoRouteReceipt?.leadOrgName
+        ?? request.autoRouteReceipt?.leadOrgCode
+        ?? request.knownAgencyCode
+        ?? "Project office";
       const isActionNeeded = request.status === "pending_customer" || request.itsmState === "pending_customer";
       const nextStep = isActionNeeded
         ? "Action needed: Please provide the requested clarification"
+        : request.autoRouteReceipt?.status === "routed"
+        ? `Next step: Routed to ${request.autoRouteReceipt.leadOrgName ?? request.autoRouteReceipt.leadOrgCode ?? "the configured team"}`
         : request.status === "submitted" || request.status === "triage"
-        ? "Next step: State Project Office intake review & routing"
+        ? "Next step: Project office intake review & routing"
         : request.status === "in_progress"
         ? "Next step: Agency review in progress"
         : request.status === "resolved" || request.status === "closed"

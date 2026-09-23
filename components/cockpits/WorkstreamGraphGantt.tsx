@@ -64,7 +64,7 @@ export const STATE_COLOR_MAP: Record<OperationalState, StateStyleConfig> = {
     description: "Active government technical review in progress with clear milestones",
   },
   waiting_applicant: {
-    label: "Waiting on SpaceX / RFI",
+    label: "Waiting on customer / RFI",
     shortLabel: "Waiting Applicant",
     barColor: "bg-amber-500 hover:bg-amber-600",
     barBorder: "border-amber-600",
@@ -72,7 +72,7 @@ export const STATE_COLOR_MAP: Record<OperationalState, StateStyleConfig> = {
     badgeBg: "bg-amber-100 border-amber-300",
     badgeText: "text-amber-950",
     dotColor: "bg-amber-500",
-    description: "Paused waiting for applicant engineering drawings, calculations, or RFI response",
+    description: "Paused while awaiting customer drawings, calculations, or an RFI response",
   },
   waiting_government: {
     label: "Waiting on Another Agency",
@@ -174,6 +174,7 @@ const STAGE_COLOR_CLASSES = [
 
 export function WorkstreamGraphGantt({
   customerSafe = false,
+  customerOrganizationName = "Customer",
   onSelectWorkstream,
   onSelectProject,
   project: projectOverride,
@@ -183,6 +184,7 @@ export function WorkstreamGraphGantt({
   focusedPhase,
 }: {
   customerSafe?: boolean;
+  customerOrganizationName?: string;
   onSelectWorkstream?: (workstreamId: string) => void;
   onSelectProject?: (workstreamId?: string) => void;
   onSelectTask?: (taskId: string) => void;
@@ -421,7 +423,7 @@ export function WorkstreamGraphGantt({
               )}
             </div>
             <h1 className="mt-2 text-2xl font-black text-slate-900">
-              {customerSafe ? "SpaceX project schedule" : "Project Delivery Schedule & Schedule analysis"}
+              {customerSafe ? `${customerOrganizationName} project schedule` : "Project Delivery Schedule & Schedule analysis"}
             </h1>
             <p className="mt-1 text-sm text-slate-600">
               {customerSafe
@@ -1106,7 +1108,7 @@ export function WorkstreamGraphGantt({
                       <div className="bg-slate-300 h-full w-full" />
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      SpaceX engineering turnaround completed within float buffer without critical-path slip.
+                      Customer engineering turnaround completed within float buffer without critical-path slip.
                     </p>
                   </div>
                 </div>

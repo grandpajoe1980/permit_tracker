@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "vinext build",
     "postbuild": "npm run security:scan",
-    "start": "vinext start",
+    "start": "node .output/server/index.mjs",
     "test": "npm run build && node --expose-gc --import ./tests/load-env.mjs --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "check:offline": "npm run typecheck && npm run lint -- --quiet && npm test",

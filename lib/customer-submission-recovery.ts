@@ -8,6 +8,8 @@ export type CustomerSubmissionFingerprintInput = Pick<
 > & {
   knownAgencyCode?: string;
   permitTypeId?: string;
+  intakeWorkflowVersionId?: string;
+  intakeAnswers?: Record<string, string | boolean>;
 };
 
 export type CustomerSubmissionRecovery = {
@@ -36,6 +38,8 @@ export function customerSubmissionFingerprint(input: CustomerSubmissionFingerpri
     input.desiredDate ?? "",
     input.knownAgencyCode ?? "",
     input.permitTypeId ?? "",
+    input.intakeWorkflowVersionId ?? "",
+    Object.entries(input.intakeAnswers ?? {}).sort(([left], [right]) => left.localeCompare(right)).map(([key, value]) => `${key}:${String(value)}`).join("\u001e"),
     input.blocksActiveWork ? "critical" : "normal",
   ].map((value) => value.trim()).join("\u001f");
 }
