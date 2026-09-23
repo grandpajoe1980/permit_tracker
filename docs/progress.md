@@ -1,5 +1,16 @@
 # PATH Progress
 
+## Market roadmap Phase 0 — September 23, 2026 (in progress)
+
+The reviewed [market benchmark and roadmap](market-benchmark-roadmap-2026-09.md) is published on `main`. This checkpoint starts PATH-001 and PATH-002:
+
+- Fixed the eight TypeScript errors at the reviewed baseline: operational records now distinguish persisted customer requests from legacy demo permits; task assignment hydration uses the actual task fields; a null ownership claim RPC response returns an error rather than success.
+- The reachable schedule simulator now identifies fixed example data and unsaved adjustments. Removed its success-only Promote Scenario button and the misleading active-forecast label.
+- Added `npm run check:offline` with a GitHub Actions gate for type, lint, build, security scan, and Node tests. Added `npm run check:connected` with a credential preflight for the Chromium persistence and document journeys. The latter is not an automatic CI release check and has not run in this checkout.
+- Verification here: `npm run check:offline` passes TypeScript, lint, build, security scan, and the Node suite (469 total, 442 passed, zero failed, 27 skipped because live Supabase configuration is unavailable). Focused schedule, assignment, operational UX, and navigation tests pass.
+
+Still open: authenticated database and multi-person browser acceptance, migration-ledger reconciliation, release deployment evidence, and the multi-project foundation. The dormant public-comment demo form is not routed in the current app and must remain unexposed until it follows the PRD's external-comment boundary. Do not mark Phase 0 complete from offline checks alone.
+
 ## Basic admin/customer portal checkpoint — September 5, 2026
 
 - Fresh GitHub checkout from `f3e33d4`; existing workflow repairs preserved.

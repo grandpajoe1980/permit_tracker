@@ -260,7 +260,6 @@ class ProjectDeliveryRepository {
           tasks: workstream.tasks.map((task) => ({
             ...task,
             assignmentGroupName: task.assignmentGroupName ?? (task.assignmentGroupId ? groupById.get(task.assignmentGroupId)?.name : undefined),
-            assignedToUserName: task.assignedToUserName ?? (task.assignedToUserId ? profileByUserId.get(task.assignedToUserId)?.fullName : undefined),
             assignedUserName: task.assignedUserName ?? (task.assignedUserId ? profileByUserId.get(task.assignedUserId)?.fullName : undefined),
           })),
           rfis: workstream.rfis.length > 0 ? workstream.rfis : linkedRfis,
@@ -3002,7 +3001,9 @@ class ProjectDeliveryRepository {
         expectedAssignedToUserId: options.expectedPreviousUserId ?? ticket.assignedToUserId ?? null,
         assignmentNotes: "Claimed ownership (Take ownership)",
       });
-      if (dbResult.error) return { success: false, error: dbResult.error, ticket };
+      if (dbResult.error || !dbResult.data) {
+        return { success: false, error: dbResult.error ?? new Error("Ticket ownership was not confirmed by the database."), ticket };
+      }
 
       await this.hydrateFromSupabase();
       const refreshed = this.findTicket(options.ticketType, options.ticketId) ?? ticket;

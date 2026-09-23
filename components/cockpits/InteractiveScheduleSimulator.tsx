@@ -10,7 +10,6 @@ import {
   ArrowUp,
   BarChart3,
   Calendar,
-  CheckCircle2,
   ChevronDown,
   Clock3,
   Copy,
@@ -18,7 +17,6 @@ import {
   GitBranch,
   Layers,
   Minus,
-  Play,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -37,7 +35,6 @@ import {
   applyTaskAdjustment,
   calculateScheduleSensitivity,
   compareScenarios,
-  createScenarioFromWorkstreams,
   getScenarioPresets,
   type ScheduleScenario,
 } from "@/lib/engines/simulation-engine";
@@ -46,16 +43,15 @@ export function InteractiveScheduleSimulator() {
   const project = getFullProjectRecord();
   const presets = getScenarioPresets(project.workstreams);
 
-  // Active base scenario (live forecast)
+  // Presets use the fixed demonstration project, not the signed-in project's schedule.
   const baseForecastScenario = presets[0];
 
-  // Active simulated scenario branch
+  // Adjustments remain local to this component.
   const [currentScenario, setCurrentScenario] = useState<ScheduleScenario>(presets[0]);
   const [selectedTaskId, setSelectedTaskId] = useState<string>(project.workstreams[0]?.tasks[0]?.id || "");
   const [simulationView, setSimulationView] = useState<"adjust" | "comparison" | "sensitivity">("adjust");
-  const [promotionNotice, setPromotionNotice] = useState<string>("");
 
-  // Calculate comparison against live forecast
+  // Compare two demonstration scenarios without persisting a forecast.
   const comparison = compareScenarios(baseForecastScenario, currentScenario);
   const sensitivity = calculateScheduleSensitivity(currentScenario);
 
@@ -77,11 +73,6 @@ export function InteractiveScheduleSimulator() {
     setCurrentScenario(presets[0]);
   };
 
-  const handlePromoteScenario = () => {
-    setPromotionNotice(`✓ Scenario "${currentScenario.name}" promoted to Active Forecast baseline.`);
-    setTimeout(() => setPromotionNotice(""), 5000);
-  };
-
   return (
     <div className="space-y-6">
       {/* Top Banner: Scenario Branch & Delta Summary */}
@@ -90,7 +81,7 @@ export function InteractiveScheduleSimulator() {
           <div>
             <div className="flex items-center gap-2">
               <Badge className="bg-indigo-500/20 text-indigo-200 border-indigo-500/30">
-                DAG Schedule Simulation & Branching Engine
+                Sample schedule simulator
               </Badge>
               <span className="text-xs text-slate-400 font-mono">Branch: {currentScenario.name}</span>
             </div>
@@ -98,7 +89,7 @@ export function InteractiveScheduleSimulator() {
               &quot;What-If&quot; Schedule Perturbation &amp; Scenario Simulator
             </h1>
             <p className="mt-1 text-sm text-slate-300">
-              Drag and adjust task durations, simulate interagency review delays, and observe real-time critical-path ripple effects.
+              Explore example task delays using fixed demonstration data. Adjustments are not saved and do not change your project forecast.
             </p>
           </div>
 
@@ -106,14 +97,14 @@ export function InteractiveScheduleSimulator() {
           <div className="flex flex-wrap items-center gap-3">
             <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-center backdrop-blur">
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                Baseline Launch
+                Sample Baseline
               </div>
                 <div className="text-lg font-mono font-bold text-white">{project.baselineLaunchDate}</div>
             </div>
 
             <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-2.5 text-center backdrop-blur">
               <div className="text-xs font-semibold uppercase tracking-wider text-indigo-300">
-                Simulated Launch
+                Sample Forecast
               </div>
               <div className="text-xl font-mono font-black text-white">
                 {currentScenario.projectLaunchDate}
@@ -169,24 +160,11 @@ export function InteractiveScheduleSimulator() {
               onClick={handleResetToForecast}
               className="text-xs h-7 border-white/20 bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white gap-1"
             >
-              <RotateCcw className="size-3" /> Reset to Active Forecast
-            </Button>
-            <Button
-              size="sm"
-              onClick={handlePromoteScenario}
-              className="text-xs h-7 bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1 shadow"
-            >
-              <CheckCircle2 className="size-3" /> Promote Scenario
+              <RotateCcw className="size-3" /> Reset example
             </Button>
           </div>
         </div>
       </div>
-
-      {promotionNotice && (
-        <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-xs font-bold text-emerald-900 flex items-center justify-between">
-          <span>{promotionNotice}</span>
-        </div>
-      )}
 
       {/* Simulator View Tabs */}
       <div className="flex items-center justify-between border-b border-slate-200 pb-3">

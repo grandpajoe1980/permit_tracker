@@ -101,6 +101,7 @@ export type OperationalWorkItem = {
   requiredInputs: string[];
   documents: Array<{ id: string; label: string; version?: string }>;
   sourceRequest?: PermitRecord;
+  sourceCustomerRequest?: CustomerRequestRecord;
   sourceWorkstream?: WorkstreamRecord;
   sourceRfi?: RFIRecord;
   sourceCoordination?: CoordinationRequestRecord;
@@ -676,7 +677,7 @@ function customerRequestToWorkItem(
     isCriticalPath: request.blocksActiveWork || Boolean(workstream?.isCriticalPath),
     ownerOrganization: assignedAgency,
     ownerName,
-    sourceRequest: request,
+    sourceCustomerRequest: request,
     sourceWorkstream: workstream,
   };
 }
@@ -756,6 +757,7 @@ export function isTerminalWorkItem(item: OperationalWorkItem): boolean {
   if (item.sourceRfi && ["accepted", "closed", "rejected", "withdrawn"].includes(item.sourceRfi.status)) return true;
   if (item.sourceWorkstream && ["complete", "cancelled"].includes(item.sourceWorkstream.operationalState)) return true;
   if (item.sourceRequest && ["resolved", "closed"].includes(item.sourceRequest.status)) return true;
+  if (item.sourceCustomerRequest && ["resolved", "closed"].includes(item.sourceCustomerRequest.status)) return true;
   if (item.sourceCoordination && ["concurred", "closed"].includes(item.sourceCoordination.status)) return true;
   return false;
 }
@@ -844,7 +846,7 @@ export function toOperationalRecordProjection(item: OperationalWorkItem): Operat
     kind: item.kind,
     code: item.sourceRfi?.code ?? item.sourceWorkstream?.code ?? item.id,
     title: item.title,
-    projectId: item.sourceWorkstream?.projectId ?? (item.sourceRequest as (ServiceRequest & { projectId?: string }) | undefined)?.projectId,
+    projectId: item.sourceWorkstream?.projectId ?? item.sourceCustomerRequest?.projectId ?? (item.sourceRequest as (ServiceRequest & { projectId?: string }) | undefined)?.projectId,
     projectName: item.projectName,
     parentWorkstreamId: item.workstreamId,
     parentWorkstreamTitle: item.workstreamTitle,

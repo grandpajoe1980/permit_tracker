@@ -148,7 +148,7 @@ export function TicketWorkflowEditor({ item, persona, onWorkflowUpdated }: Ticke
   const [newStageGate, setNewStageGate] = useState(false);
   const [nextStageNumber, setNextStageNumber] = useState(1);
   const [selectedAssignmentGroupId, setSelectedAssignmentGroupId] = useState(item.assignmentGroupId ?? workstream?.assignmentGroupId ?? "");
-  const [selectedAssigneeId, setSelectedAssigneeId] = useState(item.assignedUserId ?? item.assignedToUserId ?? workstream?.assignedToUserId ?? "");
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState(item.assignedUserId ?? workstream?.assignedToUserId ?? "");
   const [assignmentStatus, setAssignmentStatus] = useState<string | null>(null);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
 

@@ -98,18 +98,23 @@ Critical Path provides direct sign-in on the main page along with an account men
   - `lib/demo-data.ts`: Typed request entities, RAG classifications, escalation tiers, Gantt data, role definitions, and Pecan Island demo dataset.
   - `lib/permit-utils.ts`: Progress calculations, RAG aggregators, workload distribution, and plain-English intake triage.
   - `lib/supabase-browser.ts`: Optional Supabase integration for authenticated live workloads.
-- **Testing**: Node.js built-in test runner (`node --test tests/*.test.mjs`) covering 100% of data invariants, source contracts, UI components, and SSR output.
+- **Testing**: Node.js tests cover selected domain behavior, source contracts, components, and rendered output. Authenticated database and browser journeys have a separate connected gate.
 
 ---
 
 ## Running & Verifying Locally
 
-### 1. Build
+### 1. Static and offline checks
 ```bash
-npx vinext build
+npm ci
+npm run check:offline
 ```
 
-### 2. Run Test Suite
+This runs TypeScript, lint, the production build and security scan, then the Node suite. GitHub Actions runs the same checks on `main` and pull requests. Tests requiring live credentials can be skipped by the Node suite; a successful offline check does not verify a deployed or connected journey.
+
+### 2. Connected browser acceptance
 ```bash
-node --test tests/*.test.mjs
+npm run check:connected
 ```
+
+Provide the Supabase URL, browser-safe key, server-only test key, and configured demo accounts in the test environment. The command fails before opening a browser if the required key groups are missing. It runs Chromium scenarios against the test site and its database; use an isolated demo project because these scenarios create and update records. The server-only key must remain outside the browser bundle. See [the Playwright handoff](docs/testing/playwright-handoff.md) for the full scenario contract.

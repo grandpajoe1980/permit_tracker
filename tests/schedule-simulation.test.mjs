@@ -138,7 +138,8 @@ test("Simulation Engine: returns pre-built scenario presets for SpaceX Pecan Isl
   assert.equal(presets.length, 4);
 
   const names = presets.map((p) => p.name);
-  assert.ok(names.includes("Active Forecast"));
+  assert.ok(names.includes("Sample Forecast"));
+  assert.equal(presets[0].isCurrentForecast, false, "example preset must not claim to be the approved forecast");
   assert.ok(names.some((n) => n.includes("USACE")));
   assert.ok(names.some((n) => n.includes("CPRA")));
   assert.ok(names.some((n) => n.includes("Tropical Storm")));

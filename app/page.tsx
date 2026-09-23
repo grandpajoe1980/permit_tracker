@@ -255,7 +255,7 @@ function canonicalWorkItemForPath(pathname: string, items: OperationalWorkItem[]
   const requestMatch = pathname.match(/\/requests\/([^/]+)/i);
   if (requestMatch) {
     const key = decodeSegment(requestMatch[1]);
-    return items.find((item) => item.kind === "customer_request" && (item.sourceId === key || item.id === key || (item.sourceRequest as (ServiceRequest & { confirmationNumber?: string }) | undefined)?.confirmationNumber === key)) ?? null;
+    return items.find((item) => item.kind === "customer_request" && (item.sourceId === key || item.id === key || item.sourceCustomerRequest?.confirmationNumber === key)) ?? null;
   }
   return null;
 }

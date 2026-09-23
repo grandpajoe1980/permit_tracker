@@ -380,11 +380,10 @@ export function calculateScheduleSensitivity(
  */
 export function getScenarioPresets(baseWorkstreams: WorkstreamRecord[]): ScheduleScenario[] {
   const baseForecast = createScenarioFromWorkstreams(
-    "scenario-active-forecast",
-    "Active Forecast",
-    "Current live forecast incorporating +13d LA-82 variance.",
-    baseWorkstreams,
-    { isCurrentForecast: true }
+    "scenario-sample-forecast",
+    "Sample Forecast",
+    "Example forecast incorporating a 13-day LA-82 variance.",
+    baseWorkstreams
   );
 
   // Preset 1: USACE Public Comment 15-day extension

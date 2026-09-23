@@ -1,8 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { test, expect, type Page } from "@playwright/test";
 
 function readEnvFile(path = ".env") {
+  if (!existsSync(path)) return {};
   return Object.fromEntries(
     readFileSync(path, "utf8")
       .split(/\r?\n/)
