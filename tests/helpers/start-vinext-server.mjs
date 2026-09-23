@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
-const builtServer = path.join(root, ".output", "server", "index.mjs");
+const nextCli = path.join(root, "node_modules", "next", "dist", "bin", "next");
 
 async function findFreePort() {
   const server = createTcpServer();
@@ -19,11 +19,12 @@ async function findFreePort() {
   return port;
 }
 
+// Keep the export name for existing tests; the production artifact is Next.js.
 export async function startVinextServer() {
   const port = await findFreePort();
-  const child = spawn(process.execPath, [builtServer], {
+  const child = spawn(process.execPath, [nextCli, "start", "--hostname", "127.0.0.1", "--port", String(port)], {
     cwd: root,
-    env: { ...process.env, NITRO_HOST: "127.0.0.1", NITRO_PORT: String(port) },
+    env: { ...process.env, NODE_ENV: "production" },
     stdio: ["ignore", "ignore", "pipe"],
   });
   let stderr = "";
