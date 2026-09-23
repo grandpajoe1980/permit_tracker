@@ -2,34 +2,36 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createRequestSupabaseClient } from "@/lib/supabase/server";
 import { resolveProjectRoute, resolveWorkstreamRoute } from "@/lib/supabase/route-resolvers";
+import { buildShellPath } from "@/lib/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function GlobalWorkstreamRoute({ params, searchParams }: { params: Promise<{ workstreamId: string }>; searchParams: Promise<{ phase?: string }> }) {
+export default async function GlobalWorkstreamRoute({ params, searchParams }: { params: Promise<{ workstreamId: string }>; searchParams: Promise<{ phase?: string; projectId?: string }> }) {
   const { workstreamId: rawWorkstreamId } = await params;
-  const { phase } = await searchParams;
+  const { phase, projectId: projectReference } = await searchParams;
   const workstreamId = rawWorkstreamId ?? "";
 
   const client = await createRequestSupabaseClient();
   if (!client) return <main className="mx-auto max-w-4xl p-8"><h1 className="text-2xl font-bold">Supabase is not configured</h1></main>;
   const { data: user } = await client.auth.getUser();
   if (!user.user) {
-    const phaseQuery = phase ? `&tool=schedule&phase=${encodeURIComponent(phase)}` : "";
+    const loginPath = buildShellPath("project", workstreamId, "schedule", phase, projectReference);
     const phaseHash = phase ? `#phase-${encodeURIComponent(phase)}` : "";
-    return <main className="mx-auto max-w-4xl space-y-4 p-8"><h1 className="text-2xl font-bold">Sign in required</h1><p className="text-slate-600">Sign in to view this authorized workstream. After signing in, return to this URL to continue.</p><Link href={`/?view=project&workstream=${encodeURIComponent(workstreamId)}${phaseQuery}${phaseHash}`} className="inline-flex text-sm font-bold text-teal-800 hover:underline">Open PATH sign-in</Link></main>;
+    return <main className="mx-auto max-w-4xl space-y-4 p-8"><h1 className="text-2xl font-bold">Sign in required</h1><p className="text-slate-600">Sign in to view this authorized workstream. After sign-in, PATH returns to its project schedule.</p><Link href={`${loginPath}${phaseHash}`} className="inline-flex text-sm font-bold text-teal-800 hover:underline">Open PATH sign-in</Link></main>;
   }
 
-  const workstream = await resolveWorkstreamRoute(client, undefined, workstreamId);
+  const requestedProject = projectReference ? await resolveProjectRoute(client, projectReference) : null;
+  if (projectReference && !requestedProject) return <main className="mx-auto max-w-4xl space-y-4 p-8"><h1 className="text-2xl font-bold">Project not found</h1><p className="text-slate-600">This project is not available to the signed-in participant.</p></main>;
+  const workstream = await resolveWorkstreamRoute(client, requestedProject?.id, workstreamId);
 
   if (!workstream) return <main className="mx-auto max-w-4xl space-y-4 p-8"><h1 className="text-2xl font-bold">Workstream not found</h1><p className="text-slate-600">The requested workstream could not be resolved.</p><Link href="/" className="inline-flex text-sm font-bold text-teal-800 hover:underline">Back to Projects</Link></main>;
 
   if (workstream.project_id) {
-    const project = await resolveProjectRoute(client, workstream.project_id);
+    const project = requestedProject ?? await resolveProjectRoute(client, workstream.project_id);
 
     if (project?.number) {
-      const phaseQuery = phase ? `&phase=${encodeURIComponent(phase)}` : "";
       const phaseHash = phase ? `#phase-${encodeURIComponent(phase)}` : "";
-      redirect(`/?view=project&workstream=${encodeURIComponent(workstream.id)}&tool=schedule${phaseQuery}${phaseHash}`);
+      redirect(`${buildShellPath("project", workstream.id, "schedule", phase, project.number)}${phaseHash}`);
     }
   }
 

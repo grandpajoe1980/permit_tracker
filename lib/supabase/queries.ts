@@ -17,10 +17,24 @@ import type {
   OrganizationRecord, PermitTypeRecord, ProjectParticipantRecord, ProjectRecord, RFIRecord, UserProfileRecord,
   WorkstreamRecord, WorkflowTemplateRecord, OrganizationMembershipRecord,
 } from "../domain-models";
-import { legacyProjectReferences } from "../project-identifiers";
+import { isProjectUuid, legacyProjectReferences, normalizeProjectReference } from "../project-identifiers";
 
 type QueryClient = NonNullable<ReturnType<typeof getSupabaseBrowser>>;
 type ProjectScope = { id: string; number: string; keys: string[] };
+
+export type ProjectSummary = {
+  id: string;
+  number: string;
+  name: string;
+  description: string | null;
+  location: unknown;
+  status: string;
+  risk: string;
+  startDate: string | null;
+  targetDate: string | null;
+  customerOrganizationId: string;
+  leadOrganizationId: string;
+};
 
 export type QueryDiagnostic = {
   operation: string;
@@ -54,15 +68,56 @@ function recordQueryFailure(operation: string, error: unknown): void {
 }
 
 async function resolveProjectScope(client: QueryClient, projectId: string): Promise<ProjectScope | null> {
-  const lookup = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(projectId)
-    ? client.from("projects").select("id, number").eq("id", projectId).maybeSingle()
-    : client.from("projects").select("id, number").eq("number", projectId).maybeSingle();
+  const normalized = normalizeProjectReference(projectId);
+  if (!normalized) {
+    recordQueryFailure("resolve project", "A project reference is required.");
+    return null;
+  }
+  const lookup = isProjectUuid(normalized)
+    ? client.from("projects").select("id, number").eq("id", normalized).maybeSingle()
+    : client.from("projects").select("id, number").eq("number", normalized).maybeSingle();
   const { data, error } = await lookup;
   if (error) recordQueryFailure("resolve project", error);
   if (!data) return null;
   const id = String(data.id);
-  const number = String(data.number ?? projectId);
-  return { id, number, keys: Array.from(new Set([id, number, projectId, ...legacyProjectReferences(number)])) };
+  const number = String(data.number ?? normalized);
+  return { id, number, keys: Array.from(new Set([id, number, normalized, ...legacyProjectReferences(number)])) };
+}
+
+export async function fetchProjectSummary(projectId: string, queryClient?: QueryClient): Promise<ProjectSummary | null> {
+  const client = queryClient ?? getSupabaseBrowser();
+  if (!client) {
+    recordQueryFailure("fetch project", "Supabase client unavailable or not configured");
+    return null;
+  }
+  const normalized = normalizeProjectReference(projectId);
+  if (!normalized) {
+    recordQueryFailure("fetch project", "A project reference is required.");
+    return null;
+  }
+  const columns = "id, number, name, description, location, status, risk, start_date, target_date, customer_organization_id, lead_organization_id";
+  const lookup = isProjectUuid(normalized)
+    ? client.from("projects").select(columns).eq("id", normalized).maybeSingle()
+    : client.from("projects").select(columns).eq("number", normalized).maybeSingle();
+  const { data, error } = await lookup;
+  if (error) recordQueryFailure("fetch project", error);
+  if (!data) {
+    if (!error) recordQueryFailure("fetch project", "Project is unavailable to this account.");
+    return null;
+  }
+  return {
+    id: String(data.id),
+    number: String(data.number),
+    name: String(data.name),
+    description: data.description == null ? null : String(data.description),
+    location: data.location,
+    status: String(data.status ?? "active"),
+    risk: String(data.risk ?? "normal"),
+    startDate: data.start_date == null ? null : String(data.start_date),
+    targetDate: data.target_date == null ? null : String(data.target_date),
+    customerOrganizationId: String(data.customer_organization_id),
+    leadOrganizationId: String(data.lead_organization_id),
+  };
 }
 
 function noClient<T>(operation: string): T[] {
@@ -300,15 +355,12 @@ export async function fetchNotifications(userId?: string): Promise<NotificationR
   return data.map(notificationRowToDomain);
 }
 
-export async function fetchAuditEvents(projectId?: string): Promise<AuditEventRecord[]> {
+export async function fetchAuditEvents(projectId: string): Promise<AuditEventRecord[]> {
   const client = getSupabaseBrowser();
   if (!client) return noClient("fetch audit events");
-  let query = client.from("audit_events").select("*").order("created_at", { ascending: false }).limit(100);
-  if (projectId) {
-    const scope = await resolveProjectScope(client, projectId);
-    if (!scope) return [];
-    query = query.in("project_id", scope.keys);
-  }
+  const scope = await resolveProjectScope(client, projectId);
+  if (!scope) return [];
+  const query = client.from("audit_events").select("*").in("project_id", scope.keys).order("created_at", { ascending: false }).limit(100);
   const { data, error } = await query;
   if (error || !data) {
     recordQueryFailure("fetch audit events", error ?? "No audit event data returned");
@@ -418,7 +470,7 @@ export async function fetchAssignmentGroupMemberships(groupId?: string): Promise
   return data.map(assignmentGroupMembershipRowToDomain);
 }
 
-export async function fetchFullProjectState(projectId = "PRJ-PECAN-2026"): Promise<Partial<ProjectRecord>> {
+export async function fetchFullProjectState(projectId: string): Promise<Partial<ProjectRecord>> {
   const [workstreams, customerRequests, externalFilings, rfis, coordinationRequests, commitments, decisions, meetings, documents, participants, auditLedger] = await Promise.all([
     fetchWorkstreams(projectId), fetchCustomerRequests(projectId), fetchExternalFilings(projectId), fetchRFIs(projectId),
     fetchCoordinationRequests(projectId), fetchCommitments(projectId), fetchDecisions(projectId), fetchMeetings(projectId),

@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createRequestSupabaseClient } from "@/lib/supabase/server";
 import { mutateCreateCustomerRequest } from "@/lib/supabase/mutations";
+import { isProjectUuid, normalizeProjectReference } from "@/lib/project-identifiers";
 
 const requestSchema = z.object({
-  projectId: z.string().min(1).optional(),
+  projectId: z.string().trim().min(1).max(160),
   requestType: z.enum(["permit_authorization", "government_help", "project_question", "blocker_coordination", "escalation", "concierge"]),
   title: z.string().trim().min(1).max(240),
   description: z.string().trim().min(1).max(10000),
@@ -28,10 +29,10 @@ async function authenticatedClient() {
   return { client, user: data.user, error: null };
 }
 
-async function resolveProjectId(client: NonNullable<Awaited<ReturnType<typeof createRequestSupabaseClient>>>, projectId?: string) {
-  const requested = projectId ?? "PRJ-PECAN-2026";
-  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requested);
-  const lookup = uuid
+async function resolveProjectId(client: NonNullable<Awaited<ReturnType<typeof createRequestSupabaseClient>>>, projectReference: string) {
+  const requested = normalizeProjectReference(projectReference);
+  if (!requested) return null;
+  const lookup = isProjectUuid(requested)
     ? await client.from("projects").select("id, number").eq("id", requested).maybeSingle()
     : await client.from("projects").select("id, number").eq("number", requested).maybeSingle();
   if (lookup.error || !lookup.data) return null;
@@ -62,7 +63,9 @@ function mutationFailure(message: string): { status: number; error: string } {
 export async function GET(request: NextRequest) {
   const auth = await authenticatedClient();
   if (auth.error || !auth.client) return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
-  const projectId = await resolveProjectId(auth.client, new URL(request.url).searchParams.get("projectId") ?? undefined);
+  const projectReference = new URL(request.url).searchParams.get("projectId");
+  if (!projectReference?.trim()) return NextResponse.json({ success: false, error: "Project number or ID is required." }, { status: 422 });
+  const projectId = await resolveProjectId(auth.client, projectReference);
   if (!projectId) return NextResponse.json({ success: false, error: "Project not found." }, { status: 404 });
   const { data, error } = await auth.client.from("customer_requests").select("*").eq("project_id", projectId).order("created_at", { ascending: false });
   if (error) return NextResponse.json({ success: false, error: "Unable to load requests." }, { status: error.code === "42501" ? 403 : 500 });
@@ -82,7 +85,7 @@ export async function POST(request: NextRequest) {
   }
   const requestId = rawIdempotencyKey ? await idempotencyId(auth.user.id, rawIdempotencyKey) : crypto.randomUUID();
   if (rawIdempotencyKey) {
-    const existing = await auth.client.from("customer_requests").select("*").eq("id", requestId).maybeSingle();
+    const existing = await auth.client.from("customer_requests").select("*").eq("id", requestId).eq("project_id", projectId).maybeSingle();
     if (existing.error) return NextResponse.json({ success: false, error: "Unable to verify request idempotency." }, { status: existing.error.code === "42501" ? 403 : 500 });
     if (existing.data) return NextResponse.json({ success: true, data: existing.data, replayed: true }, { status: 200 });
   }

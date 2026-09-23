@@ -801,7 +801,7 @@ export function auditEventRowToDomain(row: Row): AuditEventRecord {
   return {
     id: str(row.id),
     entityType: str(row.entity_type || row.resource_type || "project"),
-    entityId: str(row.entity_id || row.resource_id || "PRJ-PECAN-2026"),
+    entityId: str(row.entity_id || row.resource_id),
     actorName: str(row.actor_name || "PATH user"),
     actorOrgName: str(row.actor_org_name || "PATH"),
     actionType: str(row.action_type || row.action || "action"),

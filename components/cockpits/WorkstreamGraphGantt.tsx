@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -22,6 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getFullProjectRecord } from "@/lib/permit-utils";
 import { repository } from "@/lib/repository";
 import { evaluateProjectSchedule } from "@/lib/engines/schedule-engine";
+import { buildDetailShellPath, buildShellPath } from "@/lib/navigation";
 import type { OperationalState, ProjectRecord } from "@/lib/domain-models";
 import { asOfDateTime } from "@/lib/time";
 import { buildWorkflowJourney } from "@/lib/workflow-journey";
@@ -176,6 +177,7 @@ export function WorkstreamGraphGantt({
   onSelectWorkstream,
   onSelectProject,
   project: projectOverride,
+  projectReference: projectReferenceOverride,
   asOfDate,
   focusedWorkstreamId,
   focusedPhase,
@@ -185,11 +187,13 @@ export function WorkstreamGraphGantt({
   onSelectProject?: (workstreamId?: string) => void;
   onSelectTask?: (taskId: string) => void;
   project?: ProjectRecord;
+  projectReference?: string;
   asOfDate?: string | Date;
   focusedWorkstreamId?: string;
   focusedPhase?: string;
 }) {
   const project = projectOverride ?? getFullProjectRecord();
+  const projectReference = projectReferenceOverride ?? (project.code || project.id);
   const schedule = evaluateProjectSchedule(project.workstreams);
   const [activeTab, setActiveTab] = useState<"graph" | "advanced">("graph");
   const [advancedSection, setAdvancedSection] = useState<"simulator" | "delays" | "acceleration">("simulator");
@@ -200,6 +204,15 @@ export function WorkstreamGraphGantt({
   const [zoom, setZoom] = useState<"day" | "week" | "month">("week");
   const [fitProject, setFitProject] = useState(false);
   const todayDate = useMemo(() => asOfDateTime(asOfDate), [asOfDate]);
+
+  const workstreamHref = useCallback((workstreamId: string, phase?: string) => {
+    const path = buildShellPath("project", workstreamId, "schedule", phase, projectReference);
+    return phase ? `${path}#phase-${encodeURIComponent(phase)}` : path;
+  }, [projectReference]);
+
+  const taskHref = useCallback((taskId: string) => {
+    return buildDetailShellPath("task", taskId, projectReference);
+  }, [projectReference]);
 
   useEffect(() => {
     if (!focusedPhase || !focusedWorkstreamId) return;
@@ -218,7 +231,7 @@ export function WorkstreamGraphGantt({
     }
 
     if (typeof window !== "undefined") {
-      window.location.assign(`/workstreams/${encodeURIComponent(workstream.code || workstream.id)}`);
+      window.location.assign(workstreamHref(workstream.id));
     }
   }
 
@@ -323,7 +336,7 @@ export function WorkstreamGraphGantt({
         stateLabel: ws.operationalStateLabel || ws.operationalState,
         isCriticalPath: ws.isCriticalPath,
         varianceDays: ws.scheduleVarianceDays,
-        canonicalHref: `/workstreams/${encodeURIComponent(ws.code || ws.id)}`,
+        canonicalHref: workstreamHref(ws.id),
       });
 
       if (ws.tasks) {
@@ -354,14 +367,14 @@ export function WorkstreamGraphGantt({
             stateLabel: task.status.replace("_", " "),
             isCriticalPath: task.isCriticalPath,
             varianceDays: 0,
-            canonicalHref: `/work/task/${encodeURIComponent(task.id)}`,
+            canonicalHref: taskHref(task.id),
           });
         }
       }
     }
 
     return items.sort((a, b) => a.sortTime - b.sortTime);
-  }, [filteredWorkstreams]);
+  }, [filteredWorkstreams, taskHref, workstreamHref]);
 
   // Counts for legend
   const stateCounts = useMemo(() => {
@@ -822,11 +835,11 @@ export function WorkstreamGraphGantt({
                             title={`Click to open ${ws.title} (${ws.code}) details page`}
                           >
                             <div className="col-span-4 min-w-0 border-r border-slate-200 px-3 py-3">
-                              <Link href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}`} className="block truncate text-base font-bold text-slate-900 hover:text-teal-800" title={`${ws.title} · ${ws.code} · Owner: ${ws.regulatoryLead.assignedReviewerName || "Unassigned"}`}>
+                              <Link href={workstreamHref(ws.id)} className="block truncate text-base font-bold text-slate-900 hover:text-teal-800" title={`${ws.title} · ${ws.code} · Owner: ${ws.regulatoryLead.assignedReviewerName || "Unassigned"}`}>
                                 {ws.title}
                               </Link>
                               <div className="mt-1 flex min-w-0 items-center gap-2 text-xs">
-                                <Link className="min-w-0 flex-1 truncate text-slate-500 hover:underline" href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}?phase=${encodeURIComponent(ws.currentStageName || "phase")}#phase-${encodeURIComponent(ws.currentStageName || "phase")}`}>
+                                <Link className="min-w-0 flex-1 truncate text-slate-500 hover:underline" href={workstreamHref(ws.id, ws.currentStageName || "phase")}>
                                   {ws.regulatoryLead.orgCode} · {ws.currentStageName || "Not configured"}
                                 </Link>
                                 <span className={`shrink-0 rounded-full border px-2 text-[10px] font-bold ${stateConfig.badgeBg} ${stateConfig.badgeText}`}>{stateConfig.shortLabel}</span>
@@ -849,7 +862,7 @@ export function WorkstreamGraphGantt({
                                     key={stage.id}
                                     data-testid={`gantt-stage-block-${ws.code}-${stage.stageKey}`}
                                     data-stage-state={stageState.toLowerCase().replaceAll(" ", "-")}
-                                    href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}?phase=${encodeURIComponent(stage.name)}#phase-${encodeURIComponent(stage.name)}`}
+                                    href={workstreamHref(ws.id, stage.name)}
                                     className={`group/stage absolute h-9 overflow-visible rounded-none border text-sm font-bold focus:z-20 hover:z-20 focus:outline-2 focus:outline-offset-2 ${STAGE_COLOR_CLASSES[index % STAGE_COLOR_CLASSES.length]}`}
                                     style={{
                                       left: `${Math.max(0, stageLeft)}%`, width: `${stageWidth}%`,
@@ -871,7 +884,7 @@ export function WorkstreamGraphGantt({
                               {stageRows.some((row) => !row.hasStageDates) && <div className="col-span-2 flex min-w-0 items-center self-stretch gap-1 border-l border-slate-200 px-2" aria-label="Unscheduled stages">
                                 {stageRows.filter((row) => !row.hasStageDates).map(({ stage, index, stageState }) => <Link
                                   key={stage.id}
-                                  href={`/workstreams/${encodeURIComponent(ws.code || ws.id)}?phase=${encodeURIComponent(stage.name)}#phase-${encodeURIComponent(stage.name)}`}
+                                  href={workstreamHref(ws.id, stage.name)}
                                   className={`group/undated relative min-w-0 flex-1 border px-1 py-2 text-sm focus:z-20 hover:z-20 ${STAGE_COLOR_CLASSES[index % STAGE_COLOR_CLASSES.length]}`}
                                   title={`${customerSafe ? stage.customerVisibilityLabel : stage.name} · ${stageState} · Not scheduled`}
                                   aria-label={`${customerSafe ? stage.customerVisibilityLabel : stage.name}: ${stageState}. Not scheduled`}

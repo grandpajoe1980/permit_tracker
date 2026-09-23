@@ -65,5 +65,5 @@ test("queue, detail, and project render the shared story and old copied URLs ent
   assert.match(appSource, /<WorkstreamTruthSummary workstream=\{linkedWorkstream\}/);
   assert.match(appSource, /function renderProjectWorkspace\(section: ProjectSection\)/);
   assert.match(appSource, /projectSection/);
-  assert.match(copiedWorkstreamRoute, /redirect\(buildShellPath\("project", workstream\.id\)\)/);
+  assert.match(copiedWorkstreamRoute, /redirect\(buildShellPath\("project", workstream\.id, undefined, undefined, project\.number\)\)/);
 });

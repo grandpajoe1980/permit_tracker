@@ -1,6 +1,6 @@
 import vinext from "vinext";
 import { nitro } from "nitro/vite";
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, loadEnv, type UserConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { sites } from "./build/sites-vite-plugin";
 
@@ -34,7 +34,7 @@ const localBindingConfig = {
     : [],
 };
 
-export default defineConfig(async ({ mode }) => {
+export default defineConfig(async ({ mode }): Promise<UserConfig> => {
   const fileEnv = loadEnv(mode, process.cwd(), "");
   const runtimeEnv = { ...fileEnv, ...process.env };
   const publicSupabaseUrl =
@@ -86,6 +86,10 @@ export default defineConfig(async ({ mode }) => {
           ? { watch: { useFsEvents: false, usePolling: true } }
           : {}),
       },
+      // Keep the server renderer and Vinext Flight components on the same
+      // Node-loaded React instance instead of mixing optimized and external
+      // React modules in the Nitro SSR environment.
+      ssr: { external: true },
       plugins: [vinext(), nitro()],
     };
   }

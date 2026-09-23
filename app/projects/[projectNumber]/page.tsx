@@ -13,10 +13,10 @@ export default async function ProjectRoute({ params }: { params: Promise<{ proje
   const client = await createRequestSupabaseClient();
   if (!client) return <main className="mx-auto max-w-4xl p-8"><h1 className="text-2xl font-bold">Supabase is not configured</h1></main>;
   const { data: user } = await client.auth.getUser();
-  if (!user.user) return <main className="mx-auto max-w-4xl p-8"><h1 className="text-2xl font-bold">Sign in required</h1><p className="mt-2 text-slate-600">Project records are only available to authorized participants.</p><Link href={`/?view=project`} className="mt-4 inline-flex text-sm font-bold text-teal-800 hover:underline">Open PATH sign-in</Link></main>;
+  if (!user.user) return <main className="mx-auto max-w-4xl p-8"><h1 className="text-2xl font-bold">Sign in required</h1><p className="mt-2 text-slate-600">Project records are only available to authorized participants.</p><Link href={`/?view=project&projectId=${encodeURIComponent(projectNumber)}`} className="mt-4 inline-flex text-sm font-bold text-teal-800 hover:underline">Open PATH sign-in</Link></main>;
 
   const project = await resolveProjectRoute(client, projectNumber);
   if (!project) return <main className="mx-auto max-w-4xl p-8"><h1 className="text-2xl font-bold">Project not found</h1><p className="mt-2 text-slate-600">This project is not available to the signed-in participant.</p><Link href="/" className="mt-4 inline-flex text-sm font-bold text-teal-800 hover:underline">Back to Projects</Link></main>;
 
-  redirect(buildShellPath("project"));
+  redirect(buildShellPath("project", undefined, undefined, undefined, project.number));
 }

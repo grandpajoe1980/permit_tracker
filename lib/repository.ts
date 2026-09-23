@@ -77,6 +77,7 @@ import {
   fetchMeetings,
   fetchNotifications,
   fetchOrganizations,
+  fetchProjectSummary,
   fetchProjectParticipants,
   fetchOrganizationMemberships,
   fetchRFIs,
@@ -123,6 +124,7 @@ import {
 import { mutateReviewDocumentVersion, mutateUploadDocumentVersion } from "./supabase/storage";
 import { getSupabaseBrowser, isSupabaseConfigured } from "./supabase/client";
 import { allowsFixtureData } from "./data-mode";
+import { isFixtureProjectReference, normalizeProjectReference } from "./project-identifiers";
 
 type MutableTicket = {
   id: string;
@@ -174,6 +176,7 @@ class ProjectDeliveryRepository {
   private assignmentGroups: AssignmentGroupRecord[] = JSON.parse(JSON.stringify(assignmentGroupsData));
   private assignmentGroupMemberships: AssignmentGroupMembershipRecord[] = JSON.parse(JSON.stringify(assignmentGroupMembershipsData));
   private isHydratedFromDb = false;
+  private activeProjectReference: string | null = null;
 
   constructor() {
     // Initial construction uses deterministic baseline
@@ -182,12 +185,24 @@ class ProjectDeliveryRepository {
   /**
    * Hydrates all authorized project state directly from Supabase PostgreSQL.
    */
-  async hydrateFromSupabase(projectId = "PRJ-PECAN-2026"): Promise<boolean> {
+  async hydrateFromSupabase(projectReference: string): Promise<boolean> {
     if (!isSupabaseConfigured()) return false;
+
+    const projectId = normalizeProjectReference(projectReference);
+    if (!projectId) {
+      this.clearProjectScopedState();
+      this.activeProjectReference = null;
+      return false;
+    }
+    const changedScope = this.activeProjectReference !== null && this.activeProjectReference !== projectId;
+    const fixtureScope = allowsFixtureData() && isFixtureProjectReference(projectId);
+    if (changedScope || (!fixtureScope && this.activeProjectReference === null)) this.clearProjectScopedState();
+    this.activeProjectReference = projectId;
 
     try {
       beginQueryDiagnostics();
       const [
+        projectSummary,
         ws,
         custReqs,
         extFilings,
@@ -208,6 +223,7 @@ class ProjectDeliveryRepository {
         groups,
         groupMemberships,
       ] = await Promise.all([
+        fetchProjectSummary(projectId),
         fetchWorkstreams(projectId),
         fetchCustomerRequests(projectId),
         fetchExternalFilings(projectId),
@@ -230,12 +246,13 @@ class ProjectDeliveryRepository {
       ]);
 
       const queryFailures = takeQueryDiagnostics();
-      if (queryFailures.length > 0) {
+      if (!projectSummary || queryFailures.length > 0) {
         console.warn("Supabase hydration failed because one or more reads were rejected:", queryFailures);
+        this.clearProjectScopedState();
         return false;
       }
 
-      const keepFixtures = allowsFixtureData();
+      const keepFixtures = fixtureScope;
       const groupById = new Map(groups.map((group) => [group.id, group]));
       const profileByUserId = new Map<string, UserProfileRecord>();
       for (const profile of profs) {
@@ -290,12 +307,106 @@ class ProjectDeliveryRepository {
       if (!keepFixtures || groups.length > 0) this.assignmentGroups = groups;
       if (!keepFixtures || namedGroupMemberships.length > 0) this.assignmentGroupMemberships = namedGroupMemberships;
 
+      if (!keepFixtures) this.project = this.projectRecordFromSummary(projectSummary, orgs);
+      this.project = {
+        ...this.project,
+        workstreams: this.workstreams,
+        commitments: this.commitments,
+        decisions: this.decisions,
+        meetings: this.meetings,
+        documents: this.documents,
+        coordinationRequests: this.coordinationRequests,
+        auditLedger: this.auditEvents,
+        participants: this.participants,
+        externalFilings: this.externalFilings,
+        customerRequests: this.customerRequests,
+      };
+
       this.isHydratedFromDb = true;
       return true;
     } catch (err) {
       console.warn("Failed to hydrate from Supabase:", err);
+      if (!fixtureScope) this.clearProjectScopedState();
       return false;
     }
+  }
+
+  private projectRecordFromSummary(summary: NonNullable<Awaited<ReturnType<typeof fetchProjectSummary>>>, organizations: OrganizationRecord[]): ProjectRecord {
+    const location = summary.location && typeof summary.location === "object" ? summary.location as Record<string, unknown> : {};
+    const leadOrganization = organizations.find((organization) => organization.id === summary.leadOrganizationId);
+    const locationDescription = [location.region, location.parish, location.state].filter((part) => typeof part === "string" && part.trim()).join(", ") || "Location not specified";
+    const risk = summary.risk === "blocked" ? "red" : summary.risk === "at_risk" ? "yellow" : "green";
+    return {
+      id: summary.id,
+      code: summary.number,
+      name: summary.name,
+      applicantOrgCode: summary.customerOrganizationId,
+      leadStateAgencyCode: leadOrganization?.code ?? summary.leadOrganizationId,
+      stateProjectManagerName: "Project manager not assigned",
+      customerProgramManagerName: "Customer contact not assigned",
+      locationDescription,
+      parish: typeof location.parish === "string" ? location.parish : "Not specified",
+      baselineLaunchDate: summary.startDate ?? "",
+      currentForecastLaunchDate: summary.targetDate ?? "",
+      scheduleVarianceDays: 0,
+      overallRagHealth: risk,
+      workstreams: this.workstreams,
+      commitments: this.commitments,
+      decisions: this.decisions,
+      meetings: this.meetings,
+      documents: this.documents,
+      coordinationRequests: this.coordinationRequests,
+      auditLedger: this.auditEvents,
+      participants: this.participants,
+      externalFilings: this.externalFilings,
+      customerRequests: this.customerRequests,
+    };
+  }
+
+  private clearProjectScopedState(): void {
+    this.isHydratedFromDb = false;
+    this.project = {
+      id: "",
+      code: "",
+      name: "Project",
+      applicantOrgCode: "",
+      leadStateAgencyCode: "",
+      stateProjectManagerName: "",
+      customerProgramManagerName: "",
+      locationDescription: "",
+      parish: "",
+      baselineLaunchDate: "",
+      currentForecastLaunchDate: "",
+      scheduleVarianceDays: 0,
+      overallRagHealth: "green",
+      workstreams: [],
+      commitments: [],
+      decisions: [],
+      meetings: [],
+      documents: [],
+      coordinationRequests: [],
+      auditLedger: [],
+      participants: [],
+      externalFilings: [],
+      customerRequests: [],
+    };
+    this.workstreams = [];
+    this.commitments = [];
+    this.coordinationRequests = [];
+    this.rfis = [];
+    this.documents = [];
+    this.decisions = [];
+    this.meetings = [];
+    this.auditEvents = [];
+    this.notifications = [];
+    this.participants = [];
+    this.externalFilings = [];
+    this.customerRequests = [];
+    this.memberships = [];
+  }
+
+  private async refreshFromSupabase(): Promise<boolean> {
+    return this.activeProjectReference ? this.hydrateFromSupabase(this.activeProjectReference) : false;
   }
 
   isDbConnected(): boolean {
@@ -510,7 +621,7 @@ class ProjectDeliveryRepository {
         p_change_summary: params.changeSummary ?? `Draft revision of ${template.name}`,
       });
       if (!error && data) {
-        await this.hydrateFromSupabase();
+        await this.refreshFromSupabase();
         const draftId = String((data as { id?: string }).id ?? data);
         const verNum = Number((data as { versionNumber?: number }).versionNumber ?? (activeVersion.versionNumber + 1));
         return { data: { draftVersionId: draftId, versionNumber: verNum }, error: null };
@@ -740,7 +851,7 @@ class ProjectDeliveryRepository {
         return { data: null, error: new Error(pubRes.error.message) };
       }
       if (!pubRes.error) {
-        await this.hydrateFromSupabase();
+        await this.refreshFromSupabase();
         return { data: draft, error: null };
       }
     }
@@ -1259,7 +1370,7 @@ class ProjectDeliveryRepository {
       }
       return { data: null, error: result.error ?? new Error("Workstream creation was not confirmed by the database.") };
     }
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { data: result.data, error: null };
   }
 
@@ -1281,7 +1392,7 @@ class ProjectDeliveryRepository {
     if (!isSupabaseConfigured()) return { data: null, error: new Error("Supabase is required for atomic customer triage.") };
     const result = await mutateTriageCustomerRequest(params);
     if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Customer triage was not confirmed by the database.") };
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { data: result.data, error: null };
   }
 
@@ -1312,7 +1423,7 @@ class ProjectDeliveryRepository {
       }
       return { data: null, error: result.error ?? new Error("Clarification request was not confirmed by the database.") };
     }
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { data: this.customerRequests.find((entry) => entry.id === params.requestId) ?? result.data, error: null };
   }
 
@@ -1363,7 +1474,7 @@ class ProjectDeliveryRepository {
     }
     const result = await mutateRespondToCustomerIntakeClarification(params);
     if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Clarification response could not be saved.") };
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { data: this.customerRequests.find((r) => r.id === params.requestId) ?? result.data, error: null };
   }
 
@@ -1386,7 +1497,7 @@ class ProjectDeliveryRepository {
     }
     const result = await mutateLinkCustomerRequestToWorkstream(params);
     if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Existing workstream link was not confirmed by the database.") };
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { data: this.customerRequests.find((entry) => entry.id === params.requestId) ?? result.data, error: null };
   }
 
@@ -1670,7 +1781,7 @@ class ProjectDeliveryRepository {
       }
       return { data: null, error: result.error ?? new Error("RFI creation was not confirmed by the database.") };
     }
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { data: result.data, error: null };
   }
 
@@ -1721,7 +1832,7 @@ class ProjectDeliveryRepository {
     if (!workstream) return { data: null, error: new Error("Workstream not found.") };
     const result = await mutateMarkWorkstreamBlocked({ ...params, workstreamId: workstream.id, workstreamCode: workstream.code });
     if (result.error) return { data: null, error: result.error };
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { data: result.data, error: null };
   }
 
@@ -1744,7 +1855,7 @@ class ProjectDeliveryRepository {
       }
       return { data: null, error: result.error };
     }
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { data: this.getWorkstreamById(workstream.id) ?? null, error: null };
   }
 
@@ -1905,7 +2016,7 @@ class ProjectDeliveryRepository {
       workstreamCode: workstream.code,
     });
     if (result.error || !result.data) return { success: false, error: result.error ?? new Error("The workflow transition was not confirmed by the database.") };
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { success: true, error: null, nextStageName: result.data.nextStageName };
   }
 
@@ -1955,7 +2066,7 @@ class ProjectDeliveryRepository {
     }
     const result = await mutateUpdateTask(params);
     if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Task update was not confirmed by the database.") };
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { data: result.data, error: null };
   }
 
@@ -1979,7 +2090,7 @@ class ProjectDeliveryRepository {
     }
     const result = await mutateCompleteTask(params);
     if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Task completion was not confirmed by the database.") };
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { data: result.data, error: null };
   }
 
@@ -2075,7 +2186,7 @@ class ProjectDeliveryRepository {
     if (!workstream) return { success: false, error: new Error("Workstream not found.") };
     const result = await mutateEscalateWorkstream({ ...params, workstreamId: workstream.id, workstreamCode: workstream.code, currentLevel: workstream.escalationLevel });
     if (result.error) return { success: false, error: result.error };
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { success: true, error: null };
   }
 
@@ -2088,7 +2199,7 @@ class ProjectDeliveryRepository {
     if (!workstream) return { success: false, error: new Error("Workstream not found.") };
     const result = await mutateTransferWorkstream({ ...params, workstreamId: workstream.id, workstreamCode: workstream.code });
     if (result.error) return { success: false, error: result.error };
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { success: true, error: null };
   }
 
@@ -2101,7 +2212,7 @@ class ProjectDeliveryRepository {
     if (!workstream) return { success: false, error: new Error("Workstream not found.") };
     const result = await mutateAddWorkstreamNote({ ...params, workstreamId: workstream.id, workstreamCode: workstream.code });
     if (result.error) return { success: false, error: result.error };
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { success: true, error: null };
   }
 
@@ -2203,7 +2314,7 @@ class ProjectDeliveryRepository {
     if (!rfi) return { success: false, error: new Error("RFI not found.") };
     const result = await mutateAcceptRFIResponse({ ...params, rfiId: rfi.id, rfiCode: rfi.code, workstreamId: rfi.workstreamId });
     if (result.error) return { success: false, error: result.error };
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { success: true, error: null };
   }
 
@@ -2261,7 +2372,7 @@ class ProjectDeliveryRepository {
       rfiId: rfi.id,
     });
     if (result.error || !result.data) return { data: null, error: result.error ?? new Error("RFI response was not confirmed by the database.") };
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { data: result.data, error: null };
   }
 
@@ -2276,7 +2387,7 @@ class ProjectDeliveryRepository {
     }
     const result = await mutateReviewDocumentVersion(params);
     if (result.error) return { success: false, error: result.error };
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     return { success: true, error: null };
   }
 
@@ -2372,7 +2483,7 @@ class ProjectDeliveryRepository {
 
     const result = await mutateUpdateCommitmentStatus(params);
     if (result.error || !result.data) return { data: null, error: result.error ?? new Error("Commitment status was not confirmed by the database.") };
-    await this.hydrateFromSupabase();
+    await this.refreshFromSupabase();
     const commitment = this.commitments.find((entry) => entry.id === params.commitmentId);
     return { data: commitment ?? null, error: commitment ? null : new Error("Commitment update was accepted but the saved row could not be reloaded.") };
   }
@@ -2968,7 +3079,7 @@ class ProjectDeliveryRepository {
       }
       const memoryResult = this.assignTicket(options);
       if (!memoryResult.success) {
-        await this.hydrateFromSupabase();
+        await this.refreshFromSupabase();
         return { data: dbResult.data, error: null };
       }
       return { data: memoryResult.ticket, error: null };
@@ -3005,7 +3116,7 @@ class ProjectDeliveryRepository {
         return { success: false, error: dbResult.error ?? new Error("Ticket ownership was not confirmed by the database."), ticket };
       }
 
-      await this.hydrateFromSupabase();
+      await this.refreshFromSupabase();
       const refreshed = this.findTicket(options.ticketType, options.ticketId) ?? ticket;
       if (dbResult.data.status === "conflict") {
         const owner = dbResult.data.assignedToUserName || dbResult.data.assignedToUserId || "another worker";
@@ -3065,7 +3176,7 @@ class ProjectDeliveryRepository {
       }
       const memoryResult = this.updateTicketITSMState(options);
       if (!memoryResult.success) {
-        await this.hydrateFromSupabase();
+        await this.refreshFromSupabase();
         return { data: dbResult.data, error: null };
       }
       return { data: memoryResult.ticket, error: null };
@@ -3095,7 +3206,7 @@ class ProjectDeliveryRepository {
       }
       const memoryResult = this.setTicketPriority(options);
       if (!memoryResult.success) {
-        await this.hydrateFromSupabase();
+        await this.refreshFromSupabase();
         return { data: dbResult.data, error: null };
       }
       return { data: memoryResult.ticket, error: null };
@@ -3111,6 +3222,8 @@ class ProjectDeliveryRepository {
   }
 
   resetE2EDemo(): void {
+    this.activeProjectReference = null;
+    this.isHydratedFromDb = false;
     this.project = JSON.parse(JSON.stringify(spacexProjectRecord));
     this.workstreams = JSON.parse(JSON.stringify(workstreamsData));
     this.commitments = JSON.parse(JSON.stringify(commitmentsData));

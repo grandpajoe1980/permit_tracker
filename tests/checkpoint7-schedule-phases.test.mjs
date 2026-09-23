@@ -20,38 +20,42 @@ after(async () => {
 
 test("Checkpoint 7: distinct canonical destinations for workstream, phase, and task", async () => {
   const { WorkstreamGraphGantt } = await vite.ssrLoadModule("/components/cockpits/WorkstreamGraphGantt.tsx");
-  const html = renderToStaticMarkup(React.createElement(WorkstreamGraphGantt));
+  const html = renderToStaticMarkup(React.createElement(WorkstreamGraphGantt, { projectReference: "PRJ-PECAN-2026" }));
+  const hrefs = Array.from(html.matchAll(/href="([^"]+)"/g), (match) => match[1].replaceAll("&amp;", "&"));
 
-  // 1. Workstream canonical destination
-  assert.match(html, /href="\/workstreams\/WS-LA82-HEAVYHAUL"/);
+  const workstreamHref = hrefs.find((href) => href.includes("workstream=WS-LA82-HEAVYHAUL") && !href.includes("phase="));
+  const phaseHref = hrefs.find((href) => href.includes("workstream=WS-LA82-HEAVYHAUL") && href.includes("phase="));
+  const taskHref = hrefs.find((href) => href.includes("kind=task") && href.includes("task-dotd-"));
+  assert.ok(workstreamHref, "Workstream href must exist");
+  assert.ok(phaseHref, "Phase anchor href must exist");
+  assert.ok(taskHref, "Task href must exist");
 
-  // 2. Phase / Stage anchor destination
-  assert.match(html, /href="\/workstreams\/WS-LA82-HEAVYHAUL\?phase=[^#]+#phase-[^"]+"/);
-
-  // 3. Task canonical destination
-  assert.match(html, /href="\/work\/task\/task-dotd-[123]"/);
-
-  // Confirm all three destinations are distinct
-  const workstreamHref = "/workstreams/WS-LA82-HEAVYHAUL";
-  const phaseHrefMatch = html.match(/href="(\/workstreams\/WS-LA82-HEAVYHAUL\?phase=[^#]+#phase-[^"]+)"/);
-  const taskHrefMatch = html.match(/href="(\/work\/task\/task-dotd-[123])"/);
-
-  assert.ok(phaseHrefMatch, "Phase anchor href must exist");
-  assert.ok(taskHrefMatch, "Task href must exist");
-  assert.notEqual(workstreamHref, phaseHrefMatch[1]);
-  assert.notEqual(workstreamHref, taskHrefMatch[1]);
-  assert.notEqual(phaseHrefMatch[1], taskHrefMatch[1]);
+  const workstreamUrl = new URL(workstreamHref, "https://path.example");
+  const phaseUrl = new URL(phaseHref, "https://path.example");
+  const taskUrl = new URL(taskHref, "https://path.example");
+  assert.equal(workstreamUrl.searchParams.get("projectId"), "PRJ-PECAN-2026");
+  assert.equal(phaseUrl.searchParams.get("projectId"), "PRJ-PECAN-2026");
+  assert.equal(taskUrl.searchParams.get("projectId"), "PRJ-PECAN-2026");
+  assert.equal(workstreamUrl.searchParams.get("view"), "project");
+  assert.ok(phaseUrl.searchParams.get("phase"));
+  assert.ok(phaseUrl.hash.startsWith("#phase-"));
+  assert.equal(taskUrl.searchParams.get("view"), "detail");
+  assert.notEqual(workstreamHref, phaseHref);
+  assert.notEqual(workstreamHref, taskHref);
+  assert.notEqual(phaseHref, taskHref);
 });
 
-test("Checkpoint 7: schedule links are not intercepted into the project shell", async () => {
+test("Checkpoint 7: schedule links preserve project scope and remain native links", async () => {
   const gantt = await readFile(new URL("../components/cockpits/WorkstreamGraphGantt.tsx", import.meta.url), "utf8");
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
 
   assert.doesNotMatch(gantt, /href=\{item\.canonicalHref\}[\s\S]{0,500}preventDefault\(\)/);
-  assert.doesNotMatch(gantt, /href=\{`\/workstreams\/\$\{encodeURIComponent\(ws\.code \|\| ws\.id\)\}`\}[\s\S]{0,500}preventDefault\(\)/);
-  assert.doesNotMatch(gantt, /href=\{`\/work\/task\/\$\{encodeURIComponent\(task\.id\)\}`\}[\s\S]{0,500}preventDefault\(\)/);
-  assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} customerSafe=\{activePersona\.isCustomer\} focusedWorkstreamId=/);
-  assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} customerSafe focusedWorkstreamId=/);
+  assert.match(gantt, /buildShellPath\("project", workstreamId, "schedule", phase, projectReference\)/);
+  assert.match(gantt, /buildDetailShellPath\("task", taskId, projectReference\)/);
+  assert.doesNotMatch(gantt, /href=\{`\/workstreams\//);
+  assert.doesNotMatch(gantt, /href=\{`\/work\/task\//);
+  assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} projectReference=\{activeProjectReference\(\) \?\? undefined\} customerSafe=\{activePersona\.isCustomer\} focusedWorkstreamId=/);
+  assert.match(page, /<WorkstreamGraphGantt project=\{projectRecord\} projectReference=\{activeProjectReference\(\) \?\? undefined\} customerSafe focusedWorkstreamId=/);
   assert.match(page, /desiredPathBase.*phase-\$\{encodeURIComponent\(selectedProjectPhase\)\}/s);
 });
 

@@ -146,7 +146,7 @@ test("renders the unified work-item summary and saved activity surface", () => {
 
 test("refreshes the canonical work item after persisted actions", () => {
   assert.match(page, /async function notify/);
-  assert.match(page, /await repository\.hydrateFromSupabase\(\)/);
+  assert.match(page, /await repository\.hydrateFromSupabase\(projectId\)/);
   assert.match(page, /canonicalItem/);
   assert.match(page, /setSaveStatus\("saving"\)/);
 });
@@ -180,6 +180,9 @@ test("uses an injected current date and explicit Gantt viewport controls", async
   assert.match(gantt, />Day<|>Week<|>Month</);
   assert.match(gantt, /Fit project/);
   assert.match(gantt, />Today</);
+  assert.match(gantt, /buildShellPath\("project", workstreamId, "schedule", phase, projectReference\)/);
+  assert.match(gantt, /buildDetailShellPath\("task", taskId, projectReference\)/);
+  assert.doesNotMatch(gantt, /href=\{`\/workstreams\//);
 });
 
 test("requires an explicit escalation target and preserves record association", async () => {
@@ -331,9 +334,11 @@ test("keeps production mutations and routes server-confirmed", () => {
   assert.match(mutations, /canonicalProjectReference\(params\.projectId\)/);
   assert.match(projectRoute, /createRequestSupabaseClient/);
   assert.match(workstreamRoute, /resolveWorkstreamRoute\(client, project\.id, workstreamId\)/);
-  assert.match(workstreamRoute, /redirect\(buildShellPath\("project", workstream\.id\)\)/);
+  assert.match(workstreamRoute, /redirect\(buildShellPath\("project", workstream\.id, undefined, undefined, project\.number\)\)/);
   assert.match(requestRoute, /createRequestSupabaseClient/);
   assert.match(requestRoute, /buildDetailShellPath\("customer_request"/);
   assert.match(requestApi, /\.eq\("id", requested\)/);
   assert.match(requestApi, /\.eq\("number", requested\)/);
+  assert.doesNotMatch(requestApi, /PRJ-PECAN-2026/);
+  assert.match(requestApi, /Project number or ID is required/);
 });

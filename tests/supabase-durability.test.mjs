@@ -199,7 +199,7 @@ liveTest("Supabase Live Database: verifies live tables on project zomzacaxwqfwjs
 });
 
 liveTest("Supabase Hydration: repository.hydrateFromSupabase populates domain records from PostgreSQL", async () => {
-  const success = await repository.hydrateFromSupabase();
+  const success = await repository.hydrateFromSupabase("PRJ-PECAN-2026");
   assert.equal(success, true);
   const workstreams = repository.getWorkstreams();
   assert.ok(workstreams.length >= 9, "Expected 9+ workstreams hydrated from Supabase");

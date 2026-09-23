@@ -8,7 +8,7 @@ export default defineConfig({
   workers: 1,
   reporter: "list",
   webServer: {
-    command: "npx vite --host 0.0.0.0 --port 3000",
+    command: "npx vite --host 127.0.0.1 --port 3000",
     url: "http://127.0.0.1:3000",
     reuseExistingServer: true,
     timeout: 120_000,

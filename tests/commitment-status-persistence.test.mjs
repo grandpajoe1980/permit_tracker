@@ -15,7 +15,7 @@ test("commitment completion uses the persisted update path and reports failures"
   assert.match(page, /The commitment status was not confirmed by the database/);
   assert.doesNotMatch(page, /repository\.updateCommitmentStatus\(item\.sourceId, commitmentNewStatus, actorName\)/);
   assert.match(repository, /async updateCommitmentStatusPersisted\(/);
-  assert.match(repository, /await this\.hydrateFromSupabase\(\)/);
+  assert.match(repository, /await this\.refreshFromSupabase\(\)/);
   assert.match(mutations, /rpc\("rpc_update_commitment_status"/);
   assert.match(mutations, /p_commitment_id: params\.commitmentId/);
 });

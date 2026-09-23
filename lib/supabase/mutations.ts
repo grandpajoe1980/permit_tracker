@@ -160,7 +160,9 @@ export async function insertAuditEvent(params: {
     old_value: params.oldValue ?? null,
     new_value: params.newValue ?? null,
     reason: params.reason ?? null,
-    project_id: params.projectId ?? "PRJ-PECAN-2026",
+    // Unscoped audit actions may be global (for example a profile update).
+    // Project work must pass its resolved project id; never attribute it to a demo.
+    project_id: params.projectId ?? null,
     actor_id: actorId ?? null,
     created_at: now,
   };

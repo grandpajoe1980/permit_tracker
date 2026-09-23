@@ -1,5 +1,35 @@
 # PATH Progress
 
+## Explicit project scope — PATH-004 — September 23, 2026
+
+- Production login now requires a project number or database ID. The selected
+  reference is carried through shell and work-item navigation; project routes,
+  request reads, writes, and repository hydration resolve a visible project row
+  through the authenticated Supabase client. Missing or inaccessible project
+  scope fails closed. The implicit Pecan fallback is removed from production
+  hydration and the request API.
+- Hydration filters project data by the resolved database ID and clears cached
+  project state when scope changes or a production hydration fails. Audit reads
+  require the same explicit scope. Request idempotency replay is also filtered
+  by project.
+- Added a two-project isolation test for request hydration and project-aware
+  navigation. The latest focused project-scope, source-contract, and navigation
+  set passes (28 tests). Connected scenarios 4 and 7–9 pass, including an
+  assertion that schedule-stage links retain `projectId`.
+- The full connected browser/document run completed 12 of 13 cases. The first
+  document-upload journey hit a `PGRST303` “JWT issued at future” error during
+  initial hydration; that same upload journey passed when retried alone. The
+  other document and persistence journeys passed. The upload test retains its
+  uniquely tagged immutable file as audit evidence in the acceptance project.
+- `npm run check:offline` passes TypeScript, lint, production build, secret
+  scan, and all 474 Node tests (447 passed, zero failed, 27 live-credential
+  tests skipped). The connected run is recorded separately because its first
+  upload attempt had the transient token-timing failure above.
+- Current limit: the browser repository still holds one active project, so
+  there is no project switcher or portfolio workspace. Independent negative
+  RLS acceptance evidence and multi-project connected browser coverage remain
+  open. No schema migration was needed for this slice.
+
 ## Filing provenance and least-privilege acceptance — September 23, 2026
 
 - The customer authorization portfolio now connects a filing to its actual customer request ID and permit type. It no longer assigns PATH status from an unrelated request merely because an agency handles both. The external status is labeled as a PATH entry, with its recorded source, agency system, update date, and a secure agency-record link when present. The screen explicitly says the agency status is not synchronized. Resource links no longer carry a blanket "Verified" heading.
@@ -7,11 +37,15 @@
 - Restored the existing `DOS` Supabase demo project (`zomzacaxwqfwjstkxbpv`) from inactive to `ACTIVE_HEALTHY`. Read-only verification found 70 remote migration versions matching all 70 repository migrations and three external filings (none yet linked to customer requests). External filings have RLS enabled, no anonymous SELECT privilege, and authenticated project-access SELECT policies. No database schema or data was changed by this checkpoint.
 - Supabase security advisors currently flag 35 authenticated `SECURITY DEFINER` functions for individual authorization review and one leaked-password-protection configuration warning. These are existing findings, not proof that each RPC is unsafe. See the [function advisor](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable) and [password-protection guidance](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
 
-`npm run check:offline` passes TypeScript, lint, production build, secret scan, and 472 Node tests (445 passed, zero failed, 27 credential-dependent skips). Connected browser acceptance remains open: this checkout has no public Supabase configuration, and the restored demo project is also used by the deployed demonstration site. Run write-producing browser suites only against an isolated acceptance project; keep the new tagged files as audit evidence or clean them through an explicit test-data retention policy.
+At the earlier filing-provenance checkpoint, connected browser acceptance was
+still open because no public Supabase configuration was present in the checkout.
+The PATH-004 runs above used environment-only credentials against the DOS
+acceptance project; tagged test uploads and records remain as audit evidence.
+The independently verified negative RLS check is still open.
 
 Open provenance issue: the current `rpc_create_external_filing` writes `last_status_verified_at` when a customer supplies any status other than `not_started`. That timestamp is therefore not independent proof from the agency. The portfolio deliberately calls it a PATH entry. A later migration should separate customer status entry from an authorized verification action with evidence and an audit trail.
 
-## Market roadmap Phase 0 — September 23, 2026 (in progress)
+## Market roadmap Phase 0 initial checkpoint — September 23, 2026
 
 The reviewed [market benchmark and roadmap](market-benchmark-roadmap-2026-09.md) is published on `main`. This checkpoint starts PATH-001 and PATH-002:
 

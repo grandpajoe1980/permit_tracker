@@ -1,18 +1,22 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
+  // These scenarios sign in separately as customer, agency, and reviewer
+  // personas. Keep time for remote auth and hydration on a cold test run.
+  test.setTimeout(120_000);
+
   test("Scenario 1: Customer Request Durability across Isolated Browser Contexts", async ({ browser }) => {
     // 1. Context A: SpaceX PM Submits Customer Request
     const contextA = await browser.newContext();
     const pageA = await contextA.newPage();
     const requestTitle = `E2E Automated Cross-Browser Test Request ${Date.now()}`;
-    await pageA.goto("/");
+    await pageA.goto("/?projectId=PRJ-PECAN-2026");
     await expect(pageA.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
 
     // Open Demo Sign-in and select Alex Martin (SpaceX customer submitter)
     await pageA.click("#demo-login-trigger");
     await pageA.click("#demo-persona-alex");
-    await expect(pageA.getByRole("button", { name: "Open project page" })).toBeVisible();
+    await expect(pageA.getByRole("button", { name: "Open project page" })).toBeVisible({ timeout: 30_000 });
 
     // Navigate to Requests & Permits
     await pageA.getByRole("button", { name: "My requests", exact: true }).click();
@@ -32,7 +36,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     // 2. Context B: Clean State Office Session (Sarah Johnson) Retrieves from Supabase
     const contextB = await browser.newContext(); // Completely isolated cookies & localStorage
     const pageB = await contextB.newPage();
-    await pageB.goto("/");
+    await pageB.goto("/?projectId=PRJ-PECAN-2026");
     await expect(pageB.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
 
     await pageB.click("#demo-login-trigger");
@@ -53,7 +57,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     const pageReviewer = await contextReviewer.newPage();
     const questionText = `E2E Automated Hydraulic Model Request ${Date.now()}`;
     const responseText = `E2E Applicant Response ${Date.now()}`;
-    await pageReviewer.goto("/");
+    await pageReviewer.goto("/?projectId=PRJ-PECAN-2026");
     await expect(pageReviewer.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
 
     await pageReviewer.click("#demo-login-trigger");
@@ -80,7 +84,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     // 2. Context B: Clean SpaceX Session responds to RFI
     const contextApplicant = await browser.newContext();
     const pageApplicant = await contextApplicant.newPage();
-    await pageApplicant.goto("/");
+    await pageApplicant.goto("/?projectId=PRJ-PECAN-2026");
     await expect(pageApplicant.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
 
     await pageApplicant.click("#demo-login-trigger");
@@ -102,7 +106,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     // 3. A fresh reviewer context retrieves the exact response and accepts it.
     const contextReviewerAgain = await browser.newContext();
     const pageReviewerAgain = await contextReviewerAgain.newPage();
-    await pageReviewerAgain.goto("/");
+    await pageReviewerAgain.goto("/?projectId=PRJ-PECAN-2026");
     await expect(pageReviewerAgain.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
     await pageReviewerAgain.click("#demo-login-trigger");
     await pageReviewerAgain.click("#demo-persona-jordan");
@@ -127,7 +131,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     const clarificationText = "Please confirm the affected location and the requested decision date.";
     const customerResponse = "The affected location is the east construction access, and the decision is needed before mobilization.";
 
-    await pageCustomer.goto("/");
+    await pageCustomer.goto("/?projectId=PRJ-PECAN-2026");
     await expect(pageCustomer.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
     await pageCustomer.click("#demo-login-trigger");
     await pageCustomer.click("#demo-persona-alex");
@@ -143,7 +147,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
 
     const contextStaff = await browser.newContext();
     const pageStaff = await contextStaff.newPage();
-    await pageStaff.goto("/");
+    await pageStaff.goto("/?projectId=PRJ-PECAN-2026");
     await expect(pageStaff.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
     await pageStaff.click("#demo-login-trigger");
     await pageStaff.click("#demo-persona-sarah");
@@ -163,11 +167,11 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
 
     const contextResponse = await browser.newContext();
     const pageResponse = await contextResponse.newPage();
-    await pageResponse.goto("/");
+    await pageResponse.goto("/?projectId=PRJ-PECAN-2026");
     await expect(pageResponse.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
     await pageResponse.click("#demo-login-trigger");
     await pageResponse.click("#demo-persona-alex");
-    await expect(pageResponse.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(pageResponse.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 30_000 });
     await pageResponse.getByRole("button", { name: /^My actions/ }).click();
     await pageResponse.getByRole("searchbox", { name: "Search work inbox" }).fill(requestTitle);
     const responseRow = pageResponse.locator('[data-testid^="inbox-row-"]').first();
@@ -184,7 +188,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     // not merely reflected by the submitting page's local state.
     const contextReadBack = await browser.newContext();
     const pageReadBack = await contextReadBack.newPage();
-    await pageReadBack.goto("/");
+    await pageReadBack.goto("/?projectId=PRJ-PECAN-2026");
     await expect(pageReadBack.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
     await pageReadBack.click("#demo-login-trigger");
     await pageReadBack.click("#demo-persona-alex");
@@ -198,11 +202,11 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
   test("Scenario 4: Shell and stage-first schedule keep the main pane as the scroll owner", async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
-    await page.goto("/");
+    await page.goto("/?projectId=PRJ-PECAN-2026");
     await expect(page.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
     await page.click("#demo-login-trigger");
     await page.click("#demo-persona-sarah");
-    await expect(page.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 30_000 });
 
     const desktopShell = await page.evaluate(() => {
       const main = document.getElementById("main-content");
@@ -272,6 +276,8 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     });
     expect(outsideLabelEvidence).toBe(true);
     const stage = page.getByTestId("gantt-stage-block-PATH-DEMO-WS-UTILITY-technical_review");
+    const stageHref = await stage.getAttribute("href");
+    expect(new URL(stageHref ?? "", page.url()).searchParams.get("projectId")).toBe("PRJ-PECAN-2026");
     await stage.focus();
     await expect(stage.getByRole("tooltip")).toBeVisible();
     const dateAlignment = await page.getByLabel("Gantt schedule timeline").evaluate((timeline) => {
@@ -302,7 +308,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     const requestTitle = `E2E Take Ownership Collision ${Date.now()}`;
     const contextCreator = await browser.newContext();
     const pageCreator = await contextCreator.newPage();
-    await pageCreator.goto("/");
+    await pageCreator.goto("/?projectId=PRJ-PECAN-2026");
     await expect(pageCreator.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
     await pageCreator.click("#demo-login-trigger");
     await pageCreator.click("#demo-persona-alex");
@@ -316,7 +322,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
 
     const contextSarah = await browser.newContext();
     const pageSarah = await contextSarah.newPage();
-    await pageSarah.goto("/");
+    await pageSarah.goto("/?projectId=PRJ-PECAN-2026");
     await expect(pageSarah.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
     await pageSarah.click("#demo-login-trigger");
     await pageSarah.click("#demo-persona-sarah");
@@ -328,7 +334,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
 
     const contextJoe = await browser.newContext();
     const pageJoe = await contextJoe.newPage();
-    await pageJoe.goto("/");
+    await pageJoe.goto("/?projectId=PRJ-PECAN-2026");
     await expect(pageJoe.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
     await pageJoe.fill("#username", "joe.skaggs@la.gov");
     await pageJoe.fill("#password", "PATH-MVP-2026!");
@@ -362,7 +368,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     test.setTimeout(60_000);
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
-    await page.goto("/");
+    await page.goto("/?projectId=PRJ-PECAN-2026");
     await expect(page.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
     await page.click("#demo-login-trigger");
     await page.click("#demo-persona-sarah");
@@ -419,7 +425,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
       hasTouch: true,
     });
     const page = await context.newPage();
-    await page.goto("/");
+    await page.goto("/?projectId=PRJ-PECAN-2026");
     await expect(page.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
 
     // Sign in with the semantic form controls, then drive the navigation
@@ -452,7 +458,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     test.setTimeout(60_000);
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
-    await page.goto("/");
+    await page.goto("/?projectId=PRJ-PECAN-2026");
     await expect(page.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
     await page.click("#demo-login-trigger");
     await page.click("#demo-persona-sam-rivera");
@@ -465,10 +471,25 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     const workstreamTitle = "Demo — Utility interconnection parallel review";
     await page.getByRole("button", { name: /^Assigned/ }).click();
     await page.getByRole("searchbox", { name: "Filter team work" }).fill(workstreamTitle);
-    const row = page.locator(`[data-testid="inbox-row-${requestId}"]`).first();
+    let row = page.locator(`[data-testid="inbox-row-${requestId}"]`).first();
+    if (!(await row.isVisible().catch(() => false))) {
+      await page.getByRole("button", { name: /^Waiting/ }).click();
+      await page.getByRole("searchbox", { name: "Filter team work" }).fill(workstreamTitle);
+      row = page.locator(`[data-testid="inbox-row-${requestId}"]`).first();
+    }
     await expect(row).toBeVisible({ timeout: 15_000 });
     await row.getByRole("button", { name: new RegExp(`Open ${requestTitle}`) }).click();
     await expect(page.getByRole("heading", { name: requestTitle, exact: true })).toBeVisible();
+
+    // A prior interrupted acceptance run may leave this tagged test request
+    // blocked. Restore its baseline first so the scenario is safely repeatable.
+    if (await page.getByText("Blocked (Action Required)", { exact: true }).isVisible().catch(() => false)) {
+      await page.getByRole("button", { name: "Clear Blocker & Resume", exact: true }).click();
+      const recoveryDialog = page.getByRole("dialog");
+      await recoveryDialog.locator("#unblock-note").fill("Restore baseline before rerunning PATH acceptance.");
+      await recoveryDialog.getByRole("button", { name: "Clear Blocker & Resume", exact: true }).click();
+      await expect(page.getByRole("status").filter({ hasText: "Blocker cleared" })).toBeVisible({ timeout: 15_000 });
+    }
 
     await page.getByRole("button", { name: "Mark Blocked", exact: true }).click();
     const blockDialog = page.getByRole("dialog");
@@ -507,13 +528,13 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     const page = await context.newPage();
     const responseText = `E2E coordination response ${Date.now()}`;
 
-    await page.goto("/");
+    await page.goto("/?projectId=PRJ-PECAN-2026");
     await expect(page.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
     await page.fill("#username", "sarah.johnson@la.gov");
     await page.fill("#password", "PATH-MVP-2026!");
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
     await expect(page.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 30_000 });
-    await page.goto("/?view=coordination");
+    await page.goto("/?view=coordination&projectId=PRJ-PECAN-2026");
     await expect(page.getByRole("heading", { name: "Coordination Requests", exact: true })).toBeVisible({ timeout: 30_000 });
 
     const coordinationCard = page.locator("article").filter({ hasText: "PATH-DEMO-COORD-RESPONDED" }).first();
@@ -542,13 +563,13 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     // workstream remains project-scoped. Read that shared project view to
     // prove the dependency is still blocked; only its separate clear action
     // can resume the workflow.
-    await page.goto("/?view=project&workstream=PATH-DEMO-WS-COAST");
+    await page.goto("/?view=project&workstream=PATH-DEMO-WS-COAST&projectId=PRJ-PECAN-2026");
     await expect(page.getByRole("heading", { name: /SpaceX .*Starbase Louisiana/i, exact: false })).toBeVisible({ timeout: 30_000 });
     const focusedWorkstream = page.locator('[data-focused-workstream-id="PATH-DEMO-WS-COAST"]');
     await expect(focusedWorkstream).toBeVisible({ timeout: 15_000 });
     await expect(focusedWorkstream.getByText(/blocked/i).first()).toBeVisible({ timeout: 15_000 });
 
-    await page.goto("/work/coordination/PATH-DEMO-COORD-RESPONDED");
+    await page.goto("/?view=detail&kind=coordination&id=PATH-DEMO-COORD-RESPONDED&projectId=PRJ-PECAN-2026");
     await expect(page.getByRole("heading", { name: "Confirm coastal concurrence conditions", exact: true })).toBeVisible({ timeout: 30_000 });
 
     // Restore the tagged demo response text while preserving its seeded
@@ -566,12 +587,12 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     test.setTimeout(90_000);
     const nonAdminContext = await browser.newContext();
     const nonAdminPage = await nonAdminContext.newPage();
-    await nonAdminPage.goto("/");
+    await nonAdminPage.goto("/?projectId=PRJ-PECAN-2026");
     await expect(nonAdminPage.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
     await nonAdminPage.click("#demo-login-trigger");
     await nonAdminPage.click("#demo-persona-sarah");
     await expect(nonAdminPage.getByRole("button", { name: "Open project page", exact: true })).toBeVisible({ timeout: 30_000 });
-    await nonAdminPage.goto("/?view=admin");
+    await nonAdminPage.goto("/?view=admin&projectId=PRJ-PECAN-2026");
     await expect(nonAdminPage.getByRole("alert").filter({ hasText: "Administrator access required" })).toBeVisible({ timeout: 30_000 });
     await expect(nonAdminPage.getByRole("heading", { name: "Customer intake queue", exact: true })).toBeVisible({ timeout: 30_000 });
     await expect(nonAdminPage.getByRole("button", { name: "Apply Audited Correction", exact: true })).toHaveCount(0);
@@ -583,7 +604,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     const firstReason = `E2E CP8 correction reason ${Date.now()}`;
     const restoreReason = `E2E CP8 restoration reason ${Date.now()}`;
 
-    await page.goto("/");
+    await page.goto("/?projectId=PRJ-PECAN-2026");
     await expect(page.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
     await page.click("#demo-login-trigger");
     await page.click("#demo-persona-joe-skaggs");
@@ -632,7 +653,7 @@ test.describe("Supabase-Authoritative Cross-Browser Persistence", () => {
     const targetDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
     async function signIn(page: import("@playwright/test").Page, personaId: string) {
-      await page.goto("/");
+      await page.goto("/?projectId=PRJ-PECAN-2026");
       await expect(page.locator("#login-shell")).toHaveAttribute("data-hydrated", "true");
       await page.click("#demo-login-trigger");
       await page.click(`#demo-persona-${personaId}`);

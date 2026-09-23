@@ -18,11 +18,12 @@ function decodeSegment(value: string | undefined) {
  * owns the hydrated record view; this route only validates the URL shape and
  * makes authentication/deep-link recovery explicit before handing off.
  */
-export default async function WorkItemRoute({ params }: { params: Promise<{ kind: string; id: string }> }) {
+export default async function WorkItemRoute({ params, searchParams }: { params: Promise<{ kind: string; id: string }>; searchParams: Promise<{ projectId?: string }> }) {
   const { kind: rawKind, id: rawId } = await params;
+  const query = await searchParams;
   const kind = decodeSegment(rawKind);
   const id = decodeSegment(rawId);
-  const path = buildWorkItemPath(kind, id);
+  const path = buildWorkItemPath(kind, id, query.projectId);
 
   if (!parseWorkItemPath(path)) {
     return (
@@ -34,6 +35,9 @@ export default async function WorkItemRoute({ params }: { params: Promise<{ kind
       </main>
     );
   }
+
+  const signInParams = new URLSearchParams({ returnTo: path });
+  if (query.projectId) signInParams.set("projectId", query.projectId);
 
   const client = await createRequestSupabaseClient();
   if (!client) {
@@ -53,10 +57,10 @@ export default async function WorkItemRoute({ params }: { params: Promise<{ kind
         <p className="text-xs font-bold uppercase tracking-wider text-teal-700">PATH work item</p>
         <h1 className="text-2xl font-black text-slate-900">Sign in required</h1>
         <p className="text-slate-600">Sign in to open this authorized work item. After sign-in, PATH returns you to the requested record.</p>
-        <Link href={`/?returnTo=${encodeURIComponent(path)}`} className="inline-flex text-sm font-bold text-teal-800 hover:underline">Open PATH sign-in</Link>
+        <Link href={`/?${signInParams.toString()}`} className="inline-flex text-sm font-bold text-teal-800 hover:underline">Open PATH sign-in</Link>
       </main>
     );
   }
 
-  redirect(buildDetailShellPath(kind, id));
+  redirect(buildDetailShellPath(kind, id, query.projectId));
 }

@@ -36,9 +36,11 @@ const READ_ONLY_RESOURCES = new Set(["workflow_versions", "audit_events"]);
 export function AdminExplorer({
   onOpenWork,
   initialTab = "records",
+  activeProjectId,
 }: {
   onOpenWork?: (resource: string, id: string) => boolean;
   initialTab?: "records" | "people" | "teams" | "workflows" | "audit";
+  activeProjectId?: string;
 }) {
   const [activeAdminTab, setActiveAdminTab] = useState<"records" | "people" | "teams" | "workflows" | "audit">(initialTab);
   const [resource, setResource] = useState<AdminResource>("projects");
@@ -58,6 +60,13 @@ export function AdminExplorer({
   const [editStatus, setEditStatus] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  function withProjectScope(href: string, projectReference = activeProjectId) {
+    if (!projectReference) return href;
+    const url = new URL(href, "https://path.local");
+    url.searchParams.set("projectId", projectReference);
+    return `${url.pathname}${url.search}${url.hash}`;
+  }
 
   function beginLoad() {
     setLoading(true);
@@ -159,7 +168,7 @@ export function AdminExplorer({
   // Relationship links rendered inside Inspect
   function renderRelationships(row: Row) {
     const links: React.ReactNode[] = [];
-    const projectId = String(row.project_id || row.projectId || "");
+    const projectId = String(row.project_id || row.projectId || (resource === "projects" ? row.id : activeProjectId) || "");
     const workstreamId = String(row.workstream_id || row.workstreamId || "");
     const taskId = String(row.task_id || row.taskId || (row.task_type ? row.id : ""));
     const userId = String(row.user_id || row.userId || row.assigned_to_user_id || row.assigned_user_id || "");
@@ -170,9 +179,9 @@ export function AdminExplorer({
       links.push(
         <div key="proj" className="flex items-center gap-2">
           <span className="text-xs font-semibold text-slate-500">Project:</span>
-          <Link href={`/projects/${encodeURIComponent(projectId)}`} className="text-xs font-bold text-teal-800 hover:underline">
+          <a href={`/projects/${encodeURIComponent(projectId)}`} className="text-xs font-bold text-teal-800 hover:underline">
             {projectId}
-          </Link>
+          </a>
         </div>
       );
     }
@@ -180,9 +189,9 @@ export function AdminExplorer({
       links.push(
         <div key="ws" className="flex items-center gap-2">
           <span className="text-xs font-semibold text-slate-500">Workstream:</span>
-          <Link href={`/workstreams/${encodeURIComponent(workstreamId)}`} className="text-xs font-bold text-teal-800 hover:underline">
+          <a href={withProjectScope(`/workstreams/${encodeURIComponent(workstreamId)}`, projectId)} className="text-xs font-bold text-teal-800 hover:underline">
             {workstreamId}
-          </Link>
+          </a>
         </div>
       );
     }
@@ -190,9 +199,9 @@ export function AdminExplorer({
       links.push(
         <div key="task" className="flex items-center gap-2">
           <span className="text-xs font-semibold text-slate-500">Task:</span>
-          <Link href={`/work/task/${encodeURIComponent(taskId)}`} className="text-xs font-bold text-teal-800 hover:underline">
+          <a href={withProjectScope(`/work/task/${encodeURIComponent(taskId)}`, projectId)} className="text-xs font-bold text-teal-800 hover:underline">
             {taskId}
-          </Link>
+          </a>
         </div>
       );
     }
@@ -200,7 +209,7 @@ export function AdminExplorer({
       links.push(
         <div key="user" className="flex items-center gap-2">
           <span className="text-xs font-semibold text-slate-500">Person:</span>
-          <Link href={`/?view=profile&userId=${encodeURIComponent(userId)}`} className="text-xs font-bold text-teal-800 hover:underline">
+          <Link href={withProjectScope(`/?view=profile&userId=${encodeURIComponent(userId)}`)} className="text-xs font-bold text-teal-800 hover:underline">
             {userId}
           </Link>
         </div>
@@ -210,7 +219,7 @@ export function AdminExplorer({
       links.push(
         <div key="org" className="flex items-center gap-2">
           <span className="text-xs font-semibold text-slate-500">Agency:</span>
-          <Link href={`/?view=contacts&orgId=${encodeURIComponent(orgCode)}`} className="text-xs font-bold text-teal-800 hover:underline">
+          <Link href={withProjectScope(`/?view=contacts&orgId=${encodeURIComponent(orgCode)}`)} className="text-xs font-bold text-teal-800 hover:underline">
             {orgCode}
           </Link>
         </div>
@@ -220,7 +229,7 @@ export function AdminExplorer({
       links.push(
         <div key="grp" className="flex items-center gap-2">
           <span className="text-xs font-semibold text-slate-500">Team Queue:</span>
-          <Link href={`/?view=admin#assignment-groups-heading`} className="text-xs font-bold text-teal-800 hover:underline">
+          <Link href={withProjectScope("/?view=admin#assignment-groups-heading")} className="text-xs font-bold text-teal-800 hover:underline">
             {groupId}
           </Link>
         </div>

@@ -205,6 +205,7 @@ function FocusedWorkstreamWorkspace({
 
 export function ProjectOverviewPage({
   project,
+  projectReference,
   customerSafe = false,
   workflowTemplates = [],
   focusedWorkstreamId,
@@ -212,6 +213,7 @@ export function ProjectOverviewPage({
   onOpenSchedule,
 }: {
   project: ProjectRecord;
+  projectReference?: string;
   customerSafe?: boolean;
   workflowTemplates?: WorkflowTemplateRecord[];
   focusedWorkstreamId?: string | null;
@@ -928,7 +930,7 @@ export function ProjectOverviewPage({
             </p>
           </CardHeader>
           <CardContent className="p-0 sm:p-2">
-            <WorkstreamGraphGantt project={project} customerSafe={customerSafe} onSelectWorkstream={onFocusWorkstream} />
+            <WorkstreamGraphGantt project={project} projectReference={projectReference} customerSafe={customerSafe} onSelectWorkstream={onFocusWorkstream} />
           </CardContent>
         </Card>
       )}

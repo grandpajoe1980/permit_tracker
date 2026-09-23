@@ -9,6 +9,7 @@ import type {
 } from "./demo-data";
 import { mutateCreateCustomerRequest, mutateCreateCustomerRequestWithDocument } from "./supabase/mutations";
 import { getSupabaseBrowser, isSupabaseConfigured } from "./supabase/client";
+import { isProjectUuid, normalizeProjectReference } from "./project-identifiers";
 
 /** The browser client intentionally accepts only publishable/anon credentials. */
 export function getSupabaseBrowserClient() {
@@ -31,6 +32,16 @@ export async function getBrowserUser() {
   if (!client) return null;
   const { data } = await client.auth.getUser();
   return data.user;
+}
+
+async function resolveVisibleProjectId(projectReference: string, client = getSupabaseBrowserClient()): Promise<{ projectId: string | null; error: Error | null }> {
+  const normalized = normalizeProjectReference(projectReference);
+  if (!client || !normalized) return { projectId: null, error: new Error("A project number or ID is required.") };
+  const lookup = isProjectUuid(normalized)
+    ? await client.from("projects").select("id").eq("id", normalized).maybeSingle()
+    : await client.from("projects").select("id").eq("number", normalized).maybeSingle();
+  if (lookup.error || !lookup.data) return { projectId: null, error: lookup.error ?? new Error("Project is unavailable to this account.") };
+  return { projectId: String(lookup.data.id), error: null };
 }
 
 export async function signOutBrowser() {
@@ -169,60 +180,33 @@ export function requestRowToPermit(row: RequestRow): ServiceRequest {
   };
 }
 
-export async function loadRequestsForUser() {
+export async function loadRequestsForUser(projectReference: string) {
   const client = getSupabaseBrowserClient();
   if (!client) return { permits: [] as PermitRecord[], error: new Error("Supabase is not configured.") };
   const { data: userData, error: userError } = await client.auth.getUser();
   if (userError || !userData.user) return { permits: [] as PermitRecord[], error: userError ?? new Error("Sign in before loading requests.") };
-  const { data, error } = await client.from("customer_requests").select("*").eq("submitted_by_user_id", userData.user.id).order("created_at", { ascending: false });
+  const scope = await resolveVisibleProjectId(projectReference, client);
+  if (scope.error || !scope.projectId) return { permits: [] as PermitRecord[], error: scope.error ?? new Error("Project is unavailable to this account.") };
+  const { data, error } = await client.from("customer_requests").select("*").eq("project_id", scope.projectId).eq("submitted_by_user_id", userData.user.id).order("created_at", { ascending: false });
   const rows = (data ?? []) as unknown as RequestRow[];
   return { permits: rows.map((row: RequestRow) => requestRowToPermit(row)), error };
 }
 
-/* Retained as historical context only; production uses the RPC-backed path below.
-async function createRequestForUserLegacy(input: { title: string; requestType: string; description: string }) {
+export async function createRequestForUser(input: { projectId: string; title: string; requestType: string; description: string; file?: File }) {
   const client = getSupabaseBrowserClient();
   if (!client) return { error: new Error("Supabase is not configured.") };
   const { data: userData } = await client.auth.getUser();
   const user = userData.user;
   if (!user) return { error: new Error("Sign in before submitting a request.") };
-  const { data: project, error: projectError } = await client.from("projects").select("id").eq("number", "PRJ-PECAN-2026").single();
-  if (projectError || !project) return { error: projectError ?? new Error("SpaceX project is not configured.") };
-  const { error } = await client.from("customer_requests").insert(Object.fromEntries(Object.entries({
-    project_id: project.id,
-    submitted_by_user_id: user.id,
-    request_type: ["permit_authorization", "government_help", "project_question", "blocker_coordination", "escalation", "concierge"].includes(input.requestType) ? input.requestType : "government_help",
-    title: input.title.trim(),
-    description: input.description.trim(),
-    confirmation_number: `PATH-${new Date().getUTCFullYear()}-${String(Date.now()).slice(-6)}`,
-    submitted_by_name: String(user.user_metadata?.full_name ?? user.email ?? "SpaceX employee"),
-    blocks_active_work: false,
-    schedule_importance: "normal",
-    attachment_document_version_ids: [],
-    id: crypto.randomUUID(),
-    updated_at: new Date().toISOString(),
-    status_label: "Submitted · Triage Queue",
-    total_days: 180,
-  }).filter(([key]) => key !== "status_label" && key !== "total_days")));
-  return { error };
-}
-*/
-
-export async function createRequestForUser(input: { title: string; requestType: string; description: string; file?: File }) {
-  const client = getSupabaseBrowserClient();
-  if (!client) return { error: new Error("Supabase is not configured.") };
-  const { data: userData } = await client.auth.getUser();
-  const user = userData.user;
-  if (!user) return { error: new Error("Sign in before submitting a request.") };
-  const { data: project, error: projectError } = await client.from("projects").select("id").eq("number", "PRJ-PECAN-2026").single();
-  if (projectError || !project) return { error: projectError ?? new Error("SpaceX project is not configured.") };
+  const scope = await resolveVisibleProjectId(input.projectId, client);
+  if (scope.error || !scope.projectId) return { error: scope.error ?? new Error("Project is unavailable to this account.") };
   const requestType = ["permit_authorization", "government_help", "project_question", "blocker_coordination", "escalation", "concierge"].includes(input.requestType)
     ? input.requestType
     : "government_help";
   const requestParams = {
     id: crypto.randomUUID(),
     confirmationNumber: `PATH-${new Date().getUTCFullYear()}-${String(Date.now()).slice(-6)}`,
-    projectId: String(project.id),
+    projectId: scope.projectId,
     requestType: requestType as "permit_authorization" | "government_help" | "project_question" | "blocker_coordination" | "escalation" | "concierge",
     title: input.title.trim(),
     description: input.description.trim(),

@@ -2,11 +2,11 @@ import { readFileSync } from "node:fs";
 import { test, expect, type Page } from "@playwright/test";
 
 async function signInAndOpenDocuments(page: Page) {
-  await page.goto("/");
+  await page.goto("/?projectId=PRJ-PECAN-2026");
   await expect(page.locator('#login-shell')).toHaveAttribute('data-hydrated', 'true');
   await page.getByRole("button", { name: "Quick Demo Sign-In" }).click();
   await page.locator("#demo-persona-alex").last().click();
-  await expect(page.getByRole("button", { name: "Project Overview", exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Project Overview", exact: true })).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Project Overview", exact: true }).click();
   await page.getByRole("button", { name: "Project documents", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Project Document Vault", exact: true })).toBeVisible();

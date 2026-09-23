@@ -215,35 +215,39 @@ export function resolveCanonicalEntityRef(pathOrUrl: string | URL): EntityRef | 
   return null;
 }
 
-export function buildWorkItemPath(kind: string, id: string) {
-  return `/work/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`;
+export function buildWorkItemPath(kind: string, id: string, projectId?: string) {
+  const path = `/work/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`;
+  return projectId ? `${path}?projectId=${encodeURIComponent(projectId)}` : path;
 }
 
 /** Shell URL used after a direct /work/:kind/:id entry has been authenticated. */
-export function buildDetailShellPath(kind: WorkRouteKind | string, id: string) {
+export function buildDetailShellPath(kind: WorkRouteKind | string, id: string, projectId?: string) {
   const params = new URLSearchParams({ view: "detail", kind, id });
+  if (projectId) params.set("projectId", projectId);
   return `/?${params.toString()}`;
 }
 
 export function parseWorkItemPath(pathname: string): ParsedWorkItemPath | null {
-  const match = pathname.match(/^\/work\/([^/]+)\/([^/]+)\/?$/i);
+  const pathOnly = pathname.split(/[?#]/, 1)[0];
+  const match = pathOnly.match(/^\/work\/([^/]+)\/([^/]+)\/?$/i);
   if (!match) return null;
   const kind = decode(match[1]).toLowerCase() as WorkRouteKind;
   const id = decode(match[2]).trim();
   return workKinds.has(kind) && id ? { kind, id } : null;
 }
 
-export function buildShellPath(route: AppRoute, workstreamId?: string, tool?: string, phase?: string) {
+export function buildShellPath(route: AppRoute, workstreamId?: string, tool?: string, phase?: string, projectId?: string) {
   const params = new URLSearchParams();
   if (route !== "my-work") params.set("view", route);
   if (workstreamId) params.set("workstream", workstreamId);
   if ((route === "secondary" || route === "project") && tool) params.set("tool", tool);
   if (phase) params.set("phase", phase);
+  if (projectId) params.set("projectId", projectId);
   const query = params.toString();
   return query ? `/?${query}` : "/";
 }
 
-export function parseShellPath(url: URL): { route: AppRoute; workstreamId?: string; tool?: string; phase?: string; workKind?: WorkRouteKind; workItemId?: string; requestId?: string; returnTo?: string; userId?: string; orgId?: string; groupId?: string } {
+export function parseShellPath(url: URL): { route: AppRoute; workstreamId?: string; tool?: string; phase?: string; projectId?: string; workKind?: WorkRouteKind; workItemId?: string; requestId?: string; returnTo?: string; userId?: string; orgId?: string; groupId?: string } {
   const view = url.searchParams.get("view") as AppRoute | null;
   const knownRoute = view && NAVIGATION_DEFINITIONS.some((entry) => entry.id === view)
     ? view
@@ -255,6 +259,7 @@ export function parseShellPath(url: URL): { route: AppRoute; workstreamId?: stri
     workstreamId?: string;
     tool?: string;
     phase?: string;
+    projectId?: string;
     workKind?: WorkRouteKind;
     workItemId?: string;
     requestId?: string;
@@ -273,6 +278,8 @@ export function parseShellPath(url: URL): { route: AppRoute; workstreamId?: stri
   };
   const phase = url.searchParams.get("phase")?.trim();
   if (phase) res.phase = phase;
+  const projectId = url.searchParams.get("projectId")?.trim();
+  if (projectId) res.projectId = projectId;
   const u = url.searchParams.get("userId") || url.searchParams.get("user");
   if (u) res.userId = u;
   const o = url.searchParams.get("orgId") || url.searchParams.get("org");

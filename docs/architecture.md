@@ -17,8 +17,15 @@ Supabase and must preserve empty authorized query results as empty results.
 - `projects.id` is the database primary key.
 - `projects.number` is the human-facing project code, for example
   `PRJ-PECAN-2026`.
-- Routes and service functions use an explicit `projectId` or `projectCode`; a
-  code is not silently treated as a primary key.
+- Production sign-in, shell URLs, request APIs, and project data hydration carry
+  an explicit project reference. RLS resolves the reference to `projects.id`
+  before project rows are read; a missing or inaccessible project fails closed.
+- A URL project reference is context, not authority. The authenticated Supabase
+  client must resolve the project row under RLS before queries or mutations use
+  its database ID. The current browser repository holds one active project;
+  there is no project switcher or portfolio workspace yet.
+- The demo project number is only a fixture/demo entry value. Production query
+  and mutation helpers never choose it as an implicit fallback.
 - `customer_requests` is the canonical PATH intake model. The legacy
   `requests` table remains only for compatibility with the original auth and
   trigger model; application intake must not write one table and read the
