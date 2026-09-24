@@ -18,7 +18,7 @@ async function check() {
   const home = await fetch(new URL("/", origin), { cache: "no-store" });
   if (!home.ok) throw new Error(`Home returned HTTP ${home.status}: ${(await home.text()).slice(0, 160)}`);
   const html = await home.text();
-  const asset = html.match(/(?:src|href)="(\/assets\/[^"?]+\.(?:js|css))"/)?.[1];
+  const asset = html.match(/(?:src|href)="((?:\/assets\/|\/_next\/static\/)[^"?]+\.(?:js|css))"/)?.[1];
   if (!asset) throw new Error("Home rendered without a built JavaScript or CSS asset");
   const response = await fetch(new URL(asset, origin));
   if (!response.ok) throw new Error(`Built asset ${asset} returned HTTP ${response.status}`);

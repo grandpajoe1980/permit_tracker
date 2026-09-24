@@ -8,9 +8,9 @@
   "scripts": {
     "install:ci": "bash scripts/install-ci.sh",
     "dev": "vite",
-    "build": "vinext build",
+    "build": "next build",
     "postbuild": "npm run security:scan",
-    "start": "node .output/server/index.mjs",
+    "start": "next start",
     "test": "npm run build && node --expose-gc --import ./tests/load-env.mjs --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "check:offline": "npm run typecheck && npm run lint -- --quiet && npm test",

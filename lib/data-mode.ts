@@ -4,6 +4,9 @@ export type AppDataMode = "production" | "demo" | "test";
 export function getAppDataMode(): AppDataMode {
   const configured = process.env.APP_DATA_MODE ?? process.env.NEXT_PUBLIC_APP_DATA_MODE;
   if (configured === "production" || configured === "demo" || configured === "test") return configured;
+  // A production Node server must not quietly enable fixture fallbacks when
+  // APP_DATA_MODE was omitted from its environment.
+  if (process.env.NODE_ENV === "production") return "production";
   return typeof window === "undefined" ? "test" : "production";
 }
 
