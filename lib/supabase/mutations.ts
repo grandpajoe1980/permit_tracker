@@ -10,6 +10,7 @@ import type {
   DocumentAgencyReviewRecord,
   DocumentVersionRecord,
   ExternalFilingRecord,
+  ExternalFilingStatusCheckRecord,
   NotificationRecord,
   OrganizationRecord,
   PermitTypeRecord,
@@ -21,7 +22,7 @@ import type {
   WorkstreamRecord,
   TaskRecord,
 } from "../domain-models";
-import { coordinationRequestRowToDomain, customerRequestRowToDomain, externalFilingRowToDomain, taskRowToDomain } from "./mappings";
+import { coordinationRequestRowToDomain, customerRequestRowToDomain, externalFilingRowToDomain, externalFilingStatusCheckRowToDomain, taskRowToDomain } from "./mappings";
 import { allowsFixtureData, requiresSupabase } from "../data-mode";
 import { canonicalProjectReference } from "../project-identifiers";
 import { calculateSHA256, uploadDocumentFile } from "./storage-primitives";
@@ -686,7 +687,7 @@ export async function mutateCreateExternalFiling(params: {
 
 export async function mutateUpdateExternalFiling(
   id: string,
-  updates: Partial<Pick<ExternalFilingRecord, "externalReferenceNumber" | "externalRecordUrl" | "externalStatus" | "submittedAt" | "submittedByUserId" | "submittedByName" | "lastStatusVerifiedAt" | "lastStatusVerifiedBy" | "notes" | "receiptDocumentVersionIds">>,
+  updates: Partial<Pick<ExternalFilingRecord, "externalReferenceNumber" | "externalRecordUrl" | "externalStatus" | "submittedAt" | "submittedByUserId" | "submittedByName" | "notes" | "receiptDocumentVersionIds">>,
   actorName: string,
   actorOrgName: string
 ): Promise<MutationResult<ExternalFilingRecord>> {
@@ -703,8 +704,6 @@ export async function mutateUpdateExternalFiling(
   if (updates.externalStatus !== undefined) payload.external_status = updates.externalStatus;
   if (updates.submittedAt !== undefined) payload.submitted_at = updates.submittedAt;
   if (updates.submittedByUserId !== undefined) payload.submitted_by_user_id = updates.submittedByUserId;
-  if (updates.lastStatusVerifiedAt !== undefined) payload.last_status_verified_at = updates.lastStatusVerifiedAt;
-  if (updates.lastStatusVerifiedBy !== undefined) payload.last_status_verified_by = updates.lastStatusVerifiedBy;
   if (updates.notes !== undefined) payload.notes = updates.notes;
   if (updates.receiptDocumentVersionIds !== undefined) payload.receipt_document_version_ids = updates.receiptDocumentVersionIds;
 
@@ -745,6 +744,38 @@ export async function mutateUpdateExternalFiling(
       receiptDocumentVersionIds: (data.receipt_document_version_ids as string[]) || [],
       createdAt: String(data.created_at),
       updatedAt: String(data.updated_at),
+    },
+    error: null,
+  };
+}
+
+export async function mutateVerifyExternalFilingStatus(params: {
+  externalFilingId: string;
+  verifiedStatus: ExternalFilingRecord["externalStatus"];
+  sourceName: string;
+  sourceUrl: string;
+  verificationNote: string;
+}): Promise<MutationResult<{ filing: ExternalFilingRecord; verification: ExternalFilingStatusCheckRecord }>> {
+  const client = getSupabaseBrowser();
+  if (!client) return { data: null, error: new Error("Supabase client unavailable") };
+  const { data, error } = await client.rpc("rpc_verify_external_filing_status", {
+    p_external_filing_id: params.externalFilingId,
+    p_verified_status: params.verifiedStatus,
+    p_source_name: params.sourceName,
+    p_source_url: params.sourceUrl,
+    p_verification_note: params.verificationNote,
+  });
+  if (error || !data || typeof data !== "object") {
+    return { data: null, error: new Error(error?.message ?? "External filing verification was not confirmed by the database.") };
+  }
+  const result = data as Record<string, unknown>;
+  if (!result.filing || typeof result.filing !== "object" || !result.verification || typeof result.verification !== "object") {
+    return { data: null, error: new Error("The database returned an incomplete filing verification result.") };
+  }
+  return {
+    data: {
+      filing: externalFilingRowToDomain(result.filing as Record<string, unknown>),
+      verification: externalFilingStatusCheckRowToDomain(result.verification as Record<string, unknown>),
     },
     error: null,
   };

@@ -5,6 +5,7 @@ import {
   auditEventRowToDomain, commitmentRowToDomain, coordinationRequestRowToDomain,
   customerRequestRowToDomain, decisionRowToDomain, documentAgencyReviewRowToDomain,
   documentRowToDomain, documentVersionRowToDomain, externalFilingRowToDomain,
+  externalFilingStatusCheckRowToDomain,
   meetingRowToDomain, notificationRowToDomain, organizationRowToDomain, permitTypeRowToDomain, workflowStageRowToDomain,
   projectParticipantRowToDomain, requirementResourceRowToDomain, rfiResponseRowToDomain,
   rfiRowToDomain, stageRunRowToDomain, taskRowToDomain, userProfileRowToDomain, workstreamRowToDomain, organizationMembershipRowToDomain,
@@ -19,6 +20,7 @@ import type {
   WorkstreamRecord, WorkflowTemplateRecord, OrganizationMembershipRecord,
 } from "../domain-models";
 import { isProjectUuid, legacyProjectReferences, normalizeProjectReference } from "../project-identifiers";
+import { summarizeProjectWorkstreams, type ProjectWorkstreamCounts } from "../project-portfolio";
 
 type QueryClient = NonNullable<ReturnType<typeof getSupabaseBrowser>>;
 type ProjectScope = { id: string; number: string; keys: string[] };
@@ -41,6 +43,10 @@ export type AccessibleProject = {
   id: string;
   number: string;
   name: string;
+  status: string;
+  risk: string;
+  targetDate: string | null;
+  workstreamCounts?: ProjectWorkstreamCounts;
   projectType: string | null;
   leadOrganizationId: string | null;
   customerOrganizationId: string | null;
@@ -52,22 +58,37 @@ export async function fetchAccessibleProjects(queryClient?: QueryClient): Promis
   const client = queryClient ?? getSupabaseBrowser();
   if (!client) return noClient("list accessible projects");
   const { data, error } = await client.from("projects")
-    .select("id, number, name, project_type, lead_organization_id, customer_organization_id, customer_organizations(name)")
+    .select("id, number, name, status, risk, target_date, project_type, lead_organization_id, customer_organization_id, customer_organizations(name)")
     .order("name", { ascending: true });
   if (error) {
     recordQueryFailure("list accessible projects", error);
     return [];
   }
+  const visibleProjectIds = (data ?? []).map((project) => String(project.id));
+  const workstreamResult = visibleProjectIds.length > 0
+    ? await client.from("workstreams").select("project_id, operational_state").in("project_id", visibleProjectIds)
+    : { data: [], error: null };
+  if (workstreamResult.error) recordQueryFailure("summarize accessible project workstreams", workstreamResult.error);
+  const workstreamCounts = workstreamResult.error ? undefined : summarizeProjectWorkstreams(workstreamResult.data ?? [], visibleProjectIds);
   return (data ?? []).map((project) => ({
     id: String(project.id),
     number: String(project.number),
     name: String(project.name),
+    status: String(project.status ?? "active"),
+    risk: String(project.risk ?? "normal"),
+    targetDate: project.target_date == null ? null : String(project.target_date),
+    workstreamCounts: workstreamCounts?.[String(project.id)],
     projectType: project.project_type == null ? null : String(project.project_type),
     leadOrganizationId: project.lead_organization_id == null ? null : String(project.lead_organization_id),
     customerOrganizationId: project.customer_organization_id == null ? null : String(project.customer_organization_id),
     customerOrganizationName: project.customer_organizations?.[0]?.name == null ? null : String(project.customer_organizations[0].name),
   }));
 }
+
+export type AccessibleProjectChoice = Pick<ProjectSummary, "id" | "number" | "name" | "status" | "risk"> & {
+  targetDate?: string | null;
+  workstreamCounts?: ProjectWorkstreamCounts;
+};
 
 export type ProjectCreationOrganization = { id: string; code: string; name: string };
 export type ProjectCreationCustomerOrganization = { id: string; name: string };
@@ -234,6 +255,32 @@ export async function fetchProjectSummary(projectId: string, queryClient?: Query
   };
 }
 
+/** Lists only project rows visible through the caller's existing RLS policies. */
+export async function fetchAccessibleProjectChoices(queryClient?: QueryClient): Promise<AccessibleProjectChoice[]> {
+  const client = queryClient ?? getSupabaseBrowser();
+  if (!client) return [];
+  const { data, error } = await client.from("projects").select("id, number, name, status, risk, target_date").order("name", { ascending: true });
+  if (error || !data) {
+    console.warn("Could not load the RLS-visible project list:", error ?? "No accessible project data returned");
+    return [];
+  }
+  const projectIds = data.map((row) => String(row.id));
+  const workstreamRes = projectIds.length
+    ? await client.from("workstreams").select("project_id, operational_state").in("project_id", projectIds)
+    : { data: [], error: null };
+  if (workstreamRes.error) console.warn("Portfolio workload totals are unavailable:", workstreamRes.error);
+  const workstreamCounts = workstreamRes.error ? {} : summarizeProjectWorkstreams(workstreamRes.data ?? [], projectIds);
+  return data.map((row) => ({
+    id: String(row.id),
+    number: String(row.number),
+    name: String(row.name),
+    status: String(row.status ?? "active"),
+    risk: String(row.risk ?? "normal"),
+    targetDate: row.target_date == null ? null : String(row.target_date),
+    workstreamCounts: workstreamCounts[String(row.id)],
+  }));
+}
+
 function noClient<T>(operation: string): T[] {
   recordQueryFailure(operation, "Supabase client unavailable or not configured");
   return [];
@@ -300,12 +347,21 @@ export async function fetchExternalFilings(projectId: string): Promise<ExternalF
   if (!client) return noClient("fetch external filings");
   const scope = await resolveProjectScope(client, projectId);
   if (!scope) return [];
-  const { data, error } = await client.from("external_filings").select("*").in("project_id", scope.keys).order("created_at", { ascending: false });
-  if (error || !data) {
-    recordQueryFailure("fetch external filings", error ?? "No external filing data returned");
+  const [filingRes, checkRes] = await Promise.all([
+    client.from("external_filings").select("*").in("project_id", scope.keys).order("created_at", { ascending: false }),
+    client.from("external_filing_status_checks").select("*").in("project_id", scope.keys).order("verified_at", { ascending: false }),
+  ]);
+  if (filingRes.error || !filingRes.data) {
+    recordQueryFailure("fetch external filings", filingRes.error ?? "No external filing data returned");
     return [];
   }
-  return data.map(externalFilingRowToDomain);
+  if (checkRes.error) recordQueryFailure("fetch external filing status checks", checkRes.error);
+  const checks = (checkRes.data ?? []).map(externalFilingStatusCheckRowToDomain);
+  return filingRes.data.map((row) => {
+    const filing = externalFilingRowToDomain(row);
+    filing.statusChecks = checks.filter((check) => check.externalFilingId === filing.id);
+    return filing;
+  });
 }
 
 async function workstreamIdsForProject(client: QueryClient, projectId: string): Promise<string[]> {

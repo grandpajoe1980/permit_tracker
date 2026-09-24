@@ -377,11 +377,31 @@ export interface ExternalFilingRecord {
   submittedByName?: string;
   lastStatusVerifiedAt?: string;
   lastStatusVerifiedBy?: string;
+  lastStatusVerificationSourceName?: string;
+  lastStatusVerificationSourceUrl?: string;
+  lastStatusVerificationNote?: string;
   authoritativeSystemName?: string;
   notes?: string;
   receiptDocumentVersionIds: string[];
+  statusChecks?: ExternalFilingStatusCheckRecord[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ExternalFilingStatusCheckRecord {
+  id: string;
+  externalFilingId: string;
+  projectId: string;
+  previousStatus: ExternalFilingRecord["externalStatus"];
+  verifiedStatus: ExternalFilingRecord["externalStatus"];
+  sourceName: string;
+  sourceUrl: string;
+  verificationNote: string;
+  verifiedByUserId?: string;
+  verifiedByName: string;
+  verifiedByOrganizationId?: string;
+  verifiedByOrganizationName: string;
+  verifiedAt: string;
 }
 
 export interface CustomerRequestRecord {

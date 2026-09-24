@@ -10,6 +10,7 @@ import type {
   DocumentRecord,
   DocumentVersionRecord,
   ExternalFilingRecord,
+  ExternalFilingStatusCheckRecord,
   MeetingRecord,
   OrganizationRecord,
   OrganizationMembershipRecord,
@@ -730,11 +731,32 @@ export function externalFilingRowToDomain(row: Row): ExternalFilingRecord {
     submittedByName: str(row.submitted_by_name) || undefined,
     lastStatusVerifiedAt: str(row.last_status_verified_at) || undefined,
     lastStatusVerifiedBy: str(row.last_status_verified_by) || undefined,
+    lastStatusVerificationSourceName: str(row.last_status_verification_source) || undefined,
+    lastStatusVerificationSourceUrl: str(row.last_status_verification_url) || undefined,
+    lastStatusVerificationNote: str(row.last_status_verification_note) || undefined,
     authoritativeSystemName: str(row.authoritative_system_name) || undefined,
     notes: str(row.notes) || undefined,
     receiptDocumentVersionIds: arr<string>(row.receipt_document_version_ids),
     createdAt: str(row.created_at || new Date().toISOString()),
     updatedAt: str(row.updated_at || new Date().toISOString()),
+  };
+}
+
+export function externalFilingStatusCheckRowToDomain(row: Row): ExternalFilingStatusCheckRecord {
+  return {
+    id: str(row.id),
+    externalFilingId: str(row.external_filing_id),
+    projectId: str(row.project_id),
+    previousStatus: str(row.previous_status, "not_started") as ExternalFilingStatusCheckRecord["previousStatus"],
+    verifiedStatus: str(row.verified_status, "not_started") as ExternalFilingStatusCheckRecord["verifiedStatus"],
+    sourceName: str(row.source_name),
+    sourceUrl: str(row.source_url),
+    verificationNote: str(row.verification_note),
+    verifiedByUserId: str(row.verified_by_user_id) || undefined,
+    verifiedByName: str(row.verified_by_name, "Authenticated user"),
+    verifiedByOrganizationId: str(row.verified_by_organization_id) || undefined,
+    verifiedByOrganizationName: str(row.verified_by_organization_name, "Issuing authority"),
+    verifiedAt: str(row.verified_at),
   };
 }
 

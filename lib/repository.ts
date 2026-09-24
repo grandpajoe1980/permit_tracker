@@ -10,6 +10,7 @@ import type {
   DocumentRecord,
   DocumentVersionRecord,
   ExternalFilingRecord,
+  ExternalFilingStatusCheckRecord,
   MeetingRecord,
   OrganizationRecord,
   NotificationRecord,
@@ -101,6 +102,7 @@ import {
   mutateCreateCustomerRequestWithDocument,
   mutateSaveWorkflowAutomationConfig,
   mutateCreateExternalFiling,
+  mutateVerifyExternalFilingStatus,
   mutateCreateRFI,
   mutateCreateWorkstreamFromRequest,
   mutateEscalateWorkstream,
@@ -1613,6 +1615,51 @@ class ProjectDeliveryRepository {
     if (result.error || !result.data) return { data: null, error: result.error ?? new Error("External filing was not persisted.") };
     this.externalFilings = [result.data, ...this.externalFilings.filter((entry) => entry.id !== result.data?.id)];
     return result;
+  }
+
+  async verifyExternalFilingStatusPersisted(params: {
+    externalFilingId: string;
+    verifiedStatus: ExternalFilingRecord["externalStatus"];
+    sourceName: string;
+    sourceUrl: string;
+    verificationNote: string;
+    verifiedByUserId: string;
+    verifiedByName: string;
+    verifiedByOrganizationId: string;
+    verifiedByOrganizationName: string;
+  }): Promise<{ data: ExternalFilingStatusCheckRecord | null; error: Error | null }> {
+    if (!isSupabaseConfigured()) {
+      if (!allowsFixtureData()) return { data: null, error: new Error("Supabase is required in production mode.") };
+      const filing = this.externalFilings.find((entry) => entry.id === params.externalFilingId);
+      if (!filing) return { data: null, error: new Error("External filing not found.") };
+      const check: ExternalFilingStatusCheckRecord = {
+        id: `status-check-${crypto.randomUUID()}`,
+        externalFilingId: filing.id,
+        projectId: filing.projectId,
+        previousStatus: filing.externalStatus,
+        verifiedStatus: params.verifiedStatus,
+        sourceName: params.sourceName.trim(),
+        sourceUrl: params.sourceUrl.trim(),
+        verificationNote: params.verificationNote.trim(),
+        verifiedByUserId: params.verifiedByUserId,
+        verifiedByName: params.verifiedByName,
+        verifiedByOrganizationId: params.verifiedByOrganizationId,
+        verifiedByOrganizationName: params.verifiedByOrganizationName,
+        verifiedAt: new Date().toISOString(),
+      };
+      filing.externalStatus = params.verifiedStatus;
+      filing.lastStatusVerifiedAt = check.verifiedAt;
+      filing.lastStatusVerifiedBy = params.verifiedByUserId;
+      filing.lastStatusVerificationSourceName = check.sourceName;
+      filing.lastStatusVerificationSourceUrl = check.sourceUrl;
+      filing.lastStatusVerificationNote = check.verificationNote;
+      filing.statusChecks = [check, ...(filing.statusChecks ?? [])];
+      return { data: check, error: null };
+    }
+    const result = await mutateVerifyExternalFilingStatus(params);
+    if (result.error || !result.data) return { data: null, error: result.error ?? new Error("External filing verification was not confirmed by the database.") };
+    await this.refreshFromSupabase();
+    return { data: result.data.verification, error: null };
   }
 
   updateExternalFiling(

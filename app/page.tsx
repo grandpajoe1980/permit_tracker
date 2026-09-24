@@ -50,6 +50,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { AdminDirectory } from "@/components/admin/AdminDirectory";
 import { AdminExplorer } from "@/components/admin/AdminExplorer";
+import { ExternalFilingVerificationPanel } from "@/components/admin/ExternalFilingVerificationPanel";
 import { DocumentViewerModal } from "@/components/documents/DocumentViewerModal";
 import type { CustomerRequestRecord, DocumentRecord, DocumentVersionRecord, ExternalFilingRecord, ITSMState } from "@/lib/domain-models";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -153,7 +154,7 @@ import {
 
 type Route = AppRoute;
 type SecondaryTool = "schedule" | "vault" | "catalog";
-type ProjectSection = "overview" | SecondaryTool;
+type ProjectSection = "overview" | "portfolio" | SecondaryTool;
 type DialogState = { action: WorkActionId; itemId: string } | null;
 type ShellHistoryState = {
   route: Route;
@@ -177,7 +178,7 @@ type ShellHistoryState = {
 };
 
 function isProjectSection(value: unknown): value is ProjectSection {
-  return value === "overview" || value === "schedule" || value === "vault" || value === "catalog";
+  return value === "overview" || value === "portfolio" || value === "schedule" || value === "vault" || value === "catalog";
 }
 
 function userIdForPersona(id: string) {
@@ -588,6 +589,8 @@ export default function Home() {
         : "No routing rule matches these answers. The project office will review and route the request."
       : "No automatic routing rule is published for this workflow. The project office will review and route the request.";
   const projectOverview: ProjectOverview = getProjectOverview(projectRecord, repository.getWorkstreams(), repository.getCustomerRequests(), repository.getExternalFilings());
+  const normalizedProjectReference = normalizeProjectReference(projectReference);
+  const activeProjectNumber = accessibleProjects.find((project) => project.id === normalizedProjectReference || project.number === normalizedProjectReference)?.number ?? normalizedProjectReference ?? "";
   const currentProfile = repository.getProfileByUserId(userIdForPersona(activePersona.id)) ?? (allowsFixtureData() ? projectProfiles.find((profile) => profile.fullName === activePersona.name) : undefined);
 
   function activeProjectReference() {
@@ -939,9 +942,9 @@ export default function Home() {
 
   function openProjectSection(section: ProjectSection) {
     const focusedWorkstreamId = selectedProjectWorkstreamId ?? undefined;
-    pushNavigation(buildShellPath("project", focusedWorkstreamId, section === "overview" ? undefined : section, undefined, projectReference), { ...currentHistoryState(), route: "project", projectSection: section, secondaryTool: section === "overview" ? secondaryTool : section, selectedItemId: null, selectedProjectWorkstreamId: selectedProjectWorkstreamId, scrollY: 0 });
+    pushNavigation(buildShellPath("project", focusedWorkstreamId, section === "overview" ? undefined : section, undefined, projectReference), { ...currentHistoryState(), route: "project", projectSection: section, secondaryTool: section === "schedule" || section === "vault" || section === "catalog" ? section : secondaryTool, selectedItemId: null, selectedProjectWorkstreamId: selectedProjectWorkstreamId, scrollY: 0 });
     setProjectSection(section);
-    if (section !== "overview") setSecondaryTool(section);
+    if (section === "schedule" || section === "vault" || section === "catalog") setSecondaryTool(section);
     setRoute("project");
     setSelectedItemId(null);
     setRequestedWorkItemPath(null);
@@ -949,9 +952,9 @@ export default function Home() {
   }
 
   function openProject(workstreamId?: string, section: ProjectSection = "overview") {
-    pushNavigation(buildShellPath("project", workstreamId, section === "overview" ? undefined : section, undefined, projectReference), { ...currentHistoryState(), route: "project", projectSection: section, secondaryTool: section === "overview" ? secondaryTool : section, selectedItemId: null, selectedProjectWorkstreamId: workstreamId ?? null, selectedProjectPhase: null, scrollY: 0 });
+    pushNavigation(buildShellPath("project", workstreamId, section === "overview" ? undefined : section, undefined, projectReference), { ...currentHistoryState(), route: "project", projectSection: section, secondaryTool: section === "schedule" || section === "vault" || section === "catalog" ? section : secondaryTool, selectedItemId: null, selectedProjectWorkstreamId: workstreamId ?? null, selectedProjectPhase: null, scrollY: 0 });
     setProjectSection(section);
-    if (section !== "overview") setSecondaryTool(section);
+    if (section === "schedule" || section === "vault" || section === "catalog") setSecondaryTool(section);
     setSelectedItemId(null);
     setSelectedProjectWorkstreamId(workstreamId ?? null);
     setSelectedProjectPhase(null);
@@ -1049,9 +1052,9 @@ export default function Home() {
     return selected;
   }
 
-  async function switchProject(number: string) {
-    const nextProject = accessibleProjects.find((project) => project.number === number);
-    if (number === projectReference || !nextProject) return;
+  async function switchProject(projectNumber: string) {
+    const choice = accessibleProjects.find((project) => project.number === projectNumber);
+    if (projectNumber === projectReference || !choice) return;
     const previous = projectReference;
     setLoadingData(true);
     setHydrationError("");
@@ -1081,8 +1084,8 @@ export default function Home() {
     setIntakeValidationErrors([]);
     setRequestFileInputKey((value) => value + 1);
     const recovery = readCustomerSubmissionRecovery();
-    setPendingFilingRecovery(recovery?.projectId === nextProject.id ? recovery : null);
-    const loaded = await repository.hydrateFromSupabase(number);
+    setPendingFilingRecovery(recovery?.projectId === choice.id ? recovery : null);
+    const loaded = await repository.hydrateFromSupabase(choice.number);
     if (!loaded) {
       const restored = previous ? await repository.hydrateFromSupabase(previous) : false;
       if (!restored) setHydrationError("The selected project could not load. Refresh the page or contact an administrator.");
@@ -1090,18 +1093,14 @@ export default function Home() {
       setLoadingData(false);
       return;
     }
-    const requests = await loadRequestsForUser(number);
+    const requests = await loadRequestsForUser(choice.number);
     setUserPermits(requests.permits);
-    setProjectReference(number);
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.set("projectId", number);
-      window.history.pushState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
-    }
-    if (recovery?.projectId === nextProject.id) {
+    pushNavigation(buildShellPath("project", undefined, undefined, undefined, choice.number), { ...currentHistoryState(), route: "project", projectSection: "overview", selectedItemId: null, selectedProjectWorkstreamId: null, selectedProjectPhase: null, scrollY: 0 });
+    setProjectReference(choice.number);
+    if (recovery?.projectId === choice.id) {
       setLastSubmittedRequest(repository.getCustomerRequests().find((request) => request.id === recovery.requestId || request.confirmationNumber === recovery.confirmationNumber) ?? null);
     }
-    setRoute(activePersona.isCustomer ? "customer-home" : "my-work");
+    setRoute("project");
     setProjectSection("overview");
     setMutationVersion((value) => value + 1);
     setLoadingData(false);
@@ -2194,7 +2193,10 @@ export default function Home() {
     }
 
     if (dialog.action === "upload_documents") {
-      notify("The secure document upload handoff is ready. The project team can now attach the requested revision.");
+      setDialog(null);
+      openProjectSection("vault");
+      showToast("No file was uploaded. Use Project documents to add the revision, then return to this work item.", "info");
+      return;
     }
   }
 
@@ -2657,14 +2659,19 @@ export default function Home() {
                   </div>
                   <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-4">
                     <span>Agency record ID: <strong>{filing?.externalReferenceNumber ?? "Not recorded"}</strong></span>
-                    <span>PATH-entered external status: <strong>{filing?.externalStatus?.replaceAll("_", " ") ?? "No filing recorded"}</strong></span>
+                    <span>{filing?.lastStatusVerifiedAt ? "Authority-verified external status" : "PATH-entered external status"}: <strong>{filing?.externalStatus?.replaceAll("_", " ") ?? "No filing recorded"}</strong></span>
                     <span>Submitted: <strong>{formatDate(filing?.submittedAt)}</strong></span>
                     <span>PATH target: <strong>{formatDate(pathRequest?.desiredDate ?? demoPermit?.targetDate)}</strong></span>
                   </div>
-                  {filing && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
-                    <p><strong>Source:</strong> Entered in PATH by {filing.submittedByName ?? "a project participant"}. Agency system: {filing.authoritativeSystemName ?? permit.responsibleOrgCode}. PATH record updated {formatDate(filing.updatedAt)}.</p>
-                    <p className="mt-1">PATH does not synchronize this status with the agency. Confirm the current decision in the agency record or with the issuing authority.</p>
-                    {recordUrl && <a href={recordUrl} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 font-bold text-amber-950 underline">Open agency record <ExternalLink className="size-3" /></a>}
+                  {filing && <div className={`mt-3 rounded-lg border p-3 text-xs ${filing.lastStatusVerifiedAt ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-amber-200 bg-amber-50 text-amber-950"}`}>
+                    <p><strong>PATH record:</strong> Entered by {filing.submittedByName ?? "a project participant"}. Agency system: {filing.authoritativeSystemName ?? permit.responsibleOrgCode}. Updated {formatDate(filing.updatedAt)}.</p>
+                    {filing.lastStatusVerifiedAt ? <>
+                      <p className="mt-1"><strong>Independent verification:</strong> {filing.lastStatusVerificationSourceName ?? "Issuing authority source"} · {formatDate(filing.lastStatusVerifiedAt)} · {filing.statusChecks?.[0]?.verifiedByName ?? "authorized authority administrator"}.</p>
+                      {filing.lastStatusVerificationNote && <p className="mt-1"><strong>Note:</strong> {filing.lastStatusVerificationNote}</p>}
+                      {filing.lastStatusVerificationSourceUrl && <a href={filing.lastStatusVerificationSourceUrl} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 font-bold underline">Open verification evidence <ExternalLink className="size-3" /></a>}
+                      <p className="mt-1">PATH does not synchronize agency systems; this is the latest documented observation, not a live status feed.</p>
+                    </> : <p className="mt-1">This PATH-entered status has not been independently verified. Confirm the current decision in the agency record or with the issuing authority.</p>}
+                    {recordUrl && <a href={recordUrl} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 font-bold underline">Open agency record <ExternalLink className="size-3" /></a>}
                   </div>}
                   <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs">
                     <p className="font-black uppercase tracking-wider text-slate-500">Reference resources</p>
@@ -2826,7 +2833,7 @@ export default function Home() {
   }
 
   function renderHelp() {
-    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer assistance</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Help and escalation</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Use a structured request when a normal project question is not enough. A PATH confirmation number lets you track the response through acknowledgement and resolution.</p></div><div className="grid gap-4 md:grid-cols-3"><Card><CardHeader><CardTitle className="text-base font-black text-[#00284d]">State concierge</CardTitle></CardHeader><CardContent><p className="text-sm font-black">Sarah Johnson</p><p className="mt-1 text-xs text-slate-600">State Project Manager · Louisiana Governor&apos;s Office of Major Projects &amp; Delivery</p><a href="mailto:sarah.johnson@la.gov" className="mt-3 inline-block text-xs font-bold text-teal-800">sarah.johnson@la.gov</a></CardContent></Card><Card><CardHeader><CardTitle className="text-base font-black text-[#00284d]">Request assistance</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">Ask for help, report a blocker, or request a project-office response.</p><Button type="button" onClick={() => { setRequestCenterMode("service"); navigate("requests"); }} className="mt-4 bg-[#00284d] text-xs font-bold">Start help request</Button></CardContent></Card><Card><CardHeader><CardTitle className="text-base font-black text-[#00284d]">Critical-path escalation</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">For delayed government dependencies or schedule risk requiring acknowledgement.</p><Button type="button" onClick={() => { setRequestCenterMode("escalation"); navigate("requests"); }} className="mt-4 bg-amber-700 text-xs font-bold hover:bg-amber-800">Request escalation</Button></CardContent></Card></div><Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">What happens after submission</CardTitle></CardHeader><CardContent><ol className="grid gap-3 text-sm text-slate-700 sm:grid-cols-4"><li><strong>1. Submitted</strong><br />PATH issues a confirmation.</li><li><strong>2. Triaged</strong><br />The State Project Office routes the request.</li><li><strong>3. Acknowledged</strong><br />A project participant records the next action.</li><li><strong>4. Resolved</strong><br />You receive a customer-safe update.</li></ol></CardContent></Card></div>;
+    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Customer assistance</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Help and escalation</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Use a structured request when a normal project question is not enough. A PATH confirmation number lets you track the response through acknowledgement and resolution.</p></div><div className="grid gap-4 md:grid-cols-3"><Card><CardHeader><CardTitle className="text-base font-black text-[#00284d]">State concierge</CardTitle></CardHeader><CardContent><p className="text-sm font-black">Project support team</p><p className="mt-1 text-xs text-slate-600">Submit an assistance request to reach the team assigned to your project.</p></CardContent></Card><Card><CardHeader><CardTitle className="text-base font-black text-[#00284d]">Request assistance</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">Ask for help, report a blocker, or request a project-office response.</p><Button type="button" onClick={() => { setRequestCenterMode("service"); navigate("requests"); }} className="mt-4 bg-[#00284d] text-xs font-bold">Start help request</Button></CardContent></Card><Card><CardHeader><CardTitle className="text-base font-black text-[#00284d]">Critical-path escalation</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">For delayed government dependencies or schedule risk requiring acknowledgement.</p><Button type="button" onClick={() => { setRequestCenterMode("escalation"); navigate("requests"); }} className="mt-4 bg-amber-700 text-xs font-bold hover:bg-amber-800">Request escalation</Button></CardContent></Card></div><Card><CardHeader><CardTitle className="text-lg font-black text-[#00284d]">What happens after submission</CardTitle></CardHeader><CardContent><ol className="grid gap-3 text-sm text-slate-700 sm:grid-cols-4"><li><strong>1. Submitted</strong><br />PATH issues a confirmation.</li><li><strong>2. Triaged</strong><br />The State Project Office routes the request.</li><li><strong>3. Acknowledged</strong><br />A project participant records the next action.</li><li><strong>4. Resolved</strong><br />You receive a customer-safe update.</li></ol></CardContent></Card></div>;
   }
 
   function renderNotifications() {
@@ -2871,17 +2878,73 @@ export default function Home() {
   function renderLegacyProject() {
     if (activePersona.isCustomer) return renderCustomerOverview();
     const workload = getAgencyWorkload(userPermits);
-    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">{PROJECT_DISPLAY_NAME}</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Project context</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Vermilion Parish, Louisiana · shared operational context for the project team.</p></div><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-red-200 bg-red-50 p-4"><p className="text-xs font-black uppercase text-red-800">Blocked / at risk</p><p className="mt-2 text-3xl font-black text-red-950">{ragSummary.red}</p></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-black uppercase text-amber-800">Attention</p><p className="mt-2 text-3xl font-black text-amber-950">{ragSummary.yellow}</p></div><div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-black uppercase text-emerald-800">On track</p><p className="mt-2 text-3xl font-black text-emerald-950">{ragSummary.green}</p></div></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Building2 className="size-5 text-teal-700" /> Agency Workload</CardTitle></CardHeader><CardContent className="space-y-3">{workload.slice(0, 8).map((agency) => <div key={agency.agencyCode} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{agency.agencyCode}</p><p className="text-xs text-slate-500">{agency.agencyLevel} · {agency.agencyName}</p></div><div className="text-right text-xs font-bold text-slate-700">{agency.count} workstreams · {agency.blockedCount} blocked</div></div>)}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Route className="size-5 text-teal-700" /> Gantt and dependencies</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">Open the schedule to review the critical path, baseline, forecast, and agency dependencies.</p><Button type="button" onClick={() => navigateSecondary("schedule")} className="mt-4 bg-[#00284d] font-bold">Open Gantt <ArrowRight className="size-4" aria-hidden="true" /></Button></CardContent></Card></div>;
+    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">{projectRecord.name}</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Project context</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{projectRecord.parish}, Louisiana · shared operational context for the project team.</p></div><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-red-200 bg-red-50 p-4"><p className="text-xs font-black uppercase text-red-800">Blocked / at risk</p><p className="mt-2 text-3xl font-black text-red-950">{ragSummary.red}</p></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-black uppercase text-amber-800">Attention</p><p className="mt-2 text-3xl font-black text-amber-950">{ragSummary.yellow}</p></div><div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-black uppercase text-emerald-800">On track</p><p className="mt-2 text-3xl font-black text-emerald-950">{ragSummary.green}</p></div></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Building2 className="size-5 text-teal-700" /> Agency Workload</CardTitle></CardHeader><CardContent className="space-y-3">{workload.slice(0, 8).map((agency) => <div key={agency.agencyCode} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{agency.agencyCode}</p><p className="text-xs text-slate-500">{agency.agencyLevel} · {agency.agencyName}</p></div><div className="text-right text-xs font-bold text-slate-700">{agency.count} workstreams · {agency.blockedCount} blocked</div></div>)}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><Route className="size-5 text-teal-700" /> Gantt and dependencies</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">Open the schedule to review the critical path, baseline, forecast, and agency dependencies.</p><Button type="button" onClick={() => navigateSecondary("schedule")} className="mt-4 bg-[#00284d] font-bold">Open Gantt <ArrowRight className="size-4" aria-hidden="true" /></Button></CardContent></Card></div>;
   }
 
   function renderProjectWorkspace(section: ProjectSection) {
-    const tabs: Array<[ProjectSection, string]> = [["overview", "Project overview"], ["schedule", "Schedule"], ["vault", "Project documents"]];
+    const tabs: Array<[ProjectSection, string]> = [["overview", "Project overview"]];
+    if (accessibleProjects.length > 1) tabs.push(["portfolio", "Project portfolio"]);
+    tabs.push(["schedule", "Schedule"], ["vault", "Project documents"]);
     if (section === "catalog") tabs.push(["catalog", "Services & permits"]);
     return <div className="space-y-5">
       <nav aria-label="Project context" className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
         {tabs.map(([tab, label]) => <Button key={tab} type="button" variant={section === tab ? "default" : "ghost"} onClick={() => openProjectSection(tab)} className="text-xs font-bold">{label}</Button>)}
       </nav>
-      {section === "overview" && <ProjectOverviewPage project={projectRecord} customerOrganizationName={customerOrganizationName} customerSafe={activePersona.isCustomer} workflowTemplates={repository.getWorkflowTemplates()} focusedWorkstreamId={selectedProjectWorkstreamId} onFocusWorkstream={(workstreamId) => openProject(workstreamId ?? undefined)} onOpenSchedule={() => openProjectSection("schedule")} />}
+      {section === "overview" && <>
+        <ProjectOverviewPage project={projectRecord} customerOrganizationName={customerOrganizationName} customerSafe={activePersona.isCustomer} workflowTemplates={repository.getWorkflowTemplates()} focusedWorkstreamId={selectedProjectWorkstreamId} onFocusWorkstream={(workstreamId) => openProject(workstreamId ?? undefined)} onOpenSchedule={() => openProjectSection("schedule")} />
+        {!activePersona.isCustomer && <ExternalFilingVerificationPanel
+          filings={repository.getExternalFilings().filter((filing) => filing.projectId === projectRecord.id)}
+          workstreams={repository.getWorkstreams().filter((workstream) => workstream.projectId === projectRecord.id)}
+          documents={repository.getDocuments().filter((document) => document.projectId === projectRecord.id)}
+          memberships={repository.getOrganizationMemberships()}
+          organizations={repository.getOrganizations()}
+          userId={actorUserId()}
+          actorName={activePersona.name}
+          onDownloadReceipt={(documentId, versionId) => void downloadVersion(documentId, versionId)}
+          onVerify={async (input) => {
+            const result = await repository.verifyExternalFilingStatusPersisted(input);
+            if (result.error) return result.error.message;
+            setMutationVersion((value) => value + 1);
+            showToast("Authority status verification recorded with source evidence.");
+            return null;
+          }}
+        />}
+      </>}
+      {section === "portfolio" && <section aria-labelledby="project-portfolio-title" className="space-y-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">RLS-visible projects</p>
+          <h1 id="project-portfolio-title" className="mt-1 text-2xl font-black text-[#00284d]">Project portfolio</h1>
+          <p className="mt-1 max-w-3xl text-sm text-slate-600">Choose a project to open its isolated workspace. PATH loads one project scope at a time; this directory does not combine project records or metrics.</p>
+        </div>
+        {accessibleProjects.length > 0 ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {accessibleProjects.map((project) => {
+            const isCurrent = project.id === normalizedProjectReference || project.number === normalizedProjectReference;
+            return <Card key={project.id} className={isCurrent ? "border-teal-500 bg-teal-50/40" : "border-slate-200"}>
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div><p className="font-mono text-xs font-bold text-slate-500">{project.number}</p><CardTitle className="mt-1 text-base font-black text-[#00284d]">{project.name}</CardTitle></div>
+                  <div className="flex flex-wrap justify-end gap-1"><span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-black uppercase text-slate-600">{project.status.replaceAll("_", " ")}</span><span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-black uppercase text-slate-600">{project.risk.replaceAll("_", " ")} risk</span></div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {project.workstreamCounts ? <div className="rounded-lg bg-slate-50 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Workstream snapshot · visible records</p>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                    <div><p className="text-lg font-black text-[#00284d]">{project.workstreamCounts.open}</p><p className="text-[10px] font-bold text-slate-600">Open</p></div>
+                    <div><p className="text-lg font-black text-amber-800">{project.workstreamCounts.waiting}</p><p className="text-[10px] font-bold text-slate-600">Waiting</p></div>
+                    <div><p className="text-lg font-black text-red-800">{project.workstreamCounts.blocked}</p><p className="text-[10px] font-bold text-slate-600">Blocked</p></div>
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-600">Completed: {project.workstreamCounts.completed} · Target: {formatDate(project.targetDate ?? undefined)}</p>
+                </div> : <p className="text-xs text-slate-500">Workload totals are unavailable.</p>}
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold text-slate-600">{isCurrent ? "Currently open" : "Available to your account"}</p>
+                  <Button type="button" size="sm" variant={isCurrent ? "outline" : "default"} onClick={() => isCurrent ? openProject() : switchProject(project.number)} className="shrink-0 font-bold">{isCurrent ? "Open project" : "Switch project"}</Button>
+                </div>
+              </CardContent>
+            </Card>;
+          })}
+        </div> : <div role="status" className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">No other project records are currently visible to this account.</div>}
+      </section>}
       {section === "schedule" && <div className="space-y-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Project context · Schedule</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Schedule</h1><p className="mt-2 text-sm text-slate-600">Baseline, forecast, dependencies, and parallel active stages for {projectRecord.name}. Open a workstream, stage, or task to view its canonical record.</p></div><WorkstreamGraphGantt project={projectRecord} projectReference={activeProjectReference() ?? undefined} customerOrganizationName={customerOrganizationName} customerSafe={activePersona.isCustomer} focusedWorkstreamId={selectedProjectWorkstreamId ?? undefined} focusedPhase={selectedProjectPhase ?? undefined} /></div>}
       {section === "vault" && <div className="space-y-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Project context · Documents</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Project documents</h1><p className="mt-2 text-sm text-slate-600">The same authorized project documents remain in context while you move between workstreams and the schedule.</p></div><DocumentVaultPanel project={projectRecord} onUploadRevision={(documentId, event) => void uploadProjectRevision(documentId, event, activePersona.organization)} onDownloadDocument={(docId, verId) => void downloadVersion(docId, verId)} onSelectWorkstream={(workstreamId) => openProject(workstreamId)} /></div>}
       {section === "catalog" && <div className="space-y-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Services & permits</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Permit catalog</h1></div><PermitCatalogPanel catalog={repository.getCatalog()} templates={repository.getWorkflowTemplates()} onStartRequest={(permitId) => { setSelectedCatalogPermitId(permitId); if (activePersona.isCustomer) { setRequestCenterMode("permit"); navigate("requests"); } else { showToast("Permit selected. Sign in with an authorized customer account to start a request.", "info"); } }} /></div>}
@@ -2910,6 +2973,9 @@ export default function Home() {
           id: createdProject.id,
           number: createdProject.number,
           name: createdProject.name,
+          status: "active",
+          risk: "normal",
+          targetDate: null,
           projectType: null,
           leadOrganizationId: null,
           customerOrganizationId: createdProject.customerOrganizationId ?? null,
@@ -2917,7 +2983,7 @@ export default function Home() {
         }, ...current]);
       }
     }} onOpenProject={(number) => void switchProject(number)} />}<Card id="admin-directory"><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent><AdminDirectory teamUsers={teamUsers} roleDefinitions={roleDefinitions} repository={repository} actorUserId={actorUserId()} onRoleChange={async (userId, roleId) => { const user = teamUsers.find((member) => member.id === userId); if (!user?.organizationId) { if (!allowsFixtureData()) { setToast("This team member has no organization membership to update."); return; } setTeamUsers((current) => current.map((member) => member.id === userId ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user?.name ?? "user"} to ${roleDefinitions[roleId].name}.`); return; } const result = await repository.setOrganizationMemberRolePersisted({ userId, organizationId: user.organizationId, role: membershipRoleForRoleId(roleId) }); if (result.error) { setToast(`Role update failed: ${result.error.message}`); return; } setTeamUsers((current) => current.map((member) => member.id === userId ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user.name} to ${roleDefinitions[roleId].name}.`); }} onMutation={(message) => { setToast(message); setMutationVersion((value) => value + 1); }} /></CardContent></Card><div id="agency-registry"><WorkflowDesignerPanel catalog={repository.getCatalog()} organizations={repository.getOrganizations()} templates={repository.getWorkflowTemplates()} /></div><p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Changes are confirmed by Supabase and audit logged.</p></div>;
-    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Participants, profiles, and roles</h1><p className="mt-2 text-sm text-slate-600">Administrators can manage project participation, profile visibility, roles, workstream responsibility, and access. Ordinary users can edit only their own contact fields.</p></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent className="space-y-3">{teamUsers.map((user) => { const profile = repository.getProfileByUserId(user.id); const participant = repository.getParticipants().find((entry) => entry.userId === user.id); return <div key={user.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{user.name} {user.name === "Joe Skaggs" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] uppercase text-amber-900">Space Czar</span>}</p><p className="text-xs font-bold text-teal-800">{profile?.displayTitle ?? user.displayTitle ?? roleDefinitions[user.roleId].name}</p><p className="text-xs text-slate-500">{profile?.workEmail ?? user.workEmail ?? user.email} · {profile?.organizationName ?? user.organization}</p><p className="mt-1 max-w-xl text-xs text-slate-500">{profile?.organizationalUnit ?? user.organizationalUnit ?? user.agency} · {participant?.workstreamIds.length ?? 0} assigned workstream(s)</p></div><select aria-label={`Role for ${user.name}`} value={user.roleId} onChange={(event) => { const roleId = event.target.value as RoleId; setTeamUsers((current) => current.map((member) => member.id === user.id ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user.name} to ${roleDefinitions[roleId].name}.`); }} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800">{(Object.keys(roleDefinitions) as RoleId[]).map((role) => <option key={role} value={role}>{roleDefinitions[role].name}</option>)}</select></div>; })}<p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}. Joe Skaggs · joe.skaggs@la.gov · Louisiana Economic Development (LED) · Space Czar.</p></CardContent></Card>{repository.getCustomerRequests().length > 0 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-amber-700" /> Customer request triage</CardTitle><p className="text-sm text-slate-600">Escalations, blockers, service requests, and permit tracking records submitted for this project appear here for government-side follow-up.</p></CardHeader><CardContent className="space-y-3">{repository.getCustomerRequests().slice(0, 8).map((request) => <div key={request.id} className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3"><div><p className="text-sm font-black text-amber-950">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-amber-900">{request.requestType.replaceAll("_", " ")} · {request.description}</p><p className="mt-1 text-xs text-amber-800">{request.submittedByName} · {request.locationOrAffectedArea ?? "Project-wide"}</p></div><span className="rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-900">{request.status}</span></div>)}</CardContent></Card>}</div>;
+    return <div className="space-y-6"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-teal-800">Authorized administration</p><h1 className="mt-2 text-3xl font-black text-[#00284d] outline-none">Participants, profiles, and roles</h1><p className="mt-2 text-sm text-slate-600">Administrators can manage project participation, profile visibility, roles, workstream responsibility, and access. Ordinary users can edit only their own contact fields.</p></div><Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><UserCog className="size-5 text-teal-700" /> Team access and project participants</CardTitle></CardHeader><CardContent className="space-y-3">{teamUsers.map((user) => { const profile = repository.getProfileByUserId(user.id); const participant = repository.getParticipants().find((entry) => entry.userId === user.id); return <div key={user.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div><p className="text-sm font-black text-[#00284d]">{user.name}</p><p className="text-xs font-bold text-teal-800">{profile?.displayTitle ?? user.displayTitle ?? roleDefinitions[user.roleId].name}</p><p className="text-xs text-slate-500">{profile?.workEmail ?? user.workEmail ?? user.email} · {profile?.organizationName ?? user.organization}</p><p className="mt-1 max-w-xl text-xs text-slate-500">{profile?.organizationalUnit ?? user.organizationalUnit ?? user.agency} · {participant?.workstreamIds.length ?? 0} assigned workstream(s)</p></div><select aria-label={`Role for ${user.name}`} value={user.roleId} onChange={(event) => { const roleId = event.target.value as RoleId; setTeamUsers((current) => current.map((member) => member.id === user.id ? { ...member, roleId, permissions: roleDefinitions[roleId].defaultPermissions } : member)); setToast(`Updated ${user.name} to ${roleDefinitions[roleId].name}.`); }} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800">{(Object.keys(roleDefinitions) as RoleId[]).map((role) => <option key={role} value={role}>{roleDefinitions[role].name}</option>)}</select></div>; })}<p className="text-xs text-slate-500">Current administrator: {firstUser?.name ?? "PATH administrator"}.</p></CardContent></Card>{repository.getCustomerRequests().length > 0 && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-lg font-black text-[#00284d]"><ShieldAlert className="size-5 text-amber-700" /> Customer request triage</CardTitle><p className="text-sm text-slate-600">Escalations, blockers, service requests, and permit tracking records submitted for this project appear here for government-side follow-up.</p></CardHeader><CardContent className="space-y-3">{repository.getCustomerRequests().slice(0, 8).map((request) => <div key={request.id} className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3"><div><p className="text-sm font-black text-amber-950">{request.confirmationNumber} · {request.title}</p><p className="mt-1 text-xs text-amber-900">{request.requestType.replaceAll("_", " ")} · {request.description}</p><p className="mt-1 text-xs text-amber-800">{request.submittedByName} · {request.locationOrAffectedArea ?? "Project-wide"}</p></div><span className="rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase text-amber-900">{request.status}</span></div>)}</CardContent></Card>}</div>;
   }
 
   function renderDetail() {
@@ -2934,7 +3000,7 @@ export default function Home() {
     const docsToDisplay = resolveWorkItemDocuments(selectedItem, repository.getDocuments());
     const assignmentLabel = customer ? "Shared project status" : selectedItem.assignedUserId ? (selectedItem.ownerName || "Assigned worker") : selectedItem.assignmentGroupName ? `Unassigned · ${selectedItem.assignmentGroupName}` : selectedItem.ownerName || "Unassigned";
 
-    return <div className="space-y-5"><nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500"><button type="button" onClick={() => navigate("my-work")} className="text-teal-800 underline-offset-2 hover:underline">My Work</button><span aria-hidden="true">›</span><button type="button" onClick={() => openProject()} className="text-teal-800 underline-offset-2 hover:underline font-bold" title="Go to project page">{PROJECT_DISPLAY_NAME}</button><span aria-hidden="true">›</span><button type="button" onClick={() => openProject(selectedItem.workstreamId)} className="text-teal-800 underline-offset-2 hover:underline" title="View workstream on project page">{selectedItem.workstreamTitle}</button><span aria-hidden="true">›</span><span className="text-slate-800">{selectedItem.title}</span></nav>
+    return <div className="space-y-5"><nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500"><button type="button" onClick={() => navigate("my-work")} className="text-teal-800 underline-offset-2 hover:underline">My Work</button><span aria-hidden="true">›</span><button type="button" onClick={() => openProject()} className="text-teal-800 underline-offset-2 hover:underline font-bold" title="Go to project page">{projectRecord.name}</button><span aria-hidden="true">›</span><button type="button" onClick={() => openProject(selectedItem.workstreamId)} className="text-teal-800 underline-offset-2 hover:underline" title="View workstream on project page">{selectedItem.workstreamTitle}</button><span aria-hidden="true">›</span><span className="text-slate-800">{selectedItem.title}</span></nav>
       <section className="rounded-2xl border border-teal-300 bg-white p-5 shadow-md sm:p-7"><div className="flex flex-col items-start gap-4 sm:flex-row sm:justify-between"><div className="min-w-0"><p className="text-xs font-black uppercase tracking-[0.2em] text-teal-800">{customer ? "PROJECT STATUS" : "YOUR ASSIGNMENT"}</p><h1 className="mt-2 max-w-3xl break-words text-2xl font-black tracking-tight text-[#00284d] outline-none sm:text-4xl">{customer ? sanitizeCustomerItem(selectedItem).title : selectedItem.title}</h1><button type="button" onClick={() => openProject(selectedItem.workstreamId)} className="mt-2 max-w-full text-left text-sm font-semibold text-slate-600 hover:text-teal-800 hover:underline cursor-pointer transition-colors" title="View workstream on project page">{selectedItem.workstreamTitle}</button></div><div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center"><span className={`w-fit max-w-full rounded-full border px-3 py-1.5 text-xs font-black uppercase ${toneClasses(selectedItem.statusTone).badge}`}>{selectedItem.statusLabel}</span><Button type="button" variant="outline" size="sm" onClick={() => openProject(selectedItem.workstreamId)} className="w-full text-xs font-bold text-teal-800 border-teal-300 hover:bg-teal-50 gap-1.5 sm:w-auto"><Building2 className="size-3.5" /> Project Page</Button></div></div><div className="mt-6 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-4"><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Assignment</p><p className="mt-1 break-words font-black text-[#00284d]">{assignmentLabel}</p></div><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Due</p><p className="mt-1 font-black text-[#00284d]">{formatDate(selectedItem.dueDate)}</p></div><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Critical path</p><p className="mt-1 font-black text-[#00284d]">{selectedItem.isCriticalPath ? "Yes" : "No"}</p></div><div><p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Schedule</p><p className="mt-1 break-words font-black text-[#00284d]">{selectedItem.scheduleImpact || "Impact not calculated"}</p></div></div>{!customer && actions.length > 0 && <div className="sticky bottom-3 z-10 mt-6 flex flex-col items-stretch gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:flex-wrap sm:items-center" aria-label="Work actions"><span className="w-full text-xs font-black uppercase tracking-wider text-slate-500 sm:w-auto sm:mr-1">Actions</span>{actions.map((action, index) => {
         const isActionPermitted = isAdministrator(activePersona) || canUserPerformAction(selectedItem, action, activePersona);
         return isActionPermitted ? (
@@ -3003,7 +3069,7 @@ export default function Home() {
     const triageOrganizations: TriageRoutingOrganizationOption[] = repository.getOrganizations().filter((organization) => organization.isActive && triageOrgCodes.has(organization.code)).map((organization) => ({ code: organization.code, name: organization.name }));
     const publishedTriageWorkflows = repository.getWorkflowTemplates().flatMap((template) => template.versions.filter((version) => version.status === "published").map((version) => ({ id: version.id, label: template.name, versionNumber: version.versionNumber })));
     const triageExistingWorkstreams = triageRequest ? repository.getWorkstreams().filter((workstream) => workstream.projectId === triageRequest.projectId) : [];
-    if (route === "catalog") return <div className="space-y-8"><h1 className="text-3xl font-black text-[#00284d]">Services &amp; Permits</h1><GovernmentServices onRequest={(title, details) => { openRequestCenter("service"); setRequestTitle(title); setRequestOutcome(title); setRequestDescription(""); setRequestAgency(""); setRequestArea(""); setRequestDate(""); setRequestBlocksWork(false); setSelectedCatalogPermitId(""); setRequestFile(null); showToast(`Include in your request: ${details}`); }} /><PermitCatalogPanel catalog={repository.getCatalog()} templates={repository.getWorkflowTemplates()} onStartRequest={(permitId) => { setSelectedCatalogPermitId(permitId); setRequestCenterMode("permit"); setRequestTitle(""); navigate("requests"); }} /></div>;
+    if (route === "catalog") return <div className="space-y-8"><h1 className="text-3xl font-black text-[#00284d]">Services &amp; Permits</h1><GovernmentServices onRequest={(title, details) => { openRequestCenter("service"); setRequestTitle(title); setRequestOutcome(title); setRequestDescription(""); setRequestAgency(""); setRequestArea(""); setRequestDate(""); setRequestBlocksWork(false); setSelectedCatalogPermitId(""); setRequestFile(null); showToast(`Include in your request: ${details}`, "info"); }} /><PermitCatalogPanel catalog={repository.getCatalog()} templates={repository.getWorkflowTemplates()} onStartRequest={(permitId) => { setSelectedCatalogPermitId(permitId); setRequestCenterMode("permit"); setRequestTitle(""); navigate("requests"); }} /></div>;
     let content: ReactNode;
     if (route === "detail") content = <WorkItemPage item={selectedItem} saving={saveStatus === "saving"} escalationTarget={escalationTarget} onEscalationTargetChange={setEscalationTarget} events={selectedItem ? repository.getAuditEvents().filter((event) => event.entityId === selectedItem.workstreamId || event.entityId === selectedItem.sourceId) : []} onNavigateParent={(kind, id) => { if (kind === "project") openProject(); else if (kind === "workstream") openProject(id); }}>{renderDetail()}</WorkItemPage>;
     else if (route === "my-work") content = renderMyWork();
@@ -3031,13 +3097,13 @@ export default function Home() {
       canAdmin={canAdmin}
       unreadNotifications={unreadNotificationCount}
       projectName={projectRecord.name || PROJECT_DISPLAY_NAME}
-      projects={accessibleProjects}
-      activeProjectNumber={projectReference}
-      projectSwitching={loadingData}
-      onSelectProject={(number) => void switchProject(number)}
       projectSubtitle={`${workspaceTitle(activePersona.workspace)} · ${PROGRAM_SUBTITLE}`}
+      projectChoices={loggedIn ? accessibleProjects : []}
+      activeProjectNumber={activeProjectNumber}
       onNavigate={(targetRoute) => navigate(targetRoute as Route)}
       onOpenProject={() => openProject()}
+      projectSwitching={loadingData}
+      onSelectProject={(number) => void switchProject(number)}
       onSignOut={() => void signOut()}
       footer={<SystemVersionFooter />}
     >
